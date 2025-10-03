@@ -1,0 +1,52 @@
+package br.com.w4solution.controle_instalacao.domain.olt;
+
+import br.com.w4solution.controle_instalacao.domain.cliente.Cliente;
+import br.com.w4solution.controle_instalacao.domain.registro.Registro;
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.util.List;
+
+@Entity
+@Table(name = "portas")
+@AllArgsConstructor
+@NoArgsConstructor
+@EqualsAndHashCode(of = "id")
+@Setter
+@Getter
+public class Porta {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private Integer porta;
+
+    @ManyToOne
+    @JoinColumn(name = "cliente_id")
+    private Cliente cliente;
+
+    @Column(unique = true)
+    private String login;
+
+    @ManyToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JoinColumn(name = "cto_id")
+    private Cto cto;
+
+    public Porta(Porta p, Cto cto) {
+        this.porta = p.porta;
+        this.cto = cto;
+    }
+
+    public Porta(Integer porta, Cto cto){
+        this.porta = porta;
+        this.cto = cto;
+    }
+
+    public void atualizaCliente(Cliente cliente){
+        this.cliente = cliente;
+    }
+
+    @Override
+    public String toString() {
+        return "porta: " + porta + " cliente: " + cliente;
+    }
+}

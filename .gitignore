@@ -1,0 +1,14 @@
+# Node (React)
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# Java (Spring Boot)
+backend/target/
+backend/.env
+*.log
+
+# Geral
+.DS_Store
+*.iml
+.idea/
