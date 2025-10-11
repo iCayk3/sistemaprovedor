@@ -22,8 +22,8 @@ public class ServiceRbx {
 
     @Autowired
     private IntegracaoRbx integracaoRbx;
-//    @Value("${api.service.integration.rbx.chave}")
-    private String chaveApi = "EN6PYLEGXSV7LK3LL2YQ6R1E5U2LG2";
+    @Value("${api.service.integration.rbx.chave}")
+    private String chaveApi;
 
     public List<ResponsePieReact> boletosBaixadosPorCidade(LocalDate data) {
         LocalDate dataFiltro = (data != null) ? data : LocalDate.now();

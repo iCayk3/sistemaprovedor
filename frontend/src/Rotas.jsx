@@ -11,6 +11,7 @@ import Register from "./Paginas/Register/iindex";
 // Componentes de Autenticação e Rota
 import { AuthProvider } from "./Componentes/AuthProvider";
 import PrivateRoute from "./Componentes/PrivateRoute";
+import Passwd from "./Paginas/Passwd";
 
 // Seu tema MUI
 const demoTheme = createTheme({
@@ -48,6 +49,7 @@ const Rotas = () => {
               {/* GRUPO DE ROTAS PÚBLICAS: /login e /register */}
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+              <Route path="/forgotpass" element={<Passwd />} />
 
               {/* GRUPO DE ROTAS PRIVADAS: Qualquer outra rota é capturada aqui */}
               <Route
