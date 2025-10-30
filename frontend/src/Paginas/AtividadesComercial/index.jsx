@@ -49,6 +49,7 @@ const AtividadesComercial = () => {
 
         try {
             await UseApi(`atividades`, 'POST', payload);
+            handleFormSubmit();
         } catch (err) {
             console.error("Erro :" + err)
         } finally {

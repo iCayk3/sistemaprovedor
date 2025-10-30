@@ -7,6 +7,8 @@ import { useEffect, useState } from "react";
 import styled from "styled-components";
 import { exportToExcel, exportToPDF } from "../../Utils/ExportUtils";
 import Api from "../../Services/Api";
+import TabelaExibicao from "../../Componentes/TabelaExibicao";
+import TextFiltro from "../../Componentes/TextFiltro";
 
 const FinStyled = styled.section`
   .fin-table {
@@ -22,7 +24,7 @@ const FinStyled = styled.section`
 `
 
 const colunas = [
-  { field: 'id', headerName: 'Codigo', width: 80 },
+  { field: 'codigo', headerName: 'Codigo', width: 80 },
   { field: 'nome', headerName: 'Nome', width: 400 },
   { field: 'valorDebito', headerName: 'Débito', width: 100 },
   {
@@ -39,7 +41,7 @@ const colunas = [
   },
   { field: 'diasAtrasado', headerName: 'Dias atrasado', width: 100 },
   {
-    field: 'dataBloqueio',  
+    field: 'dataBloqueio',
     headerName: 'Data bloqueio',
     width: 120,
     valueFormatter: (params) => {
@@ -84,7 +86,7 @@ const Inadiplentes = () => {
   const [inadiplentes, setInadiplentes] = useState({});
   const [clientesInadiplentes, setClientesInadiplentes] = useState({});
 
-  const [praca, setPraca] = useState('');
+  const [filtro, setFiltro] = useState('');
   const [pracaLabel, setPracaLabel] = useState('');
 
 
@@ -116,34 +118,17 @@ const Inadiplentes = () => {
       <div>
         <div className="fin-pizza">
           <Typography variant="h4" component="h2" sx={{ marginTop: 4 }}>
-            {totalInadiplentes ? `Total de inadiplentes: ${totalInadiplentes.total}` : <CircularProgress size="3rem" />}
+            {totalInadiplentes ? `Total de bloqueados: ${totalInadiplentes.total}` : <CircularProgress size="3rem" />}
           </Typography>
           <DashPizza uri={`rbx/boletosabertos/inadiplentes/cidade`} metodo="POST" financeiro />
         </div>
 
         <div className="fin-table">
-          <FieldAutoComplet
-            dadosProcedimento={procedimentos}
-            label={"Praça de cobrança"}
-            aoAlterado={setPraca}
-            onInputValueChange={setPracaLabel}
-            valor={praca}
-            inputValue={pracaLabel}
-          />
-
-          <Stack direction="row" spacing={2} sx={{ marginBottom: 2, marginTop: 2 }}>
-            <Button variant="contained" color="primary" onClick={() => exportToExcel(dadosFiltrados, "inadiplentes")}>
-              Exportar Excel
-            </Button>
-            <Button variant="contained" color="secondary" onClick={() => exportToPDF(colunas, dadosFiltrados, "inadiplentes")}>
-              Exportar PDF
-            </Button>
-          </Stack>
-
-          <TableGrid dados={dadosFiltrados} colunasEdit={colunas} financeiro sx={{ marginTop: 4 }} filtro={pracaLabel} />
+          {/* <TextFiltro onChange={setFiltro}/> */}
+          <TabelaExibicao rows={dadosFiltrados} columns={colunas} tablefin filtroExterno={filtro}/>
         </div>
 
-        <BasicCard valor={inadiplentes.Valor} titulo="Inadiplentes" boletoAberto />
+        <BasicCard valor={inadiplentes.Valor} titulo="Bloqueados" boletoAberto />
       </div>
     </FinStyled>
   );

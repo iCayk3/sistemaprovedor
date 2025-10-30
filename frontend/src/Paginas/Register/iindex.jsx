@@ -5,6 +5,7 @@ import {
     Box, Typography, Paper
 } from '@mui/material';
 import AccountCircle from '@mui/icons-material/AccountCircle';
+import ArrowCircleLeftIcon from '@mui/icons-material/ArrowCircleLeft';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import Api from "../../Services/Api";
@@ -76,6 +77,18 @@ const CustomPasswordField = memo(({ value, onChange }) => {
 
 const UseApi = Api()
 
+const sxInputs = {
+    mb: 2,
+    '& .MuiOutlinedInput-root': {
+        borderRadius: '12px',
+        background: 'rgba(255,255,255,0.05)',
+        color: '#fff',
+        '& fieldset': { borderColor: 'rgba(255,255,255,0.3)' },
+        '&:hover fieldset': { borderColor: '#00e5ff' },
+        '&.Mui-focused fieldset': { borderColor: '#00e5ff' },
+    },
+    '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
+}
 
 const Register = () => {
 
@@ -98,53 +111,71 @@ const Register = () => {
     return <>
 
         <Box
-            component="form"
-            noValidate
-            autoComplete="off"
             sx={{
                 display: 'flex',
                 justifyContent: 'center',
                 alignItems: 'center',
                 minHeight: '100vh',
-                backgroundColor: 'transparent',
-                flexDirection: 'column',
+                backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url("/imagens/backgroudlogin1.jpg")`,
+                backgroundSize: 'cover',
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'center',
             }}
         >
-            {!enviado ?
-                <Paper elevation={3} sx={{ padding: 4, maxWidth: 400, width: '100%', m: 'auto', height: '100%', maxHeight: 400, mt: '20%' }}>
-                    <Typography variant="h5" gutterBottom>Cadastrar-se</Typography>
-                    <Typography variant="subtitle1" gutterBottom>Bem-vindo, preencha os campos, por favor!</Typography>
+            <Paper
+                elevation={0}
+                sx={{
+                    position: 'relative',
+                    padding: 4,
+                    maxWidth: 400,
+                    width: '100%',
+                    borderRadius: '16px',
+                    background: 'rgba(255,255,255,0.05)',
+                    backdropFilter: 'blur(12px)',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                    color: '#fff',
+                }}
+            >
+                <Link href="/login" variant="body2" sx={{ color: '#048897', }}>
+                    <ArrowCircleLeftIcon sx={{ mb: 4 }} />
+                </Link>
+
+                {!enviado ?
                     <Box>
-                        <CustomEmailField value={usuario} onChange={(e) => setUsuario(e.target.value)} />
-                        <CustomPasswordField value={senha} onChange={(e) => setSenha(e.target.value)} />
+                        <Typography variant="h5" gutterBottom>Cadastrar-se</Typography>
+                        <Typography variant="subtitle1" gutterBottom>Bem-vindo, preencha os campos, por favor!</Typography>
+                        <Box>
+                            <CustomEmailField value={usuario} onChange={(e) => setUsuario(e.target.value)} />
+                            <CustomPasswordField value={senha} onChange={(e) => setSenha(e.target.value)} />
+                            <Button
+                                variant="outlined"
+                                color="info"
+                                size="small"
+                                fullWidth
+                                sx={{ my: 2 }}
+                                onClick={() => cadastrar()}
+                            >
+                                Cadastrar
+                            </Button>
+                        </Box>
+                    </Box>
+                    :
+                    <Box>
+                        <Typography>Aguarde o administrador liberar o acesso!</Typography>
                         <Button
                             variant="outlined"
                             color="info"
                             size="small"
                             fullWidth
                             sx={{ my: 2 }}
-                            onClick={() => cadastrar()}
+                            href="/login"
                         >
-                            Cadastrar
+                            Tela de login
                         </Button>
                     </Box>
-                </Paper>
-                :
-                <Box>
-                    <Typography>Aguarde o administrador liberar o acesso!</Typography>
-                    <Button
-                        variant="outlined"
-                        color="info"
-                        size="small"
-                        fullWidth
-                        sx={{ my: 2 }}
-                        href="/login"
-                    >
-                        Tela de login
-                    </Button>
-                </Box>
 
-            }
+                }
+            </Paper>
         </Box>
     </>
 }

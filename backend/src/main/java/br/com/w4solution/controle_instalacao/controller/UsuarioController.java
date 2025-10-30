@@ -74,6 +74,12 @@ public class UsuarioController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/userchek")
+    public ResponseEntity<?> validarUsuario (@RequestBody UsuarioCheckDTO dados){
+        var ativado = service.checarUsuarioExistente(dados.usuario());
+        return ResponseEntity.ok().body(ativado);
+    }
+
 
     @GetMapping("/token/validar")
     public ResponseEntity<Void> validarToken() {
@@ -91,6 +97,12 @@ public class UsuarioController {
         return ResponseEntity.ok().body(usuariosPendentes);
     }
 
+    @GetMapping("/pendentes/redefinicoes")
+    public ResponseEntity<?> listaRedefinicoesPendentes(){
+        var usuariosPendentes = service.buscarRedefinicoesPendentes();
+        return ResponseEntity.ok().body(usuariosPendentes);
+    }
+
     @GetMapping("/notactivate")
     public ResponseEntity<?> listarNaoAtivos(){
         var usuariosPendentes = service.buscarNaoAtivos();
@@ -101,6 +113,19 @@ public class UsuarioController {
     public ResponseEntity<?> listarAll(){
         var usuarios = service.buscarTodosUsuarios();
         return ResponseEntity.ok().body(usuarios);
+    }
+
+        @PostMapping("/solicitaredefinirsenha")
+    public ResponseEntity<?> solicitarRedefinirSenha(@RequestBody RedefinirSenhaDTO dados){
+        service.solicitarRedefinirSenha(dados);
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/redefinirsenha")
+    @Transactional
+    public ResponseEntity<?> redefinirSenha(@RequestBody RedefinirSenhaDTO dados, HttpServletRequest request){
+        service.redefinirSenha(dados, request);
+        return ResponseEntity.ok().build();
     }
 
     @PutMapping("/senha")

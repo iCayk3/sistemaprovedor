@@ -1,12 +1,16 @@
 package br.com.w4solution.controle_instalacao.services.usuarios;
 
+import br.com.w4solution.controle_instalacao.domain.usuarios.RedefinirSenha;
 import br.com.w4solution.controle_instalacao.domain.usuarios.Status;
 import br.com.w4solution.controle_instalacao.domain.usuarios.Usuario;
 import br.com.w4solution.controle_instalacao.dto.usuarios.*;
 import br.com.w4solution.controle_instalacao.infra.configuration.exceptions.UsuarioException;
 import br.com.w4solution.controle_instalacao.infra.configuration.exceptions.UsuarioNaoEncontradoException;
 import br.com.w4solution.controle_instalacao.infra.configuration.exceptions.ValidacaoAutenticacaoException;
+import br.com.w4solution.controle_instalacao.repository.system.LogRepository;
+import br.com.w4solution.controle_instalacao.repository.usuarios.RedefinirSenhaRepository;
 import br.com.w4solution.controle_instalacao.repository.usuarios.UsuarioRepository;
+import br.com.w4solution.controle_instalacao.services.system.Log;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -30,6 +34,12 @@ public class UsuarioService {
 
     @Autowired
     private TokenService service;
+
+    @Autowired
+    private RedefinirSenhaRepository redefinirSenhaRepository;
+
+    @Autowired
+    LogRepository logRepository;
 
     public UsuarioDTO cadastrarUsuario(UsuarioCadastroDTO dados) {
         var usuario = new Usuario(dados);
@@ -125,5 +135,61 @@ public class UsuarioService {
         } else {
             throw new UsuarioException("Usuario não encontrado");
         }
+    }
+
+    public Boolean checarUsuarioExistente(String usuiario) {
+        var usuario = repository.findByUsuarioAndStatus(usuiario, Status.ATIVO);
+        return usuario.isPresent();
+    }
+
+    public void solicitarRedefinirSenha(RedefinirSenhaDTO dados) {
+        var pedidoRedefinicao = new RedefinirSenha(dados);
+        redefinirSenhaRepository.save(pedidoRedefinicao);
+    }
+
+    public List<RedefinirSenhaSolDTO> buscarRedefinicoesPendentes() {
+        return redefinirSenhaRepository.findAllByStatus(Status.PENDENTE).stream().map(RedefinirSenhaSolDTO::new).toList();
+    }
+
+    public void redefinirSenha(RedefinirSenhaDTO dados, HttpServletRequest request) {
+        var solicitacaoUsuarioOptional = redefinirSenhaRepository.findById(dados.id());
+        if(solicitacaoUsuarioOptional.isEmpty()){
+            throw new RuntimeException("solicitação não encontrada");
+        }
+        var usuarioOptional = repository.findByUsuario(solicitacaoUsuarioOptional.get().getUsuario());
+        var usuario = usuarioOptional.get();
+        var solicitacao = solicitacaoUsuarioOptional.get();
+        var usuarioAprovacao = buscarUsuarioRequisicao(request);
+
+        usuario.setSenha(solicitacao.getSenha());
+
+        var log = new Log(null, "Troca de senha", usuarioAprovacao.getUsuario(), "Troca de senha realizada", "True");
+        logRepository.save(log);
+
+        solicitacao.setStatus(Status.INATIVO);
+    }
+
+    private Usuario buscarUsuarioRequisicao(HttpServletRequest request){
+        Cookie[] cookies = request.getCookies();
+        String token = null;
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if ("token".equals(cookie.getName())) {
+                    token = cookie.getValue();
+                    break;
+                }
+            }
+        } else {
+            System.out.println("Nenhum cookie encontrado.");
+        }
+
+        var subjetc = service.getSubject(token);
+        var usuario = repository.findByUsuario(subjetc);
+
+        if(usuario.isEmpty()){
+            throw new RuntimeException("Usuario não definido");
+        }
+
+        return usuario.get();
     }
 }

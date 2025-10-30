@@ -23,4 +23,5 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     @Query("SELECT u FROM Usuario u WHERE str(u.permissao) LIKE %:roleFragment%")
     List<Usuario> encontrarUsuariosPorFragmento(String roleFragment);
 
+    Optional<Usuario> findByUsuarioAndStatus(String usuario, Status status);
 }

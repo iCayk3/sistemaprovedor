@@ -37,6 +37,7 @@ import UsuariosNAtivos from '../Paginas/UsuariosNAtivos';
 import ManagementUser from '../Paginas/ManagementUser';
 import Api from '../Services/Api';
 import SettingsAtividades from '../Paginas/SettingsAtividades';
+import PendentPass from '../Paginas/PendentPass';
 
 //Configurações do tema
 const theme = createTheme({
@@ -232,8 +233,8 @@ const Menu = () => {
                         icon: <PaymentOutlinedIcon />,
                         children: [
                             {
-                                segment: 'inadiplentes',
-                                title: 'Clientes inadiplentes',
+                                segment: 'bloqueados',
+                                title: 'Clientes bloqueados',
                                 icon: <MoneyOffOutlinedIcon />,
                             },
                             {
@@ -259,6 +260,11 @@ const Menu = () => {
                     {
                         segment: 'management',
                         title: 'Gerenciar usuarios',
+                        icon: <DescriptionIcon />,
+                    },
+                    {
+                        segment: 'pendentpass',
+                        title: 'Redefinições pendentes',
                         icon: <DescriptionIcon />,
                     },
                 ],
@@ -309,10 +315,11 @@ const Menu = () => {
                         <Route path="comercial/configuration" element={user.role === 'ADMIN' || user.role === 'COMERCIAL' ? <SettingsAtividades /> : semPermissao} />
                         <Route path="perfil/settings" element={<SettingsPerfil />} />
                         <Route path="/financeiro/dados" element={user.role === 'ADMIN' || user.role === 'FINANCEIRO' ? <Financeiro /> : semPermissao} />
-                        <Route path="/financeiro/cobranca/inadiplentes" element={user.role === 'ADMIN' || user.role === 'FINANCEIRO' ? <Inadiplentes /> : semPermissao} />
+                        <Route path="/financeiro/cobranca/bloqueados" element={user.role === 'ADMIN' || user.role === 'FINANCEIRO' ? <Inadiplentes /> : semPermissao} />
                         <Route path="/financeiro/cobranca/suspenso" element={user.role === 'ADMIN' || user.role === 'FINANCEIRO' ? <Suspensos /> : semPermissao} />
                         <Route path="/settinguser/ativar" element={user.role === 'ADMIN' ? <UsuariosNAtivos /> : semPermissao} />
                         <Route path="/settinguser/management" element={user.role === 'ADMIN' ? <ManagementUser /> : semPermissao} />
+                        <Route path="/settinguser/pendentpass" element={user.role === 'ADMIN' ? <PendentPass /> : semPermissao} />
 
                         {/* Rota "catch-all" para páginas não encontradas dentro do app */}
                         <Route path="*" element={<div>Página não encontrada</div>} />

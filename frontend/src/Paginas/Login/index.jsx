@@ -175,7 +175,7 @@ const Login = () => {
             <Link href="/register" variant="body2" sx={{ color: '#00e5ff' }}>
               Cadastre-se
             </Link>
-            <Link href="/" variant="body2" sx={{ color: '#00e5ff' }}>
+            <Link href="/forgotpass" variant="body2" sx={{ color: '#00e5ff' }}>
               Esqueceu sua senha?
             </Link>
           </Box>
