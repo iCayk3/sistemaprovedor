@@ -1,3 +1,4 @@
+// const apiUrl = "https://serverbackend.w4solution.com.br/";
 const apiUrl = "http://localhost:8080/";
 
 export default function Api() {
