@@ -12,7 +12,6 @@ import MapIcon from '@mui/icons-material/Map';
 import MapPage from "../Paginas/MapPage";
 import SettingsApplicationsIcon from '@mui/icons-material/SettingsApplications';
 import FiberNewIcon from '@mui/icons-material/FiberNew';
-import PeopleIcon from '@mui/icons-material/People';
 import Financeiro from '../Paginas/Financeiro';
 import Inadiplentes from '../Paginas/Inadiplentes';
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
@@ -39,9 +38,7 @@ import Api from '../Services/Api';
 import SettingsAtividades from '../Paginas/SettingsAtividades';
 import PendentPass from '../Paginas/PendentPass';
 
-//Configurações do tema
 const theme = createTheme({
-
     colorSchemes: { light: true, dark: true },
     cssVariables: {
         colorSchemeSelector: 'class',
@@ -65,7 +62,7 @@ function SidebarFooter({ mini }) {
     return (
         <Box
             sx={{
-                mt: 'auto', // Move para o final
+                mt: 'auto',
                 p: 2,
                 display: 'flex',
                 flexDirection: 'column',
@@ -77,7 +74,7 @@ function SidebarFooter({ mini }) {
                 variant="caption"
                 sx={{ mt: 1, whiteSpace: 'nowrap', overflow: 'hidden', textAlign: 'center' }}
             >
-                {mini ? '© SOL' : `© SOL PROVEDOR DE INTERNET | 2.1`}
+                {mini ? '© SOL' : '© SOL PROVEDOR DE INTERNET | 2.1'}
             </Typography>
         </Box>
     );
@@ -87,13 +84,22 @@ SidebarFooter.propTypes = {
     mini: PropTypes.bool.isRequired,
 };
 
-const UseApi = Api()
+const UseApi = Api();
+const roleGroups = {
+    technical: ['ADMIN', 'TECNICO', 'TECNICO_COMERCIAL', 'TECNICO_FINANCEIRO'],
+    commercial: ['ADMIN', 'COMERCIAL', 'TECNICO_COMERCIAL', 'COMERCIAL_FINANCEIRO'],
+    financial: ['ADMIN', 'FINANCEIRO', 'TECNICO_FINANCEIRO', 'COMERCIAL_FINANCEIRO'],
+    admin: ['ADMIN'],
+};
 
 const Menu = () => {
+    const [user, setUser] = React.useState({});
+    const semPermissao = <div>Sem permissao</div>;
 
-    const [user, setUser] = React.useState({})
-
-    const semPermissao = <div>Sem permissao</div>
+    const hasRole = React.useCallback(
+        (group) => roleGroups[group]?.includes(user.role),
+        [user.role],
+    );
 
     React.useEffect(() => {
         const fetchData = async () => {
@@ -105,7 +111,7 @@ const Menu = () => {
             }
         };
         fetchData();
-    }, [])
+    }, []);
 
     const NAVIGATION = [
         {
@@ -124,10 +130,10 @@ const Menu = () => {
             kind: 'header',
             title: 'Registros',
         },
-        user.role === 'ADMIN' || user.role === 'TECNICO'
+        hasRole('technical')
             ? {
                 segment: 'registro',
-                title: 'Registro de serviço',
+                title: 'Registro de servico',
                 icon: <BarChartIcon />,
                 children: [
                     {
@@ -142,29 +148,12 @@ const Menu = () => {
                     },
                     {
                         segment: 'settings',
-                        title: 'Configurações registros',
+                        title: 'Configuracoes registros',
                         icon: <DescriptionIcon />,
                     },
                 ],
             } : null,
-        // {
-        //     segment: 'manutencao',
-        //     title: 'Registro de manutenção',
-        //     icon: <BarChartIcon />,
-        //     children: [
-        //         {
-        //             segment: 'manutencao',
-        //             title: 'Registrar',
-        //             icon: <DescriptionIcon />,
-        //         },
-        //         {
-        //             segment: 'dashboard-registro',
-        //             title: 'Overview de registros',
-        //             icon: <DescriptionIcon />,
-        //         },
-        //     ],
-        // },
-        user.role === 'ADMIN' || user.role === 'TECNICO'
+        hasRole('technical')
             ? {
                 segment: 'redes',
                 title: 'Redes',
@@ -187,13 +176,13 @@ const Menu = () => {
                     },
                 ],
             } : null,
-        user.role === 'ADMIN' || user.role === 'TECNICO'
+        hasRole('technical')
             ? {
                 segment: 'map',
                 title: 'Mapa de CTOs',
                 icon: <MapIcon />,
             } : null,
-        user.role === 'ADMIN' || user.role === 'COMERCIAL'
+        hasRole('commercial')
             ? {
                 segment: 'comercial',
                 title: 'Comercial',
@@ -211,12 +200,12 @@ const Menu = () => {
                     },
                     {
                         segment: 'configuration',
-                        title: 'Configurações',
+                        title: 'Configuracoes',
                         icon: <Groups2Icon />,
                     },
                 ],
             } : null,
-        user.role === 'ADMIN' || user.role === 'FINANCEIRO'
+        hasRole('financial')
             ? {
                 segment: 'financeiro',
                 title: 'Consultar dados financeiro',
@@ -229,7 +218,7 @@ const Menu = () => {
                     },
                     {
                         segment: 'cobranca',
-                        title: 'Dados cobrança',
+                        title: 'Dados cobranca',
                         icon: <PaymentOutlinedIcon />,
                         children: [
                             {
@@ -246,10 +235,10 @@ const Menu = () => {
                     },
                 ],
             } : null,
-        user.role === 'ADMIN'
+        hasRole('admin')
             ? {
                 segment: 'settinguser',
-                title: 'Configurações usuarios',
+                title: 'Configuracoes usuarios',
                 icon: <BarChartIcon />,
                 children: [
                     {
@@ -264,7 +253,7 @@ const Menu = () => {
                     },
                     {
                         segment: 'pendentpass',
-                        title: 'Redefinições pendentes',
+                        title: 'Redefinicoes pendentes',
                         icon: <DescriptionIcon />,
                     },
                 ],
@@ -272,12 +261,11 @@ const Menu = () => {
     ].filter(Boolean);
 
     const DashboardView = () => {
-        if (user.role === 'ADMIN' || user.role === 'TECNICO') return <DashboardPrincipal />;
-        if (user.role === 'COMERCIAL') return <DashBoardsComercial />;
-        if (user.role === 'FINANCEIRO') return <Financeiro />;
-        return <div>Sem permissão</div>;
+        if (hasRole('technical')) return <DashboardPrincipal />;
+        if (hasRole('commercial')) return <DashBoardsComercial />;
+        if (hasRole('financial')) return <Financeiro />;
+        return <div>Sem permissao</div>;
     };
-
 
     return (
         <ReactRouterAppProvider
@@ -295,34 +283,27 @@ const Menu = () => {
                 }}
             >
                 <PageContainer>
-                    {/* Roteador interno para as páginas privadas */}
                     <Routes>
-                        {/* Redireciona a rota raiz ("/") para a página inicial do dashboard */}
                         <Route path="/" element={<Navigate to="/dashboard" replace />} />
-
-                        {/* O "path" aqui deve corresponder ao "segment" definido no NAVIGATION */}
-
                         <Route path="dashboard" element={<DashboardView />} />
-                        <Route path="registro/registrar" element={user.role === 'ADMIN' || user.role === 'TECNICO' ? <Inicio /> : semPermissao} />
-                        <Route path="registro/dashboard-registro" element={user.role === 'ADMIN' || user.role === 'TECNICO' ? <OverviewRegistro /> : semPermissao} />
-                        <Route path="registro/settings" element={user.role === 'ADMIN' || user.role === 'TECNICO' ? <SettingsRegistros /> : semPermissao} />
-                        <Route path="redes/ctos" element={user.role === 'ADMIN' || user.role === 'TECNICO' ? <ListeCto /> : semPermissao} />
-                        <Route path="redes/equipamento" element={user.role === 'ADMIN' || user.role === 'TECNICO' ? <CadastroEquipamento /> : semPermissao} />
-                        <Route path="redes/tecnico" element={user.role === 'ADMIN' || user.role === 'TECNICO' ? <EquipesTecnicas /> : semPermissao} />
-                        <Route path="map" element={user.role === 'ADMIN' || user.role === 'TECNICO' ? <MapPage /> : semPermissao} />
-                        <Route path="comercial/atividades" element={user.role === 'ADMIN' || user.role === 'COMERCIAL' ? <AtividadesComercial /> : semPermissao} />
-                        <Route path="comercial/dashboards" element={user.role === 'ADMIN' || user.role === 'COMERCIAL' ? <DashBoardsComercial /> : semPermissao} />
-                        <Route path="comercial/configuration" element={user.role === 'ADMIN' || user.role === 'COMERCIAL' ? <SettingsAtividades /> : semPermissao} />
+                        <Route path="registro/registrar" element={hasRole('technical') ? <Inicio /> : semPermissao} />
+                        <Route path="registro/dashboard-registro" element={hasRole('technical') ? <OverviewRegistro /> : semPermissao} />
+                        <Route path="registro/settings" element={hasRole('technical') ? <SettingsRegistros /> : semPermissao} />
+                        <Route path="redes/ctos" element={hasRole('technical') ? <ListeCto /> : semPermissao} />
+                        <Route path="redes/equipamento" element={hasRole('technical') ? <CadastroEquipamento /> : semPermissao} />
+                        <Route path="redes/tecnico" element={hasRole('technical') ? <EquipesTecnicas /> : semPermissao} />
+                        <Route path="map" element={hasRole('technical') ? <MapPage /> : semPermissao} />
+                        <Route path="comercial/atividades" element={hasRole('commercial') ? <AtividadesComercial /> : semPermissao} />
+                        <Route path="comercial/dashboards" element={hasRole('commercial') ? <DashBoardsComercial /> : semPermissao} />
+                        <Route path="comercial/configuration" element={hasRole('commercial') ? <SettingsAtividades /> : semPermissao} />
                         <Route path="perfil/settings" element={<SettingsPerfil />} />
-                        <Route path="/financeiro/dados" element={user.role === 'ADMIN' || user.role === 'FINANCEIRO' ? <Financeiro /> : semPermissao} />
-                        <Route path="/financeiro/cobranca/bloqueados" element={user.role === 'ADMIN' || user.role === 'FINANCEIRO' ? <Inadiplentes /> : semPermissao} />
-                        <Route path="/financeiro/cobranca/suspenso" element={user.role === 'ADMIN' || user.role === 'FINANCEIRO' ? <Suspensos /> : semPermissao} />
-                        <Route path="/settinguser/ativar" element={user.role === 'ADMIN' ? <UsuariosNAtivos /> : semPermissao} />
-                        <Route path="/settinguser/management" element={user.role === 'ADMIN' ? <ManagementUser /> : semPermissao} />
-                        <Route path="/settinguser/pendentpass" element={user.role === 'ADMIN' ? <PendentPass /> : semPermissao} />
-
-                        {/* Rota "catch-all" para páginas não encontradas dentro do app */}
-                        <Route path="*" element={<div>Página não encontrada</div>} />
+                        <Route path="/financeiro/dados" element={hasRole('financial') ? <Financeiro /> : semPermissao} />
+                        <Route path="/financeiro/cobranca/bloqueados" element={hasRole('financial') ? <Inadiplentes /> : semPermissao} />
+                        <Route path="/financeiro/cobranca/suspenso" element={hasRole('financial') ? <Suspensos /> : semPermissao} />
+                        <Route path="/settinguser/ativar" element={hasRole('admin') ? <UsuariosNAtivos /> : semPermissao} />
+                        <Route path="/settinguser/management" element={hasRole('admin') ? <ManagementUser /> : semPermissao} />
+                        <Route path="/settinguser/pendentpass" element={hasRole('admin') ? <PendentPass /> : semPermissao} />
+                        <Route path="*" element={<div>Pagina nao encontrada</div>} />
                     </Routes>
                 </PageContainer>
             </DashboardLayout>

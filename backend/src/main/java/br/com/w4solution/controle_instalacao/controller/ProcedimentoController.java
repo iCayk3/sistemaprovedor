@@ -7,12 +7,16 @@ import br.com.w4solution.controle_instalacao.services.registros.ProcedimentoServ
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+import static br.com.w4solution.controle_instalacao.infra.configuration.security.SecurityExpressions.TECHNICAL_ACCESS;
+
 @RestController
 @RequestMapping("procedimento")
+@PreAuthorize(TECHNICAL_ACCESS)
 public class ProcedimentoController {
 
     @Autowired

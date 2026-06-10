@@ -6,13 +6,17 @@ import br.com.w4solution.controle_instalacao.infra.configuration.exceptions.Vali
 import br.com.w4solution.controle_instalacao.services.rbx.ServiceRbx;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
 
+import static br.com.w4solution.controle_instalacao.infra.configuration.security.SecurityExpressions.FINANCIAL_ACCESS;
+
 @RestController
 @RequestMapping("rbx")
+@PreAuthorize(FINANCIAL_ACCESS)
 public class RbxController {
 
     @Autowired

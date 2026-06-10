@@ -1,5 +1,4 @@
-// const apiUrl = "https://serverbackend.w4solution.com.br/";
-const apiUrl = "http://localhost:8080/";
+const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8080/";
 
 export default function Api() {
     return async (endpoint, method = "GET", body = null) => {
