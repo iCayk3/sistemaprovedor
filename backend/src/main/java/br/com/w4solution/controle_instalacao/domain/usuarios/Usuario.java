@@ -10,6 +10,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -38,7 +39,31 @@ public class Usuario implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+        List<GrantedAuthority> authorities = new ArrayList<>();
+        authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + permissao.name()));
+
+        switch (permissao) {
+            case ADMIN -> authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+            case TECNICO -> authorities.add(new SimpleGrantedAuthority("ROLE_TECNICO"));
+            case COMERCIAL -> authorities.add(new SimpleGrantedAuthority("ROLE_COMERCIAL"));
+            case FINANCEIRO -> authorities.add(new SimpleGrantedAuthority("ROLE_FINANCEIRO"));
+            case TECNICO_COMERCIAL -> {
+                authorities.add(new SimpleGrantedAuthority("ROLE_TECNICO"));
+                authorities.add(new SimpleGrantedAuthority("ROLE_COMERCIAL"));
+            }
+            case TECNICO_FINANCEIRO -> {
+                authorities.add(new SimpleGrantedAuthority("ROLE_TECNICO"));
+                authorities.add(new SimpleGrantedAuthority("ROLE_FINANCEIRO"));
+            }
+            case COMERCIAL_FINANCEIRO -> {
+                authorities.add(new SimpleGrantedAuthority("ROLE_COMERCIAL"));
+                authorities.add(new SimpleGrantedAuthority("ROLE_FINANCEIRO"));
+            }
+            case GUEST -> authorities.add(new SimpleGrantedAuthority("ROLE_GUEST"));
+        }
+
+        return authorities;
     }
 
     @Override

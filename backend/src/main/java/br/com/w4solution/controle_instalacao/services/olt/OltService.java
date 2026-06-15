@@ -72,7 +72,7 @@ public class OltService {
 
         List<Porta> portas = new ArrayList<>();
 
-        var cto = new Cto(null, dados.nomeCto(), portas, olt.get(), dados.latidude(), dados.latidude());
+        var cto = new Cto(null, dados.nomeCto(), portas, olt.get(), dados.latidude(), dados.longitude());
 
         for (int i = 1; i <= dados.portas(); i++) {
             portas.add(new Porta(i, cto));

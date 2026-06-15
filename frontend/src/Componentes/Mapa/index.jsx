@@ -23,6 +23,7 @@ const INITIAL_CAMERA = {
 };
 
 const UseApi = Api();
+const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? "";
 
 const Mapa = () => {
     const [olt, setOlt] = React.useState([]);
@@ -160,37 +161,43 @@ const Mapa = () => {
                 />
             </div>
 
-            <APIProvider apiKey={'AIzaSyCNyzIXzq_HWJPXmwlo76cGzW9bKt4HeSQ'}>
-                <Map
-                    mapId={"solprovedordeinternet"}
-                    {...cameraProps}
-                    style={{ width: '100%', height: '100%' }}
-                    onCameraChanged={handleCameraChange}
-                >
-                    {loadingCtos ? (
-                        <div style={{
-                            position: 'absolute', top: 10, right: 10, zIndex: 1000, background: '#fff',
-                            padding: '5px 10px', borderRadius: 8, boxShadow: '0 0 5px rgba(0,0,0,0.2)'
-                        }}>
-                            <CircularProgress size={20} />
-                        </div>
-                    ) : (
-                        cto.map((dados) => (
-                            <MarcadorCTO
-                                key={dados.id}
-                                lat={dados.lat}
-                                lng={dados.longi}
-                                label={dados.label}
-                                ctoId={dados.id}
-                                aoAbrir={exibirPortas}
-                                portas={portasPorCto[dados.id] || []}
-                                deletarClienteDaPorta={deletarCliente}
-                                abrirFormulario={abrirFormulario}
-                            />
-                        ))
-                    )}
-                </Map>
-            </APIProvider>
+            {googleMapsApiKey ? (
+                <APIProvider apiKey={googleMapsApiKey}>
+                    <Map
+                        mapId={"solprovedordeinternet"}
+                        {...cameraProps}
+                        style={{ width: '100%', height: '100%' }}
+                        onCameraChanged={handleCameraChange}
+                    >
+                        {loadingCtos ? (
+                            <div style={{
+                                position: 'absolute', top: 10, right: 10, zIndex: 1000, background: '#fff',
+                                padding: '5px 10px', borderRadius: 8, boxShadow: '0 0 5px rgba(0,0,0,0.2)'
+                            }}>
+                                <CircularProgress size={20} />
+                            </div>
+                        ) : (
+                            cto.map((dados) => (
+                                <MarcadorCTO
+                                    key={dados.id}
+                                    lat={dados.lat}
+                                    lng={dados.longi}
+                                    label={dados.label}
+                                    ctoId={dados.id}
+                                    aoAbrir={exibirPortas}
+                                    portas={portasPorCto[dados.id] || []}
+                                    deletarClienteDaPorta={deletarCliente}
+                                    abrirFormulario={abrirFormulario}
+                                />
+                            ))
+                        )}
+                    </Map>
+                </APIProvider>
+            ) : (
+                <div style={{ padding: 16, background: '#fff3cd', borderRadius: 8 }}>
+                    Configure VITE_GOOGLE_MAPS_API_KEY para carregar o mapa.
+                </div>
+            )}
 
             <Dialog open={exibirForm} onClose={() => setExibirForm(false)}>
                 <DialogTitle>Cadastrar cliente</DialogTitle>

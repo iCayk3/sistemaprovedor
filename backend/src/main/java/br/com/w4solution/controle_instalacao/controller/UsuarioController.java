@@ -1,20 +1,35 @@
 package br.com.w4solution.controle_instalacao.controller;
 
 import br.com.w4solution.controle_instalacao.domain.usuarios.Usuario;
-import br.com.w4solution.controle_instalacao.dto.usuarios.*;
+import br.com.w4solution.controle_instalacao.dto.usuarios.AlterarPermissao;
+import br.com.w4solution.controle_instalacao.dto.usuarios.AlterarStatusDTO;
+import br.com.w4solution.controle_instalacao.dto.usuarios.DadosAutenticao;
+import br.com.w4solution.controle_instalacao.dto.usuarios.DadosToken;
+import br.com.w4solution.controle_instalacao.dto.usuarios.RedefinirSenhaDTO;
+import br.com.w4solution.controle_instalacao.dto.usuarios.TrocaSenhaDTO;
+import br.com.w4solution.controle_instalacao.dto.usuarios.UsuarioCadastroDTO;
+import br.com.w4solution.controle_instalacao.dto.usuarios.UsuarioCheckDTO;
+import br.com.w4solution.controle_instalacao.dto.usuarios.UsuarioDTO;
 import br.com.w4solution.controle_instalacao.services.usuarios.UsuarioService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
-import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.util.Arrays;
+import static br.com.w4solution.controle_instalacao.infra.configuration.security.SecurityExpressions.ADMIN_ONLY;
+import static br.com.w4solution.controle_instalacao.infra.configuration.security.SecurityExpressions.AUTHENTICATED;
 
 @RestController
 @RequestMapping("usuario")
@@ -33,6 +48,7 @@ public class UsuarioController {
 
     @PostMapping("ativar/{id}")
     @Transactional
+    @PreAuthorize(ADMIN_ONLY)
     public ResponseEntity<?> ativadorUsuario(@PathVariable Long id) {
         service.ativarCliente(id);
         return ResponseEntity.ok().body("Usuario ativado");
@@ -45,107 +61,97 @@ public class UsuarioController {
     }
 
     @PostMapping("/logout")
+    @PreAuthorize(AUTHENTICATED)
     public ResponseEntity<Void> logout(HttpServletResponse response) {
-        // 1. Crie um novo cookie com o MESMO NOME do cookie do token.
-        //    É crucial que o nome seja idêntico. Supondo que o nome seja "token".
-        Cookie cookie = new Cookie("token", null); // O valor pode ser nulo ou vazio
-
-        // 2. Defina a idade máxima do cookie para 0.
-        //    Isso instrui o navegador a expirar e remover o cookie imediatamente.
+        Cookie cookie = new Cookie("token", null);
         cookie.setMaxAge(0);
-
-        // 3. (MUITO IMPORTANTE) Configure o caminho (path) do cookie.
-        //    O caminho deve ser o MESMO que foi usado quando o cookie foi criado.
-        //    Geralmente, é o caminho raiz "/". Se você não definir isso corretamente,
-        //    o navegador não encontrará o cookie para apagar.
         cookie.setPath("/");
-
-        // 4. (Opcional, mas recomendado) Se o cookie original era HttpOnly, o cookie de remoção também deve ser.
         cookie.setHttpOnly(true);
-
-        // 5. (Opcional, mas recomendado) Se o cookie original era Secure, o cookie de remoção também deve ser.
-        // cookie.setSecure(true);
-
-        // 6. Adicione o cookie à resposta HTTP.
-        //    O navegador receberá esta resposta e processará a instrução de apagar o cookie.
         response.addCookie(cookie);
-
-        // 7. Retorne uma resposta de sucesso.
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/userchek")
-    public ResponseEntity<?> validarUsuario (@RequestBody UsuarioCheckDTO dados){
+    public ResponseEntity<?> validarUsuario(@RequestBody UsuarioCheckDTO dados) {
         var ativado = service.checarUsuarioExistente(dados.usuario());
         return ResponseEntity.ok().body(ativado);
     }
 
-
     @GetMapping("/token/validar")
+    @PreAuthorize(AUTHENTICATED)
     public ResponseEntity<Void> validarToken() {
-        return ResponseEntity.ok().build(); // já autenticado no filtro
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/me")
+    @PreAuthorize(AUTHENTICATED)
     public ResponseEntity<UsuarioDTO> me(@AuthenticationPrincipal Usuario usuario) {
         return ResponseEntity.ok(new UsuarioDTO(usuario));
     }
 
     @GetMapping("/pendentes")
-    public ResponseEntity<?> listarPendentes(){
+    @PreAuthorize(ADMIN_ONLY)
+    public ResponseEntity<?> listarPendentes() {
         var usuariosPendentes = service.buscarPendentes();
         return ResponseEntity.ok().body(usuariosPendentes);
     }
 
     @GetMapping("/pendentes/redefinicoes")
-    public ResponseEntity<?> listaRedefinicoesPendentes(){
+    @PreAuthorize(ADMIN_ONLY)
+    public ResponseEntity<?> listaRedefinicoesPendentes() {
         var usuariosPendentes = service.buscarRedefinicoesPendentes();
         return ResponseEntity.ok().body(usuariosPendentes);
     }
 
     @GetMapping("/notactivate")
-    public ResponseEntity<?> listarNaoAtivos(){
+    @PreAuthorize(ADMIN_ONLY)
+    public ResponseEntity<?> listarNaoAtivos() {
         var usuariosPendentes = service.buscarNaoAtivos();
         return ResponseEntity.ok().body(usuariosPendentes);
     }
 
-    @GetMapping()
-    public ResponseEntity<?> listarAll(){
+    @GetMapping
+    @PreAuthorize(ADMIN_ONLY)
+    public ResponseEntity<?> listarAll() {
         var usuarios = service.buscarTodosUsuarios();
         return ResponseEntity.ok().body(usuarios);
     }
 
-        @PostMapping("/solicitaredefinirsenha")
-    public ResponseEntity<?> solicitarRedefinirSenha(@RequestBody RedefinirSenhaDTO dados){
+    @PostMapping("/solicitaredefinirsenha")
+    public ResponseEntity<?> solicitarRedefinirSenha(@RequestBody RedefinirSenhaDTO dados) {
         service.solicitarRedefinirSenha(dados);
         return ResponseEntity.ok().build();
     }
 
     @PutMapping("/redefinirsenha")
     @Transactional
-    public ResponseEntity<?> redefinirSenha(@RequestBody RedefinirSenhaDTO dados, HttpServletRequest request){
+    @PreAuthorize(ADMIN_ONLY)
+    public ResponseEntity<?> redefinirSenha(@RequestBody RedefinirSenhaDTO dados, HttpServletRequest request) {
         service.redefinirSenha(dados, request);
         return ResponseEntity.ok().build();
     }
 
     @PutMapping("/senha")
     @Transactional
-    public ResponseEntity<?> trocarSenha(@RequestBody TrocaSenhaDTO senhas, HttpServletRequest request){
+    @PreAuthorize(AUTHENTICATED)
+    public ResponseEntity<?> trocarSenha(@RequestBody TrocaSenhaDTO senhas, HttpServletRequest request) {
         service.trocarSenha(senhas, request);
         return ResponseEntity.ok().build();
     }
+
     @PutMapping("/statuschange")
     @Transactional
-    public ResponseEntity<?> alterarStatus(@RequestBody AlterarStatusDTO dados){
+    @PreAuthorize(ADMIN_ONLY)
+    public ResponseEntity<?> alterarStatus(@RequestBody AlterarStatusDTO dados) {
         service.alterarStatus(dados);
         return ResponseEntity.ok().build();
     }
 
     @PutMapping("/levelchange")
     @Transactional
-    public ResponseEntity<?> alterarPermissao(@RequestBody AlterarPermissao dados){
+    @PreAuthorize(ADMIN_ONLY)
+    public ResponseEntity<?> alterarPermissao(@RequestBody AlterarPermissao dados) {
         service.alterarPermissao(dados);
         return ResponseEntity.ok().build();
     }
-
 }
