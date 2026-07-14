@@ -21,7 +21,15 @@ const UserGroup = ({ usuarios, onChagen, statu, onRoleChange }) => {
     return (
         usuarios.length > 0 && <section>
             <Typography variant="h5" gutterBottom sx={{ marginTop: 2 }}>usuarios {statu}</Typography>
-            <Box sx={{ display: 'grid', gap: 4, gridTemplateColumns: 'repeat(4,1fr)' }}>
+            <Box sx={{
+                display: 'grid',
+                gap: 2,
+                gridTemplateColumns: {
+                    xs: '1fr',
+                    md: 'repeat(2, minmax(0, 1fr))',
+                    xl: 'repeat(4, minmax(0, 1fr))',
+                },
+            }}>
                 {usuarios.map((dados) => (
                     <Paper elevation={3} sx={{ padding: 4, maxWidth: 400, width: '100%' }} key={dados.id}>
                         <Typography variant="h5" gutterBottom>usuario: {dados.usuario}</Typography>

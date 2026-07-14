@@ -21,11 +21,15 @@ public class Atividade {
     private String cliente;
     private LocalDate data;
     private String usuario;
+    private String segmento;
+    private Double valor;
 
     public Atividade(CadastrarAtividadesDTO atv, String usuario){
         this.evento = atv.evento();
         this.cliente = atv.cliente();
         this.data = atv.data();
         this.usuario = usuario;
+        this.segmento = atv.segmento() != null ? atv.segmento() : "ATIVIDADE";
+        this.valor = atv.valor();
     }
 }

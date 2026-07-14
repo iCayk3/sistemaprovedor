@@ -11,11 +11,11 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-import static br.com.w4solution.controle_instalacao.infra.configuration.security.SecurityExpressions.COMMERCIAL_ACCESS;
+import static br.com.w4solution.controle_instalacao.infra.configuration.security.SecurityExpressions.COMMERCIAL_OR_FINANCIAL_ACCESS;
 
 @RestController
 @RequestMapping("atividades")
-@PreAuthorize(COMMERCIAL_ACCESS)
+@PreAuthorize(COMMERCIAL_OR_FINANCIAL_ACCESS)
 public class AtividadesController {
 
     @Autowired
@@ -28,20 +28,26 @@ public class AtividadesController {
     }
 
     @GetMapping("/resumo/mensal")
-    public ResponseEntity<List<ResumoMensalDTO>> resumoMensalAtividade(@RequestParam(required = false) String data){
-        var atividadesResumidas = service.buscarResumoMensalAtividade(data);
+    public ResponseEntity<List<ResumoMensalDTO>> resumoMensalAtividade(@RequestParam(required = false) String data, @RequestParam(required = false) String segmento){
+        var atividadesResumidas = service.buscarResumoMensalAtividade(data, segmento);
         return ResponseEntity.ok().body(atividadesResumidas);
     }
 
     @GetMapping("/registro/mensal")
-    public ResponseEntity<List<AtividadesDTO>> registroMensal(@RequestParam(required = false) String data){
-        var atividades = service.listarAtividadesPorMes(data);
+    public ResponseEntity<List<AtividadesDTO>> registroMensal(@RequestParam(required = false) String data, @RequestParam(required = false) String segmento){
+        var atividades = service.listarAtividadesPorMes(data, segmento);
         return ResponseEntity.ok().body(atividades);
     }
 
     @GetMapping("/usuario")
-    public ResponseEntity<List<ServicoPorUsuarioDiario>> listarAtividadesPorUsuario(@RequestParam(required = false) String filtro) {
-        var atividades = service.listarAtividadesPorUsuario(filtro);
+    public ResponseEntity<List<ServicoPorUsuarioDiario>> listarAtividadesPorUsuario(@RequestParam(required = false) String filtro, @RequestParam(required = false) String segmento) {
+        var atividades = service.listarAtividadesPorUsuario(filtro, segmento);
+        return ResponseEntity.ok().body(atividades);
+    }
+
+    @GetMapping("/usuario/mensal")
+    public ResponseEntity<List<ServicoPorUsuarioDiario>> listarAtividadesMensaisPorUsuario(@RequestParam(required = false) String data, @RequestParam(required = false) String segmento) {
+        var atividades = service.listarAtividadesMensaisPorUsuario(data, segmento);
         return ResponseEntity.ok().body(atividades);
     }
 

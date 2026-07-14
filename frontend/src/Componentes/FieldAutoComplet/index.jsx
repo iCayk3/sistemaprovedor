@@ -40,7 +40,7 @@ const FieldAutoComplet = ({
     return (
         <>
             {/* Caso: endpoint ou dados via API */}
-            {!porta && !desabilitar && !dadosProcedimento && data.length > 0 &&
+            {!porta && !desabilitar && !dadosProcedimento &&
                 <Autocomplete
                     value={valor}
                     inputValue={inputValue}

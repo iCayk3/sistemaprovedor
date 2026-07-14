@@ -1,36 +1,11 @@
 import { useEffect, useState } from "react";
-import styled from "styled-components";
+import { Box, Paper, Typography } from "@mui/material";
 import ResumoMensal from "../../Componentes/ResumoMensal";
 import Api from "../../Services/Api";
 import DashPizza from "../../Componentes/DashPizza";
 import TabelaExibicao from "../../Componentes/TabelaExibicao";
 import Filtros from "../../Componentes/Filtros";
 
-const MainOverviewEstilizada = styled.main`
-
-display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        grid-template-columns: 80% 20%;
-        grid-auto-rows: auto;
-        gap: 20px;
-        box-sizing: border-box;
-        .pizza {
-            margin-top: 8px;
-        }
-        section:nth-child(3){
-            grid-column: span 2;
-        }
-        section {       
-            text-align: center;
-            border-radius: 8px;
-        }
-
-        @media only screen and (max-width: 1438px) {
-            display: block;
-            box-sizing: border-box;
-            grid-auto-rows: none
-        }
-    `
 const today = new Date();
 
 const columns = [
@@ -39,7 +14,7 @@ const columns = [
     { field: 'olt', headerName: 'OLT', width: 150 },
     { field: 'cto', headerName: 'CTO', width: 130 },
     { field: 'porta', headerName: 'PORTA', width: 70 },
-    { field: 'equipe', headerName: 'Equipe técnica', width: 250 },
+    { field: 'equipe', headerName: 'Equipe tecnica', width: 250 },
     {
         field: 'data',
         headerName: 'Data',
@@ -50,29 +25,27 @@ const columns = [
             const data = new Date(`${raw}T00:00:00`);
             return data.toLocaleDateString('pt-BR');
         }
-
     },
     { field: 'procedimento', headerName: 'Procedimento', width: 130 },
     { field: 'mac', headerName: 'MAC', width: 130 },
     { field: 'ctoAntiga', headerName: 'CTO Antiga', width: 130 },
     { field: 'localidade', headerName: 'Localidade', width: 130 },
-    { field: 'observacao', headerName: 'Observação', width: 130 },
+    { field: 'observacao', headerName: 'Observacao', width: 130 },
 ];
 
 const OverviewRegistro = () => {
-
-    const [dataConsulta, setDataConsulta] = useState(today.toISOString().slice(0, 10))
-    const [data, setData] = useState()
-    const [rows, setRows] = useState()
-    const [dataFiltro, setDataFiltro] = useState('')
-    const [codigo, setCodigo] = useState('')
-    const [tecnico, setTecnico] = useState('')
-    const [tecnicoLabel, setTecnicoLabel] = useState('')
-    const UseApi = Api()
+    const [dataConsulta, setDataConsulta] = useState(today.toISOString().slice(0, 10));
+    const [data, setData] = useState();
+    const [rows, setRows] = useState();
+    const [dataFiltro, setDataFiltro] = useState('');
+    const [codigo, setCodigo] = useState('');
+    const [tecnico, setTecnico] = useState('');
+    const [tecnicoLabel, setTecnicoLabel] = useState('');
+    const UseApi = Api();
 
     const selectData = (even) => {
-        setDataConsulta(even.toISOString().slice(0, 10))
-    }
+        setDataConsulta(even.toISOString().slice(0, 10));
+    };
 
     useEffect(() => {
         const fetchData = async () => {
@@ -100,22 +73,33 @@ const OverviewRegistro = () => {
         fetchData();
     }, [dataConsulta]);
 
-
     return (
-        <MainOverviewEstilizada>
-            <div>
+        <Box sx={{ display: 'grid', gap: 2 }}>
+            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+                <Typography variant="h5" fontWeight={800}>Overview de registros</Typography>
+                <Typography color="text.secondary">Consulta operacional com filtros, resumo mensal e distribuicao por tecnico.</Typography>
+            </Paper>
+
+            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, minWidth: 0 }}>
                 <Filtros
                     aoAlteradoTecnico={setTecnico}
                     aoAlteradoTecnicoLabel={setTecnicoLabel}
                     aoAlteradoData={setDataFiltro}
                     aoAlteradoCliente={setCodigo}
                 />
-                <section><TabelaExibicao columns={columns} rows={rows} filtroExterno={{ tecnicoLabel, codigo, dataFiltro }} /></section>
-            </div>
-            <section><ResumoMensal dataApiCto={data} aoSelectData={(e) => selectData(e)} /></section>
-            <section className="pizza"><DashPizza uri={`registros/servicos/tecnicos/mensal/resumo?filtro=${dataConsulta}`} /></section>
-        </MainOverviewEstilizada>
-    )
-}
+                <Box sx={{ mt: 2 }}>
+                    <TabelaExibicao columns={columns} rows={rows} filtroExterno={{ tecnicoLabel, codigo, dataFiltro }} />
+                </Box>
+            </Paper>
+
+            <ResumoMensal dataApiCto={data} aoSelectData={(e) => selectData(e)} />
+
+            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+                <Typography variant="h6" fontWeight={800} mb={2}>Distribuicao por equipe</Typography>
+                <DashPizza uri={`registros/servicos/tecnicos/mensal/resumo?filtro=${dataConsulta}`} />
+            </Paper>
+        </Box>
+    );
+};
 
 export default OverviewRegistro;

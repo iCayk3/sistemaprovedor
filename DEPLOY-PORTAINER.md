@@ -1,73 +1,53 @@
 # Deploy com Portainer
 
-Este projeto pode ser publicado no Portainer usando o arquivo [docker-compose.yml](C:/Users/Cayke/.codex/worktrees/6210/sistemaprovedor/docker-compose.yml).
+Use `docker-compose.yml` como stack principal no Portainer.
 
-## Estrutura
+## Servicos
 
-O stack sobe 3 serviços:
+- `db`: PostgreSQL 17
+- `backend`: API Spring Boot na porta interna `8080`
+- `frontend`: React servido por Nginx na porta publica `FRONTEND_PORT`
 
-- `db`: PostgreSQL
-- `backend`: API Spring Boot
-- `frontend`: app React servido por Nginx
+O frontend chama o backend por `/api/`, e o Nginx encaminha internamente para `http://backend:8080`.
 
-O frontend acessa o backend via proxy em `/api/`, evitando problemas de CORS no ambiente publicado.
-
-## Arquivos usados
-
-- [docker-compose.yml](C:/Users/Cayke/.codex/worktrees/6210/sistemaprovedor/docker-compose.yml)
-- [.env.portainer.example](C:/Users/Cayke/.codex/worktrees/6210/sistemaprovedor/.env.portainer.example)
-- [backend/Dockerfile](C:/Users/Cayke/.codex/worktrees/6210/sistemaprovedor/backend/Dockerfile)
-- [frontend/Dockerfile](C:/Users/Cayke/.codex/worktrees/6210/sistemaprovedor/frontend/Dockerfile)
-- [frontend/nginx.conf](C:/Users/Cayke/.codex/worktrees/6210/sistemaprovedor/frontend/nginx.conf)
-
-## Variáveis importantes
-
-Use [.env.portainer.example](C:/Users/Cayke/.codex/worktrees/6210/sistemaprovedor/.env.portainer.example) como base e preencha principalmente:
-
-- `POSTGRES_PASSWORD`
-- `JWT_SECRET`
-- `LINK_RBX`
-- `API_KEY`
-- `API_FRONTEND`
-- `VITE_GOOGLE_MAPS_API_KEY` se o mapa for usado
-
-## Passo a passo no Portainer
-
-1. Crie uma nova `Stack`.
-2. Cole o conteúdo de [docker-compose.yml](C:/Users/Cayke/.codex/worktrees/6210/sistemaprovedor/docker-compose.yml).
-3. Preencha as variáveis de ambiente com base em [.env.portainer.example](C:/Users/Cayke/.codex/worktrees/6210/sistemaprovedor/.env.portainer.example).
-4. Faça o deploy da stack.
-
-## Observações
-
-- O frontend publica por padrão na porta definida em `FRONTEND_PORT`.
-- O backend não precisa expor porta pública; ele é acessado internamente pelo Nginx.
-- O volume `postgres_data` preserva os dados do banco entre reinicializações.
-- Para produção, não use os valores padrão de senha/segredo do exemplo.
-
-## Exemplo de valores
+## Variaveis para cadastrar no Portainer
 
 ```env
+DB_CONTAINER_NAME=sistemaprovedor-db
+BACKEND_CONTAINER_NAME=sistemaprovedor-backend
+FRONTEND_CONTAINER_NAME=sistemaprovedor-frontend
+
+POSTGRES_HOST=db
 POSTGRES_DB=controle_instalacao
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=uma-senha-forte
+POSTGRES_PASSWORD=troque-por-uma-senha-forte
 
-JWT_SECRET=uma-chave-jwt-forte
+JWT_SECRET=troque-por-uma-chave-jwt-forte
 LINK_RBX=https://seu-endpoint-rbx
 API_KEY=sua-chave-rbx
-API_FRONTEND=https://app.seudominio.com
+API_FRONTEND=https://seudominio.com
 
 VITE_API_URL=/api/
 VITE_GOOGLE_MAPS_API_KEY=
+
 FRONTEND_PORT=80
 ```
 
-## Pós-deploy
+## Observacoes importantes
 
-Depois que subir:
+- `POSTGRES_HOST` deve ficar como `db` quando o banco subir na mesma stack.
+- `API_FRONTEND` deve ser o dominio publico do sistema, por exemplo `https://app.seudominio.com`.
+- `VITE_API_URL` deve ficar `/api/` para usar o proxy do Nginx.
+- O backend nao precisa publicar a porta `8080`; ele e acessado apenas pelo frontend dentro da rede Docker.
+- O volume `postgres_data` preserva os dados do banco entre recriacoes dos containers.
+- Nao use valores padrao de senha/segredo em producao.
 
-1. acesse o frontend pela porta/domínio configurado
-2. teste login
-3. valide chamadas ao backend
-4. valide exportação PDF/Excel
-5. valide o mapa, se a chave do Google Maps tiver sido configurada
+## Passo a passo
+
+1. No Portainer, crie uma Stack.
+2. Cole o conteudo de `docker-compose.yml`.
+3. Cadastre as variaveis acima em Environment variables.
+4. Faca o deploy.
+5. Acesse o dominio/porta configurada no `FRONTEND_PORT`.
+6. Valide login, dashboards, cobrancas, ACP eventos e consultas RBX.
+

@@ -17,8 +17,13 @@ public class Evento {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String evento;
+    private String segmento;
 
     public void atualizarEvento(String evento) {
         this.evento = evento;
+    }
+
+    public void atualizarSegmento(String segmento) {
+        this.segmento = segmento;
     }
 }

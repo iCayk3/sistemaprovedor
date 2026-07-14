@@ -1,56 +1,46 @@
-import styled from "styled-components"
-
-const DivTableComponent = styled.div`
-    display: block;
-    justify-content: center;
-    align-items: center;
-    border-radius: 8px;
-    position: relative;
-
-    table {
-        width: 100%;
-        box-sizing: border-box;
-    }
-
-    th, td {
-        border-radius: 8px;
-        border: 1px solid #dbe9ff;
-        padding: 6px;
-        text-align: left;
-    }
-
-    th {
-        background-color: #7192ff;
-        width: 100vw;
-    }
-
-    td {
-        text-align: center;
-        width: 2rem;
-    }
-
-    @media only screen and (max-width: 600px) {
-        h1 {
-            font-size: 14px;
-        }
-    }
-`
+import { Box, LinearProgress, Paper, Typography } from '@mui/material';
 
 const TabelaResumo = ({ rows }) => {
-    return (
-        <DivTableComponent>
-            <table>
-                <tbody>
-                    {rows.map((dados, index) => (
-                        <tr key={index}>
-                            <th>{dados.label}</th>
-                            <td>{dados.value}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </DivTableComponent>
-    )
-}
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const maxValue = Math.max(...safeRows.map((item) => Number(item.value) || 0), 0);
 
-export default TabelaResumo
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gap: 1.25,
+        gridTemplateColumns: {
+          xs: '1fr',
+          sm: 'repeat(2, minmax(0, 1fr))',
+          xl: 'repeat(3, minmax(0, 1fr))',
+        },
+      }}
+    >
+      {safeRows.map((dados, index) => {
+        const value = Number(dados.value) || 0;
+        const percent = maxValue ? (value / maxValue) * 100 : 0;
+
+        return (
+          <Paper key={`${dados.label}-${index}`} variant="outlined" sx={{ p: 1.5, borderRadius: 2, minWidth: 0 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 0.75 }}>
+              <Typography variant="body2" fontWeight={700}>{dados.label}</Typography>
+              <Typography variant="body2" fontWeight={800}>{value.toLocaleString('pt-BR')}</Typography>
+            </Box>
+            {maxValue > 0 ? (
+              <LinearProgress variant="determinate" value={percent} sx={{ height: 7, borderRadius: 999 }} />
+            ) : (
+              <Box sx={{ height: 7, borderRadius: 999, bgcolor: 'action.hover' }} />
+            )}
+          </Paper>
+        );
+      })}
+      {!safeRows.length && (
+        <Box sx={{ py: 3, textAlign: 'center' }}>
+          <Typography color="text.secondary">Nenhum dado para exibir.</Typography>
+        </Box>
+      )}
+    </Box>
+  );
+};
+
+export default TabelaResumo;

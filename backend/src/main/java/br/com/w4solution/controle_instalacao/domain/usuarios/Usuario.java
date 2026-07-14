@@ -60,6 +60,7 @@ public class Usuario implements UserDetails {
                 authorities.add(new SimpleGrantedAuthority("ROLE_COMERCIAL"));
                 authorities.add(new SimpleGrantedAuthority("ROLE_FINANCEIRO"));
             }
+            case COBRANCA -> authorities.add(new SimpleGrantedAuthority("ROLE_COBRANCA"));
             case GUEST -> authorities.add(new SimpleGrantedAuthority("ROLE_GUEST"));
         }
 
@@ -120,7 +121,7 @@ public class Usuario implements UserDetails {
         this.status = status;
     }
 
-    public void alterarCliente(UserRole role) {
+    public void alterarPermissao(UserRole role) {
         this.permissao = role;
     }
 }

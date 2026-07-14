@@ -12,11 +12,11 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.List;
 
-import static br.com.w4solution.controle_instalacao.infra.configuration.security.SecurityExpressions.FINANCIAL_ACCESS;
+import static br.com.w4solution.controle_instalacao.infra.configuration.security.SecurityExpressions.CHARGING_ACCESS;
 
 @RestController
 @RequestMapping("rbx")
-@PreAuthorize(FINANCIAL_ACCESS)
+@PreAuthorize(CHARGING_ACCESS)
 public class RbxController {
 
     @Autowired

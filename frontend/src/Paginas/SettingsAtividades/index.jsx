@@ -1,168 +1,300 @@
-import styled from "styled-components";
-import Api from "../../Services/Api";
-import { useEffect, useState } from "react";
-import TextoInput from "../../Componentes/TextoInput";
-import {
-    Button,
-    IconButton,
-    List,
-    ListItem,
-    ListItemText,
-    Typography
-} from "@mui/material";
 import ClearIcon from "@mui/icons-material/Clear";
 import EditIcon from "@mui/icons-material/DriveFileRenameOutline";
+import LockRoundedIcon from "@mui/icons-material/LockRounded";
+import {
+    Alert,
+    Box,
+    Button,
+    Chip,
+    IconButton,
+    MenuItem,
+    Paper,
+    Stack,
+    Tab,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Tabs,
+    TextField,
+    Typography,
+} from "@mui/material";
+import { useEffect, useMemo, useState } from "react";
 import { DialogAction } from "../../Componentes/DialogAction";
-
-const FormularioStyled = styled.form`
-    .sub-area {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 32px;
-        margin-top: 32px;
-    }
-`;
-
-const ProcedimentosContainer = styled.div`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 24px;
-    justify-content: space-between;
-`;
-
-const ProcedimentoBox = styled.div`
-    display: flex;
-    align-items: center;
-    padding: 12px 16px;
-    border-left: 1px solid;
-    border-right: 1px solid;
-    min-width: 220px;
-    width: 25%;
-    display: flex;
-    justify-content: space-between;
-`;
-
-const CorIndicador = styled.span`
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    margin-left: 12px;
-`;
+import TextoInput from "../../Componentes/TextoInput";
+import Api from "../../Services/Api";
 
 const api = Api();
 
-const SettingsAtividades = () => {
+const segments = {
+    ATIVIDADE: {
+        label: "Atividades",
+        title: "Cadastro de evento",
+        field: "Evento",
+        helper: "Tipos usados no registro de atividades comerciais.",
+        suggestions: ["LIGACAO", "WHATSAPP", "VISITA", "VENDA", "CANCELAMENTO"],
+    },
+    LEAD: {
+        label: "Leads",
+        title: "Cadastro de lead",
+        field: "Origem / etapa",
+        helper: "Cadastre origens e etapas para acompanhar leads.",
+        suggestions: ["INDICACAO", "WHATSAPP", "INSTAGRAM", "SITE", "EM NEGOCIACAO", "CONVERTIDO", "PERDIDO"],
+    },
+    COBRANCA: {
+        label: "Cobrancas",
+        title: "Cadastro de cobranca",
+        field: "Acao / status",
+        helper: "Itens criticos da cobranca ficam bloqueados para manter o fluxo operacional consistente.",
+        suggestions: ["ABERTO", "EM NEGOCIACAO", "PROMESSA DE PAGAMENTO", "FECHADO", "CONTATO REALIZADO", "SEM RETORNO", "ACORDO", "SEGUNDA VIA ENVIADA", "CONTESTACAO", "NEGATIVACAO", "PAGO"],
+    },
+};
 
+const lockedBySegment = {
+    COBRANCA: new Set(["ABERTO", "EM NEGOCIACAO", "PROMESSA DE PAGAMENTO", "FECHADO"]),
+};
+
+const SettingsAtividades = ({ initialSegment = "ATIVIDADE", allowedSegments = ["ATIVIDADE", "LEAD", "COBRANCA"] }) => {
     const [evento, setEvento] = useState("");
     const [procedimentos, setProcedimentos] = useState([]);
     const [refresh, setRefresh] = useState(true);
     const [editData, setEditData] = useState(null);
     const [deleteId, setDeleteId] = useState(null);
+    const [segmento, setSegmento] = useState(initialSegment);
+    const [error, setError] = useState("");
+    const [search, setSearch] = useState("");
+    const config = segments[segmento];
+    const visibleSegments = allowedSegments.filter((key) => segments[key]);
+
+    useEffect(() => {
+        if (!visibleSegments.includes(segmento)) {
+            setSegmento(visibleSegments[0] || "ATIVIDADE");
+        }
+    }, [segmento, visibleSegments]);
 
     useEffect(() => {
         (async () => {
+            setError("");
             try {
-                const dados = await api("evento");
-                setProcedimentos(dados);
+                const dados = await api(`evento?segmento=${segmento}`);
+                setProcedimentos(Array.isArray(dados) ? dados : []);
             } catch (err) {
                 console.error("Erro ao buscar procedimentos:", err);
+                setError(err.message || "Erro ao carregar opcoes.");
             }
         })();
-    }, [refresh]);
+    }, [refresh, segmento]);
+
+    const filteredItems = useMemo(() => {
+        const query = search.trim().toLowerCase();
+        if (!query) return procedimentos;
+        return procedimentos.filter((item) => String(item.label || "").toLowerCase().includes(query));
+    }, [procedimentos, search]);
 
     const cadastrarEvento = async (e) => {
         e.preventDefault();
+        if (!evento.trim()) return;
+        setError("");
         try {
             await api("evento", "POST", {
                 evento: evento.toUpperCase(),
+                segmento,
             });
             setEvento("");
             setRefresh((r) => !r);
         } catch (err) {
             console.error("Erro ao cadastrar:", err);
+            setError(err.message || "Erro ao cadastrar opcao.");
         }
     };
 
     const editarEvento = async () => {
         if (!editData) return;
+        setError("");
         try {
             await api(`evento/${editData.id}`, "PUT", {
                 evento: editData.label.toUpperCase(),
+                segmento,
             });
             setEditData(null);
             setRefresh((r) => !r);
         } catch (err) {
             console.error("Erro ao editar:", err);
+            setError(err.message || "Erro ao editar opcao.");
         }
     };
 
     const excluirEvento = async () => {
+        setError("");
         try {
             await api(`evento/${deleteId}`, "DELETE");
             setDeleteId(null);
             setRefresh((r) => !r);
         } catch (err) {
             console.error("Erro ao excluir:", err);
+            setError(err.message || "Erro ao excluir opcao.");
         }
     };
 
-    return (
-        <>
-            <FormularioStyled onSubmit={cadastrarEvento}>
-                <div style={{ display: "flex", gap: "64px", justifyContent: "space-between" }}>
-                    <div style={{ width: "100%" }}>
-                        <Typography variant="h4">Cadastro de evento</Typography>
-                        <TextoInput
-                            labelProp="Evento"
-                            aoAlterado={(e) => setEvento(e.target.value.toUpperCase())}
-                            valor={evento}
-                            obrigatorio
-                            sx={{ width: '100%' }}
-                        />
-                    </div>
-                </div>
-                <Button type="submit" variant="outlined" sx={{ mt: 4 }}>
-                    Cadastrar
-                </Button>
-            </FormularioStyled>
+    const adicionarSugestoes = async () => {
+        const existentes = new Set(procedimentos.map((item) => item.label));
+        const pendentes = config.suggestions.filter((item) => !existentes.has(item));
+        if (!pendentes.length) return;
+        setError("");
+        try {
+            await Promise.all(pendentes.map((item) => api("evento", "POST", { evento: item, segmento })));
+            setRefresh((r) => !r);
+        } catch (err) {
+            console.error("Erro ao cadastrar sugestoes:", err);
+            setError(err.message || "Erro ao adicionar sugestoes.");
+        }
+    };
 
-            <div>
-                <Typography variant="h4" sx={{ mt: 4 }}>
-                    Eventos
-                </Typography>
-                <ProcedimentosContainer>
-                    {procedimentos.map((item) => (
-                        <ProcedimentoBox key={item.id}>
-                            <Typography variant="body1">{item.label}</Typography>   
-                            <IconButton onClick={() => setEditData({ ...item })} sx={{ ml: 1 }}>
-                                <EditIcon />
-                            </IconButton>
-                            <IconButton color="error" onClick={() => setDeleteId(item.id)} sx={{ ml: 1 }}>
-                                <ClearIcon />
-                            </IconButton>
-                        </ProcedimentoBox>
-                    ))}
-                </ProcedimentosContainer>
-            </div>
+    const isLocked = (item) => lockedBySegment[segmento]?.has(item.label);
+    const pageTitle = visibleSegments.length === 1 && visibleSegments[0] === "COBRANCA"
+        ? "Configuracoes de cobranca"
+        : "Configuracoes comerciais";
+
+    return (
+        <Box>
+            <Paper variant="outlined" sx={{ p: 2.5, mb: 2, borderRadius: 2 }}>
+                <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={2}>
+                    <Box>
+                        <Typography variant="h4" fontWeight={800}>{pageTitle}</Typography>
+                        <Typography color="text.secondary">
+                            Cadastre e mantenha as opcoes usadas pelos formularios e dashboards.
+                        </Typography>
+                    </Box>
+                    <TextField
+                        size="small"
+                        label="Buscar opcao"
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        sx={{ minWidth: { xs: "100%", md: 320 } }}
+                    />
+                </Stack>
+                {visibleSegments.length > 1 && (
+                    <Tabs value={segmento} onChange={(_, value) => setSegmento(value)} sx={{ mt: 2 }}>
+                        {visibleSegments.map((key) => (
+                            <Tab key={key} value={key} label={segments[key].label} />
+                        ))}
+                    </Tabs>
+                )}
+            </Paper>
+
+            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+            <Paper component="form" variant="outlined" onSubmit={cadastrarEvento} sx={{ p: 2, mb: 2, borderRadius: 2 }}>
+                <Typography variant="h6" fontWeight={800}>{config.title}</Typography>
+                <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>{config.helper}</Typography>
+                <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "stretch", md: "center" }}>
+                    <TextField
+                        label={config.field}
+                        value={evento}
+                        onChange={(event) => setEvento(event.target.value.toUpperCase())}
+                        required
+                        fullWidth
+                    />
+                    <Button type="submit" variant="contained" sx={{ minWidth: 140 }}>
+                        Cadastrar
+                    </Button>
+                    <Button type="button" variant="outlined" onClick={adicionarSugestoes} sx={{ minWidth: 180 }}>
+                        Adicionar sugestoes
+                    </Button>
+                </Stack>
+            </Paper>
+
+            <Paper variant="outlined" sx={{ borderRadius: 2 }}>
+                <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={2} sx={{ p: 2 }}>
+                    <Box>
+                        <Typography variant="h6" fontWeight={800}>{config.label}</Typography>
+                        <Typography color="text.secondary" variant="body2">
+                            {filteredItems.length} de {procedimentos.length} opcoes exibidas.
+                        </Typography>
+                    </Box>
+                    <TextField
+                        select
+                        size="small"
+                        label="Segmento"
+                        value={segmento}
+                        onChange={(event) => setSegmento(event.target.value)}
+                        disabled={visibleSegments.length === 1}
+                        sx={{ minWidth: 220 }}
+                    >
+                        {visibleSegments.map((key) => (
+                            <MenuItem key={key} value={key}>{segments[key].label}</MenuItem>
+                        ))}
+                    </TextField>
+                </Stack>
+
+                <TableContainer>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>Opcao</TableCell>
+                                <TableCell>Tipo</TableCell>
+                                <TableCell align="right">Acoes</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {filteredItems.map((item) => (
+                                <TableRow key={item.id} hover>
+                                    <TableCell>
+                                        <Typography fontWeight={800}>{item.label}</Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                        {isLocked(item) ? (
+                                            <Chip size="small" icon={<LockRoundedIcon />} color="warning" variant="outlined" label="Obrigatorio" />
+                                        ) : (
+                                            <Chip size="small" variant="outlined" label="Customizavel" />
+                                        )}
+                                    </TableCell>
+                                    <TableCell align="right">
+                                        <IconButton
+                                            size="small"
+                                            onClick={() => setEditData({ ...item })}
+                                            disabled={isLocked(item)}
+                                        >
+                                            <EditIcon fontSize="small" />
+                                        </IconButton>
+                                        <IconButton
+                                            size="small"
+                                            color="error"
+                                            onClick={() => setDeleteId(item.id)}
+                                            disabled={isLocked(item)}
+                                        >
+                                            <ClearIcon fontSize="small" />
+                                        </IconButton>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                            {!filteredItems.length && (
+                                <TableRow>
+                                    <TableCell colSpan={3} align="center">Nenhuma opcao encontrada.</TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            </Paper>
 
             {editData && (
                 <DialogAction
                     abrir
                     entradas
-                    titulo="Editar evento"
+                    titulo="Editar opcao"
                     contexto={
-                        <div style={{ display: "flex", gap: "32px", flexDirection: 'column', height: '200px' }}>
+                        <Stack spacing={2} sx={{ pt: 2, minWidth: 360 }}>
                             <TextoInput
-                                labelProp="Evento"
-                                aoAlterado={(e) =>
-                                    setEditData((prev) => ({ ...prev, label: e.target.value }))
-                                }
+                                labelProp={config.field}
+                                aoAlterado={(e) => setEditData((prev) => ({ ...prev, label: e.target.value }))}
                                 valor={editData.label}
                                 obrigatorio
-                                sx={{ width: '100%', marginTop: 2 }}
+                                sx={{ width: "100%" }}
                             />
-                        </div>
-
+                        </Stack>
                     }
                     aoChamar={editarEvento}
                     aoFechar={() => setEditData(null)}
@@ -170,20 +302,18 @@ const SettingsAtividades = () => {
                 />
             )}
 
-            {
-                deleteId && (
-                    <DialogAction
-                        abrir
-                        titulo="Excluir evento"
-                        contexto="Tem certeza que deseja excluir o evento?"
-                        aoChamar={excluirEvento}
-                        aoFechar={() => setDeleteId(null)}
-                        nomeAcao="Excluir"
-                    />
-                )
-            }
-        </>
-    )
-}
+            {deleteId && (
+                <DialogAction
+                    abrir
+                    titulo="Excluir opcao"
+                    contexto="Tem certeza que deseja excluir esta opcao?"
+                    aoChamar={excluirEvento}
+                    aoFechar={() => setDeleteId(null)}
+                    nomeAcao="Excluir"
+                />
+            )}
+        </Box>
+    );
+};
 
-export default SettingsAtividades
+export default SettingsAtividades;

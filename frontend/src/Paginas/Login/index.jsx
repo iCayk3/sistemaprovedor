@@ -1,7 +1,17 @@
 import * as React from 'react';
 import {
-  Button, FormControl, InputLabel, OutlinedInput, TextField,
-  InputAdornment, Link, IconButton, Box, Typography, Paper
+  Alert,
+  Box,
+  Button,
+  FormControl,
+  IconButton,
+  InputAdornment,
+  InputLabel,
+  Link,
+  OutlinedInput,
+  Paper,
+  TextField,
+  Typography,
 } from '@mui/material';
 import AccountCircle from '@mui/icons-material/AccountCircle';
 import Visibility from '@mui/icons-material/Visibility';
@@ -19,45 +29,39 @@ const sxInputs = {
     '&.Mui-focused fieldset': { borderColor: '#00e5ff' },
   },
   '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' },
-}
+};
 
 const CustomEmailField = React.memo(({ value, onChange, codigoErro }) => (
-  <>
-    <TextField
-      error={codigoErro === 401 ? true : false}
-      label="Login"
-      name="email"
-      type="text"
-      size="small"
-      required
-      fullWidth
-      value={value}
-      onChange={onChange}
-      InputProps={{
-        startAdornment: (
-          <InputAdornment position="start">
-            <AccountCircle sx={{ color: 'rgba(255,255,255,0.7)' }} />
-          </InputAdornment>
-        ),
-      }}
-      variant="outlined"
-      sx={sxInputs}
-    />
-  </>
+  <TextField
+    error={codigoErro >= 400}
+    label="Login"
+    name="email"
+    type="text"
+    size="small"
+    required
+    fullWidth
+    value={value}
+    onChange={onChange}
+    InputProps={{
+      startAdornment: (
+        <InputAdornment position="start">
+          <AccountCircle sx={{ color: 'rgba(255,255,255,0.7)' }} />
+        </InputAdornment>
+      ),
+    }}
+    variant="outlined"
+    sx={sxInputs}
+  />
 ));
 
 const CustomPasswordField = React.memo(({ value, onChange, codigoErro }) => {
   const [showPassword, setShowPassword] = React.useState(false);
 
   return (
-    <FormControl
-      sx={sxInputs}
-      fullWidth
-      variant="outlined"
-    >
+    <FormControl sx={sxInputs} fullWidth variant="outlined">
       <InputLabel size="small" htmlFor="outlined-adornment-password">Senha</InputLabel>
       <OutlinedInput
-        error={codigoErro === 401 ? true : false}
+        error={codigoErro >= 400}
         type={showPassword ? 'text' : 'password'}
         name="password"
         size="small"
@@ -78,9 +82,6 @@ const CustomPasswordField = React.memo(({ value, onChange, codigoErro }) => {
         }
         label="Senha"
       />
-      {codigoErro === 401 ? <Box sx={{color : 'red', ml : 1}}>
-        Usuario ou senha invalidos!
-      </Box> : ''}
     </FormControl>
   );
 });
@@ -91,31 +92,44 @@ const Login = () => {
   const [usuario, setUsuario] = React.useState('');
   const [senha, setSenha] = React.useState('');
   const [erroCode, setErrorCode] = React.useState(200);
+  const [erroMensagem, setErroMensagem] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
 
-  const controllCodigoDigitoUser = (e) => {
-    setErrorCode(200)
-    setUsuario(e)
-  }
+  const clearError = () => {
+    setErrorCode(200);
+    setErroMensagem('');
+  };
 
-  const controllCodigoDigitoPass = (e) => {
-    setErrorCode(200)
-    setSenha(e)
-  }
+  const controllCodigoDigitoUser = (value) => {
+    clearError();
+    setUsuario(value);
+  };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const controllCodigoDigitoPass = (value) => {
+    clearError();
+    setSenha(value);
+  };
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
     logar();
   };
 
   const logar = async () => {
+    setLoading(true);
+    setErroMensagem('');
     try {
-      const form = { usuario, senha };
-      const response = await UseApi('usuario/logar', 'POST', form);
-      localStorage.setItem("user", JSON.stringify(response.user))
-      window.location.href = "/";
+      const response = await UseApi('usuario/logar', 'POST', { usuario, senha });
+      localStorage.setItem('user', JSON.stringify(response.user));
+      window.location.href = '/';
     } catch (error) {
+      const status = error?.status ? `Erro ${error.status}: ` : '';
+      const message = error?.message || 'Nao foi possivel conectar ao backend.';
       setErrorCode(error?.status || 500);
-      console.error('Erro ao fazer login:', error?.status);
+      setErroMensagem(`${status}${message}`);
+      console.error('Erro ao fazer login:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -126,7 +140,7 @@ const Login = () => {
         justifyContent: 'center',
         alignItems: 'center',
         minHeight: '100vh',
-        backgroundImage: `linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url("/imagens/backgroudlogin1.jpg")`,
+        backgroundImage: 'linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url("/imagens/backgroudlogin1.jpg")',
         backgroundSize: 'cover',
         backgroundRepeat: 'no-repeat',
         backgroundPosition: 'center',
@@ -148,11 +162,24 @@ const Login = () => {
       >
         <Typography variant="h5" gutterBottom fontWeight={600}>Login</Typography>
         <Typography variant="body2" gutterBottom sx={{ mb: 3, color: 'rgba(255,255,255,0.7)' }}>
-          Bem-vindo, faça login por favor!
+          Bem-vindo, faca login por favor.
         </Typography>
+        {erroMensagem && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {erroMensagem}
+          </Alert>
+        )}
         <Box component="form" noValidate autoComplete="off" onSubmit={handleSubmit}>
-          <CustomEmailField value={usuario} onChange={(e) => controllCodigoDigitoUser(e.target.value)} codigoErro={erroCode} />
-          <CustomPasswordField value={senha} onChange={(e) => controllCodigoDigitoPass(e.target.value)} codigoErro={erroCode} />
+          <CustomEmailField
+            value={usuario}
+            onChange={(e) => controllCodigoDigitoUser(e.target.value)}
+            codigoErro={erroCode}
+          />
+          <CustomPasswordField
+            value={senha}
+            onChange={(e) => controllCodigoDigitoPass(e.target.value)}
+            codigoErro={erroCode}
+          />
           <Button
             variant="contained"
             fullWidth
@@ -168,8 +195,9 @@ const Login = () => {
               },
             }}
             type="submit"
+            disabled={loading}
           >
-            Entrar
+            {loading ? 'Entrando...' : 'Entrar'}
           </Button>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
             <Link href="/register" variant="body2" sx={{ color: '#00e5ff' }}>

@@ -11,6 +11,7 @@ public enum UserRole {
     TECNICO_COMERCIAL("tecnico_comercial"),
     TECNICO_FINANCEIRO("tecnico_financeiro"),
     COMERCIAL_FINANCEIRO("comercial_financeiro"),
+    COBRANCA("cobranca"),
     GUEST("guest");
 
     private String role;

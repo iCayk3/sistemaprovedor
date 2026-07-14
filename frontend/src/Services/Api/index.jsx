@@ -20,7 +20,20 @@ export default function Api() {
 
         if (!response.ok) {
             const errorText = await response.text();
-            const error = new Error(errorText || "Erro na requisição");
+            let message = errorText;
+
+            try {
+                const parsed = JSON.parse(errorText);
+                if (Array.isArray(parsed)) {
+                    message = parsed.map((item) => item.mensagem || item.message || JSON.stringify(item)).join("; ");
+                } else if (parsed?.message || parsed?.erro || parsed?.error) {
+                    message = parsed.message || parsed.erro || parsed.error;
+                }
+            } catch {
+                message = errorText;
+            }
+
+            const error = new Error(message || "Erro na requisicao");
             error.status = response.status;
             throw error;
         }
@@ -29,8 +42,8 @@ export default function Api() {
 
         if (contentType && contentType.includes("application/json")) {
             return await response.json();
-        } else {
-            return await response.text();
         }
+
+        return await response.text();
     };
 }

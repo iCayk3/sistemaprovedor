@@ -1,217 +1,224 @@
-import { Fab, FormControl, Typography, Button, IconButton, Box, styled } from "@mui/material";
-import TextoInput from "../../../Componentes/TextoInput";
-import { useState } from "react";
-import Divider from "@mui/material/Divider";
 import AddIcon from "@mui/icons-material/Add";
-import ClearIcon from '@mui/icons-material/Clear';
-import Api from "../../../Services/Api";
+import ClearIcon from "@mui/icons-material/Clear";
+import Groups3Icon from "@mui/icons-material/Groups3";
+import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import {
+    Alert,
+    Box,
+    Button,
+    IconButton,
+    Paper,
+    Stack,
+    Typography,
+} from "@mui/material";
+import { useState } from "react";
 import FieldAutoComplet from "../../../Componentes/FieldAutoComplet";
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
-import Groups3Icon from '@mui/icons-material/Groups3';
+import TextoInput from "../../../Componentes/TextoInput";
+import Api from "../../../Services/Api";
 
+const UseApi = Api();
 
-const UseApi = Api()
+const emptyTechnician = { id: null, nome: "" };
 
-const CadastroStyled = styled("section")`
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 32px;
-
-    @media only screen and (max-width: 930px) {
-            display: block;
-            box-sizing: border-box;
-            grid-auto-rows: none
-        }
-`
+const TechnicianRows = ({ rows, disabled = false, onAdd, onRemove, onChange, labelPrefix }) => (
+    <Stack spacing={1.2}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Typography variant="subtitle1" fontWeight={800}>Tecnicos</Typography>
+            <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={onAdd} disabled={disabled}>
+                Adicionar
+            </Button>
+        </Stack>
+        {rows.map((tecnico, index) => (
+            <Stack
+                key={index}
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                sx={{
+                    p: 1,
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 1,
+                }}
+            >
+                <Typography color="text.secondary" sx={{ width: 28, textAlign: "center" }}>
+                    {index + 1}
+                </Typography>
+                <TextoInput
+                    labelProp={`${labelPrefix} ${index + 1}`}
+                    valor={tecnico.nome}
+                    aoAlterado={(valor) => onChange(index, valor)}
+                    sx={{ width: "100%" }}
+                    desabilitar={disabled}
+                />
+                <IconButton
+                    color="error"
+                    onClick={() => onRemove(index)}
+                    aria-label="Remover tecnico"
+                    disabled={disabled || rows.length === 1}
+                >
+                    <ClearIcon />
+                </IconButton>
+            </Stack>
+        ))}
+    </Stack>
+);
 
 const CadastrosEquipes = ({ atualizar }) => {
-    const [nomeEquipe, setNomeEquipe] = useState('');
-    const [tecnicos, setTecnicos] = useState([{ id: null, nome: '' }]);
-    const [tecnicosAtualizar, setTecnicosAtualizar] = useState([{ id: null, nome: '' }]);
-    const [tecnicoInput0, setTecnicoInput0] = useState('')
-    const [tecnico0, setTecnico0] = useState('')
+    const [nomeEquipe, setNomeEquipe] = useState("");
+    const [tecnicos, setTecnicos] = useState([emptyTechnician]);
+    const [tecnicosAtualizar, setTecnicosAtualizar] = useState([emptyTechnician]);
+    const [tecnicoInput0, setTecnicoInput0] = useState("");
+    const [tecnico0, setTecnico0] = useState("");
+    const [error, setError] = useState("");
 
-    const adicionarTecnico = ({ atualizar }) => {
-        if (!atualizar) {
-            setTecnicos([...tecnicos, { id: null, nome: '' }]);
+    const adicionarTecnico = ({ atualizar: atualizarEquipe } = {}) => {
+        if (atualizarEquipe) {
+            setTecnicosAtualizar((current) => [...current, emptyTechnician]);
+            return;
         }
-        if (atualizar) {
-            setTecnicosAtualizar([...tecnicosAtualizar, { id: null, nome: '' }]);
-        }
+        setTecnicos((current) => [...current, emptyTechnician]);
     };
 
-    const atualizarTecnico = (index, valor, atualizar) => {
-        if (!atualizar) {
-            const novosTecnicos = [...tecnicos];
-            novosTecnicos[index].nome = valor.target.value;
-            setTecnicos(novosTecnicos);
+    const atualizarTecnico = (index, valor, atualizarEquipe) => {
+        const nextValue = valor.target.value;
+        if (atualizarEquipe) {
+            setTecnicosAtualizar((current) => current.map((item, itemIndex) => (
+                itemIndex === index ? { ...item, nome: nextValue } : item
+            )));
+            return;
         }
-        if (atualizar) {
-            const novosTecnicos = [...tecnicosAtualizar];
-            novosTecnicos[index].nome = valor.target.value;
-            setTecnicosAtualizar(novosTecnicos);
-        }
+        setTecnicos((current) => current.map((item, itemIndex) => (
+            itemIndex === index ? { ...item, nome: nextValue } : item
+        )));
     };
 
-    const removerTecnico = (index, atualizar) => {
-        if (!atualizar) {
-            const novosTecnicos = tecnicos.filter((_, i) => i !== index);
-            setTecnicos(novosTecnicos);
+    const removerTecnico = (index, atualizarEquipe) => {
+        if (atualizarEquipe) {
+            setTecnicosAtualizar((current) => current.filter((_, itemIndex) => itemIndex !== index));
+            return;
         }
-        if (atualizar) {
-            const novosTecnicos = tecnicosAtualizar.filter((_, i) => i !== index);
-            setTecnicosAtualizar(novosTecnicos);
-        }
+        setTecnicos((current) => current.filter((_, itemIndex) => itemIndex !== index));
     };
 
     const atualizarPagina = () => {
-        atualizar(prev => !prev)
-    }
+        atualizar((prev) => !prev);
+    };
 
-    const enviarDados = async ({ atualizar }) => {
-
+    const enviarDados = async ({ atualizar: atualizarEquipe } = {}) => {
+        setError("");
         const payload = {
-            nomeEquipe: atualizar ? tecnico0.id : nomeEquipe,
-            tecnicos: atualizar ? tecnicosAtualizar : tecnicos,
+            nomeEquipe: atualizarEquipe ? tecnico0.id : nomeEquipe,
+            tecnicos: atualizarEquipe ? tecnicosAtualizar : tecnicos,
         };
 
-        const fetchData = async () => {
-
-            try {
-                if (!atualizar) {
-                    console.log(payload)
-                    await UseApi(`tecnico/equipes`, 'POST', payload);
-                    setNomeEquipe('')
-                    setTecnicos([{ id: null, nome: '' }]);
-                    alert(`Cadastro da equipe ${nomeEquipe} realizado com sucesso`)
-                    atualizarPagina()
-                }
-
-                if (atualizar) {
-                    console.log(payload)
-                    await UseApi(`tecnico`, 'POST', payload);
-                    setTecnico0('')
-                    setTecnicosAtualizar([{ id: null, nome: '' }]);
-                    alert(`Equipe "${nomeEquipe}" atualizada com sucesso com os técnicos: \n -${tecnicosAtualizar.map(n => n.nome).join('\n -')}`);
-                    atualizarPagina()
-                }
-
-            } catch (error) {
-                console.error('Erro ao buscar dados:', error);
+        try {
+            if (!atualizarEquipe) {
+                await UseApi("tecnico/equipes", "POST", payload);
+                setNomeEquipe("");
+                setTecnicos([emptyTechnician]);
+                atualizarPagina();
+                return;
             }
-        };
 
-        fetchData();
+            await UseApi("tecnico", "POST", payload);
+            setTecnico0("");
+            setTecnicoInput0("");
+            setTecnicosAtualizar([emptyTechnician]);
+            atualizarPagina();
+        } catch (requestError) {
+            console.error("Erro ao salvar cadastro:", requestError);
+            setError(requestError.message || "Erro ao salvar cadastro.");
+        }
     };
 
     return (
-        <CadastroStyled>
-            <div>
-                <FormControl sx={{ width: '100%', display: 'flex', gap: 2 }}>
-                    <Typography variant="h4" component={"h4"} sx={{ marginBottom: 2 }}>
-                        Cadastro de equipe
-                    </Typography>
-                    <Typography variant="h6" component={"h4"} sx={{ marginBottom: 2 }}>
-                        Informe o nome da equipe
-                    </Typography>
-                    <TextoInput
-                        labelProp={"Nome da equipe"}
-                        obrigatorio
-                        valor={nomeEquipe}
-                        aoAlterado={(e) => setNomeEquipe(e.target.value)}
-                        sx={{ width: '100%' }}
-                    />
-                    <Typography variant="h6" component={"h4"} sx={{ marginTop: 2 }}>
-                        Técnicos
-                    </Typography>
-                    {tecnicos.map((tecnico, index) => (
-                        <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <IconButton
-                                color="error"
-                                onClick={() => removerTecnico(index)}
-                                aria-label="Remover técnico"
-                            >
-                                <ClearIcon />
-                            </IconButton>
-                            <TextoInput
-                                labelProp={`Nome do técnico ${index + 1}`}
-                                valor={tecnico.nome}
-                                aoAlterado={(valor) => atualizarTecnico(index, valor)}
-                                sx={{ width: '100%' }}
-                            />
+        <Box>
+            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+            <Box
+                sx={{
+                    display: "grid",
+                    gap: 2,
+                    gridTemplateColumns: { xs: "1fr", lg: "repeat(2, minmax(0, 1fr))" },
+                }}
+            >
+                <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+                    <Stack spacing={2}>
+                        <Box>
+                            <Typography variant="h5" fontWeight={800}>Cadastro de equipe</Typography>
+                            <Typography color="text.secondary">
+                                Crie uma equipe ja associando seus tecnicos.
+                            </Typography>
                         </Box>
-                    ))}
-                    <Fab size="small" color="primary" aria-label="add" onClick={adicionarTecnico} sx={{ marginTop: 1 }}>
-                        <AddIcon />
-                    </Fab>
+                        <TextoInput
+                            labelProp="Nome da equipe"
+                            obrigatorio
+                            valor={nomeEquipe}
+                            aoAlterado={(e) => setNomeEquipe(e.target.value)}
+                            sx={{ width: "100%" }}
+                        />
+                        <TechnicianRows
+                            rows={tecnicos}
+                            labelPrefix="Nome do tecnico"
+                            onAdd={() => adicionarTecnico()}
+                            onRemove={(index) => removerTecnico(index)}
+                            onChange={(index, valor) => atualizarTecnico(index, valor)}
+                        />
+                        <Button
+                            variant="contained"
+                            startIcon={<Groups3Icon />}
+                            onClick={() => enviarDados()}
+                            disabled={!nomeEquipe.trim()}
+                            sx={{ alignSelf: "stretch" }}
+                        >
+                            Cadastrar equipe
+                        </Button>
+                    </Stack>
+                </Paper>
 
-                    <Button
-                        variant="contained"
-                        color="primary"
-                        onClick={() => enviarDados(false)}
-                        sx={{ marginTop: 2 }}
-                    >
-                        Cadastrar <Groups3Icon sx={{marginLeft : 2}}/>
-                    </Button>
-                </FormControl>
-                <Divider sx={{ marginTop: 2, width: '100%', marginBottom: 4 }} />
-            </div>
-            <div>
-                <FormControl sx={{ width: '100%', display: 'flex', gap: 2 }}>
-                    <Typography variant="h4" component={"h4"} sx={{ marginBottom: 2 }}>
-                        Cadastro de técnico
-                    </Typography>
-                    <Typography variant="h6" component={"h4"} sx={{ marginBottom: 2 }}>
-                        Selecione a equipe
-                    </Typography>
-
-                    <FieldAutoComplet
-                        endpoint={`tecnico/equipes`}
-                        obrigatorio
-                        nome={"Técnicos"}
-                        aoAlterado={setTecnico0}
-                        onInputValueChange={setTecnicoInput0}
-                        valor={tecnico0}
-                        inputValue={tecnicoInput0}
-                    />
-                    <Typography variant="h6" component={"h4"} sx={{ marginTop: 2 }}>
-                        Técnicos
-                    </Typography>
-                    {tecnicosAtualizar.map((tecnico, index) => (
-                        <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <IconButton
-                                color="error"
-                                onClick={() => removerTecnico(index, true)}
-                                aria-label="Remover técnico"
-                            >
-                                <ClearIcon />
-                            </IconButton>
-                            {!tecnico0 && <FieldAutoComplet desabilitar label="Sem equipe cadastrada" />}
-                            {tecnico0 && <TextoInput
-                                labelProp={`Nome do técnico ${index + 1}`}
-                                valor={tecnico.nome || " "}
-                                aoAlterado={(valor) => atualizarTecnico(index, valor, true)}
-                                sx={{ width: '100%' }}
-                            />}
+                <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+                    <Stack spacing={2}>
+                        <Box>
+                            <Typography variant="h5" fontWeight={800}>Cadastro de tecnico</Typography>
+                            <Typography color="text.secondary">
+                                Adicione novos tecnicos a uma equipe existente.
+                            </Typography>
                         </Box>
-                    ))}
-                    <Fab size="small" color="primary" aria-label="add" onClick={() => adicionarTecnico({ atualizar: true })} sx={{ marginTop: 1 }}>
-                        <AddIcon />
-                    </Fab>
-                    <Button
-                        variant="contained"
-                        color="primary"
-                        onClick={() => enviarDados({ atualizar: true })}
-                        sx={{ marginTop: 2 }}
-                    >
-                        Cadastrar técnico <PersonAddIcon sx={{marginLeft : 2}}/> 
-                    </Button>
-                </FormControl>
-                <Divider sx={{ marginTop: 2, marginBottom: 2 }} />
-            </div>
-
-        </CadastroStyled>
+                        <FieldAutoComplet
+                            endpoint="tecnico/equipes"
+                            obrigatorio
+                            nome="Equipe"
+                            aoAlterado={setTecnico0}
+                            onInputValueChange={setTecnicoInput0}
+                            valor={tecnico0}
+                            inputValue={tecnicoInput0}
+                        />
+                        <TechnicianRows
+                            rows={tecnicosAtualizar}
+                            disabled={!tecnico0}
+                            labelPrefix="Nome do tecnico"
+                            onAdd={() => adicionarTecnico({ atualizar: true })}
+                            onRemove={(index) => removerTecnico(index, true)}
+                            onChange={(index, valor) => atualizarTecnico(index, valor, true)}
+                        />
+                        {!tecnico0 && (
+                            <Alert severity="info">
+                                Selecione uma equipe para liberar o cadastro de tecnicos.
+                            </Alert>
+                        )}
+                        <Button
+                            variant="contained"
+                            startIcon={<PersonAddIcon />}
+                            onClick={() => enviarDados({ atualizar: true })}
+                            disabled={!tecnico0}
+                            sx={{ alignSelf: "stretch" }}
+                        >
+                            Cadastrar tecnico
+                        </Button>
+                    </Stack>
+                </Paper>
+            </Box>
+        </Box>
     );
 };
 

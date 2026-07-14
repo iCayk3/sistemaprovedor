@@ -131,7 +131,7 @@ public class UsuarioService {
         var optionaluser = repository.findById(dados.id());
         if(optionaluser.isPresent()){
             var user = optionaluser.get();
-            user.alterarCliente(dados.role());
+            user.alterarPermissao(dados.role());
         } else {
             throw new UsuarioException("Usuario não encontrado");
         }

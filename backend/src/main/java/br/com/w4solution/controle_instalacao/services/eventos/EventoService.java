@@ -17,13 +17,14 @@ public class EventoService {
     EventoRepository repository;
 
     public Evento cadastrarEvento(cadastrarEventoDTO dados) {
-        var evento = new Evento(null, dados.evento());
+        var evento = new Evento(null, dados.evento(), normalizarSegmento(dados.segmento()));
         repository.save(evento);
         return evento;
     }
 
-    public List<EventoDTO> listarEventos() {
-        return repository.findAll().stream().map(EventoDTO::new).toList();
+    public List<EventoDTO> listarEventos(String segmento) {
+        var segmentoNormalizado = normalizarSegmento(segmento);
+        return repository.encontrarPorSegmento(segmentoNormalizado).stream().map(EventoDTO::new).toList();
     }
 
     public void editarEvento(Long id, AtualizarEventoDTO ev) {
@@ -31,6 +32,7 @@ public class EventoService {
         if(eventoOptional.isPresent()){
             var evento = eventoOptional.get();
             evento.atualizarEvento(ev.evento());
+            evento.atualizarSegmento(normalizarSegmento(ev.segmento()));
         }else {
             throw new RuntimeException("Evento nao encontrado");
         }
@@ -38,5 +40,12 @@ public class EventoService {
 
     public void deletarEvento(Long id) {
         repository.deleteById(id);
+    }
+
+    private String normalizarSegmento(String segmento) {
+        if(segmento == null || segmento.isBlank()){
+            return "ATIVIDADE";
+        }
+        return segmento.trim().toUpperCase();
     }
 }

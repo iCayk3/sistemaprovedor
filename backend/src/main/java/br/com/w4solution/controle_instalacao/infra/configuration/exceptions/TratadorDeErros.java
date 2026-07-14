@@ -59,7 +59,15 @@ public class TratadorDeErros {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<?> erroCadastroLogin(DataIntegrityViolationException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body("Erro: Usuario ou CPF ja cadastrado!");
+        var mensagem = ex.getMostSpecificCause() == null
+                ? ex.getMessage()
+                : ex.getMostSpecificCause().getMessage();
+
+        if (mensagem != null && mensagem.toLowerCase().contains("usuarios_usuario")) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("Erro: Usuario ja cadastrado!");
+        }
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body("Erro de integridade no banco: " + mensagem);
     }
     @ExceptionHandler(ValidacaoAutenticacaoException.class)
     public ResponseEntity<?> erroLogin(ValidacaoAutenticacaoException ex) {

@@ -1,4 +1,4 @@
 package br.com.w4solution.controle_instalacao.dto.evento;
 
-public record AtualizarEventoDTO(String evento) {
+public record AtualizarEventoDTO(String evento, String segmento) {
 }

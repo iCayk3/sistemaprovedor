@@ -12,19 +12,19 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-import static br.com.w4solution.controle_instalacao.infra.configuration.security.SecurityExpressions.COMMERCIAL_ACCESS;
+import static br.com.w4solution.controle_instalacao.infra.configuration.security.SecurityExpressions.COMMERCIAL_OR_FINANCIAL_ACCESS;
 
 @RestController
 @RequestMapping("evento")
-@PreAuthorize(COMMERCIAL_ACCESS)
+@PreAuthorize(COMMERCIAL_OR_FINANCIAL_ACCESS)
 public class EventoController {
 
     @Autowired
     EventoService service;
 
     @GetMapping
-    public ResponseEntity<List<EventoDTO>> listarEventos(){
-        var eventos = service.listarEventos();
+    public ResponseEntity<List<EventoDTO>> listarEventos(@RequestParam(required = false) String segmento){
+        var eventos = service.listarEventos(segmento);
         return ResponseEntity.ok().body(eventos);
     }
 

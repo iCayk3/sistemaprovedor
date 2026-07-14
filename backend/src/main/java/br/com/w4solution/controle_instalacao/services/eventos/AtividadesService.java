@@ -15,7 +15,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 
 @Service
@@ -54,9 +56,10 @@ public class AtividadesService {
         return repository.findAll().stream().map(AtividadesDTO::new).toList();
     }
 
-    public List<ServicoPorUsuarioDiario> listarAtividadesPorUsuario(String filtro) {
+    public List<ServicoPorUsuarioDiario> listarAtividadesPorUsuario(String filtro, String segmento) {
 
         var usuarios = usuarioRepository.encontrarUsuariosPorFragmento(UserRole.COMERCIAL.toString());
+        var segmentoNormalizado = normalizarSegmento(segmento);
 
         return usuarios.stream().map(u -> {
             List<Object[]> resultados = null;
@@ -64,10 +67,10 @@ public class AtividadesService {
             if(filtro != null){
 
                 LocalDate data = LocalDate.parse(filtro);
-                resultados  = repository.encontrarAtividadesPorUsuario(u.getUsuario(), data.getMonthValue(), data.getYear(), data.getDayOfMonth());
+                resultados  = repository.encontrarAtividadesPorUsuario(u.getUsuario(), segmentoNormalizado, data.getMonthValue(), data.getYear(), data.getDayOfMonth());
 
             }else {
-                resultados  = repository.encontrarAtividadesPorUsuario(u.getUsuario(), LocalDate.now().getMonth().getValue(), LocalDate.now().getYear(), LocalDate.now().getDayOfMonth());
+                resultados  = repository.encontrarAtividadesPorUsuario(u.getUsuario(), segmentoNormalizado, LocalDate.now().getMonth().getValue(), LocalDate.now().getYear(), LocalDate.now().getDayOfMonth());
             }
 
             List<TotalAtividadeDTO> atividadesDto = new ArrayList<>();
@@ -81,25 +84,53 @@ public class AtividadesService {
         }).toList();
     }
 
-    public List<ResumoMensalDTO> buscarResumoMensalAtividade(String data) {
+    public List<ServicoPorUsuarioDiario> listarAtividadesMensaisPorUsuario(String data, String segmento) {
+        var segmentoNormalizado = normalizarSegmento(segmento);
+        var dataConvertida = data == null || data.isBlank() ? LocalDate.now() : LocalDate.parse(data);
+        var resultados = repository.encontrarAtividadesMensaisPorUsuario(segmentoNormalizado, dataConvertida.getMonthValue(), dataConvertida.getYear());
+        Map<String, List<TotalAtividadeDTO>> porUsuario = new LinkedHashMap<>();
 
-        var eventos = eventoRepository.findAll();
+        for (Object[] resultado : resultados) {
+            String usuario = (String) resultado[0];
+            String evento = (String) resultado[1];
+            Long quantidade = (Long) resultado[2];
+            porUsuario.computeIfAbsent(usuario, key -> new ArrayList<>()).add(new TotalAtividadeDTO(evento, quantidade));
+        }
+
+        return porUsuario.entrySet().stream()
+                .map(entry -> new ServicoPorUsuarioDiario(entry.getKey(), entry.getValue()))
+                .toList();
+    }
+
+    public List<ResumoMensalDTO> buscarResumoMensalAtividade(String data, String segmento) {
+
+        var segmentoNormalizado = normalizarSegmento(segmento);
+        var eventos = eventoRepository.encontrarPorSegmento(segmentoNormalizado);
         var dataConvertida = LocalDate.parse(data);
         return eventos.stream().map(e -> {
-            var value = repository.encontrarAtividadesMensal(e.getEvento(), dataConvertida.getMonthValue(), dataConvertida.getYear());
+            var value = repository.encontrarAtividadesMensal(e.getEvento(), segmentoNormalizado, dataConvertida.getMonthValue(), dataConvertida.getYear());
             return new ResumoMensalDTO(e.getEvento(), value != null ? value : 0);
         }).toList();
     }
 
-    public List<AtividadesDTO> listarAtividadesPorMes(String data) {
+    public List<AtividadesDTO> listarAtividadesPorMes(String data, String segmento) {
+        var segmentoNormalizado = normalizarSegmento(segmento);
         if(data == null){
-            return repository.listarAtividadesDoMes(LocalDate.now().getYear(), LocalDate.now().getMonthValue()).stream().map(AtividadesDTO::new).toList();
+            return repository.listarAtividadesDoMes(segmentoNormalizado, LocalDate.now().getYear(), LocalDate.now().getMonthValue()).stream().map(AtividadesDTO::new).toList();
         }
-        return null;
+        var dataConvertida = LocalDate.parse(data);
+        return repository.listarAtividadesDoMes(segmentoNormalizado, dataConvertida.getYear(), dataConvertida.getMonthValue()).stream().map(AtividadesDTO::new).toList();
     }
 
     public void deletarAtividade(Long id) {
         repository.deleteById(id);
+    }
+
+    private String normalizarSegmento(String segmento) {
+        if(segmento == null || segmento.isBlank()){
+            return "ATIVIDADE";
+        }
+        return segmento.trim().toUpperCase();
     }
 }
 

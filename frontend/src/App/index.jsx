@@ -18,6 +18,7 @@ import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
 import PaymentOutlinedIcon from '@mui/icons-material/PaymentOutlined';
 import MoneyOffOutlinedIcon from '@mui/icons-material/MoneyOffOutlined';
 import SavingsOutlinedIcon from '@mui/icons-material/SavingsOutlined';
+import RequestQuoteOutlinedIcon from '@mui/icons-material/RequestQuoteOutlined';
 import Suspensos from '../Paginas/Suspensos';
 import CadastroEquipamento from '../Paginas/CadastroEquipamento';
 import ListeCto from '../Paginas/ListeCto';
@@ -25,7 +26,7 @@ import EquipesTecnicas from '../Paginas/EquipesTecnicas';
 import SettingsRegistros from '../Paginas/SettingsRegistros';
 import Groups2Icon from '@mui/icons-material/Groups2';
 import PropTypes from 'prop-types';
-import { Box, Typography } from '@mui/material';
+import { Box, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
 import AtividadesComercial from '../Paginas/AtividadesComercial';
 import DashBoardsComercial from '../Paginas/DashBoardsComercial';
 import AccountMenu from '../Componentes/AccountMenu';
@@ -37,6 +38,10 @@ import ManagementUser from '../Paginas/ManagementUser';
 import Api from '../Services/Api';
 import SettingsAtividades from '../Paginas/SettingsAtividades';
 import PendentPass from '../Paginas/PendentPass';
+import DashboardClientes from '../Paginas/DashboardClientes';
+import AcpEventos from '../Paginas/AcpEventos';
+import EventNoteIcon from '@mui/icons-material/EventNote';
+import Cobrancas from '../Paginas/Cobrancas';
 
 const theme = createTheme({
     colorSchemes: { light: true, dark: true },
@@ -89,6 +94,7 @@ const roleGroups = {
     technical: ['ADMIN', 'TECNICO', 'TECNICO_COMERCIAL', 'TECNICO_FINANCEIRO'],
     commercial: ['ADMIN', 'COMERCIAL', 'TECNICO_COMERCIAL', 'COMERCIAL_FINANCEIRO'],
     financial: ['ADMIN', 'FINANCEIRO', 'TECNICO_FINANCEIRO', 'COMERCIAL_FINANCEIRO'],
+    charging: ['ADMIN', 'FINANCEIRO', 'TECNICO_FINANCEIRO', 'COMERCIAL_FINANCEIRO', 'COBRANCA'],
     admin: ['ADMIN'],
 };
 
@@ -100,6 +106,7 @@ const Menu = () => {
         (group) => roleGroups[group]?.includes(user.role),
         [user.role],
     );
+    const isChargingOnly = user.role === 'COBRANCA';
 
     React.useEffect(() => {
         const fetchData = async () => {
@@ -113,22 +120,68 @@ const Menu = () => {
         fetchData();
     }, []);
 
+    const cobrancaChildren = [
+        {
+            segment: 'registrar',
+            title: 'Registrar cobranca',
+            icon: <RequestQuoteOutlinedIcon />,
+        },
+        {
+            segment: 'dashboard',
+            title: 'Dashboard cobranca',
+            icon: <DashboardIcon />,
+        },
+        {
+            segment: 'acompanhamento',
+            title: 'Acompanhamento',
+            icon: <RequestQuoteOutlinedIcon />,
+        },
+        {
+            segment: 'bloqueados',
+            title: 'Clientes bloqueados',
+            icon: <MoneyOffOutlinedIcon />,
+        },
+        {
+            segment: 'suspenso',
+            title: 'Clientes suspenso',
+            icon: <MoneyOffOutlinedIcon />,
+        },
+        {
+            segment: 'configuracoes',
+            title: 'Configuracoes cobranca',
+            icon: <Groups2Icon />,
+        },
+    ];
+
+    const cobrancaMenu = {
+        segment: 'financeiro/cobranca',
+        title: 'Cobranca',
+        icon: <PaymentOutlinedIcon />,
+        children: cobrancaChildren,
+    };
+
     const NAVIGATION = [
         {
             kind: 'header',
             title: 'Menu principal',
         },
-        {
+        !isChargingOnly ? {
             segment: 'dashboard',
             title: 'Dashboard principal',
             icon: <DashboardIcon />,
-        },
+        } : null,
+        hasRole('financial')
+            ? {
+                segment: 'dashboard-clientes',
+                title: 'Dashboard clientes',
+                icon: <Groups2Icon />,
+            } : null,
         {
             kind: 'divider',
         },
         {
             kind: 'header',
-            title: 'Registros',
+            title: isChargingOnly ? 'Operacao de cobranca' : 'Registros',
         },
         hasRole('technical')
             ? {
@@ -182,6 +235,12 @@ const Menu = () => {
                 title: 'Mapa de CTOs',
                 icon: <MapIcon />,
             } : null,
+        hasRole('technical')
+            ? {
+                segment: 'noc-eventos',
+                title: 'ACP eventos',
+                icon: <EventNoteIcon />,
+            } : null,
         hasRole('commercial')
             ? {
                 segment: 'comercial',
@@ -195,12 +254,12 @@ const Menu = () => {
                     },
                     {
                         segment: 'dashboards',
-                        title: 'Dashboards',
+                        title: 'Dashboards comercial',
                         icon: <FiberNewIcon />,
                     },
                     {
                         segment: 'configuration',
-                        title: 'Configuracoes',
+                        title: 'Configuracoes comercial',
                         icon: <Groups2Icon />,
                     },
                 ],
@@ -208,9 +267,14 @@ const Menu = () => {
         hasRole('financial')
             ? {
                 segment: 'financeiro',
-                title: 'Consultar dados financeiro',
+                title: 'Financeiro',
                 icon: <MonetizationOnIcon />,
                 children: [
+                    {
+                        segment: 'dashboard-clientes',
+                        title: 'Dashboard clientes',
+                        icon: <DashboardIcon />,
+                    },
                     {
                         segment: 'dados',
                         title: 'Dados financeiro',
@@ -218,23 +282,13 @@ const Menu = () => {
                     },
                     {
                         segment: 'cobranca',
-                        title: 'Dados cobranca',
+                        title: 'Cobranca',
                         icon: <PaymentOutlinedIcon />,
-                        children: [
-                            {
-                                segment: 'bloqueados',
-                                title: 'Clientes bloqueados',
-                                icon: <MoneyOffOutlinedIcon />,
-                            },
-                            {
-                                segment: 'suspenso',
-                                title: 'Clientes suspenso',
-                                icon: <MoneyOffOutlinedIcon />,
-                            },
-                        ],
+                        children: cobrancaChildren,
                     },
                 ],
             } : null,
+        isChargingOnly ? cobrancaMenu : null,
         hasRole('admin')
             ? {
                 segment: 'settinguser',
@@ -261,10 +315,41 @@ const Menu = () => {
     ].filter(Boolean);
 
     const DashboardView = () => {
-        if (hasRole('technical')) return <DashboardPrincipal />;
-        if (hasRole('commercial')) return <DashBoardsComercial />;
-        if (hasRole('financial')) return <Financeiro />;
-        return <div>Sem permissao</div>;
+        const options = [
+            hasRole('technical') ? { value: 'tecnico', label: 'Registros tecnicos', content: <DashboardPrincipal /> } : null,
+            user.role ? { value: 'acp-eventos', label: 'ACP Eventos', content: <AcpEventos readOnly /> } : null,
+            hasRole('commercial') ? { value: 'atividade', label: 'Atividades comerciais', content: <DashBoardsComercial segmento="ATIVIDADE" allowSegmentSelect={false} /> } : null,
+            hasRole('charging') ? { value: 'cobranca', label: 'Cobrancas', content: <Cobrancas mode="dashboard" /> } : null,
+            hasRole('financial') ? { value: 'clientes', label: 'Clientes', content: <DashboardClientes /> } : null,
+        ].filter(Boolean);
+        const [selected, setSelected] = React.useState(options[0]?.value || '');
+        const active = options.find((item) => item.value === selected) || options[0];
+
+        if (!active) return <div>Sem permissao</div>;
+
+        return (
+            <Stack spacing={2}>
+                <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                    <Typography variant="h5" fontWeight={800}>Dashboard principal</Typography>
+                    <Typography color="text.secondary" sx={{ mb: 2 }}>
+                        Selecione a visao que deseja acompanhar.
+                    </Typography>
+                    <TextField
+                        select
+                        size="small"
+                        label="Dashboard"
+                        value={active.value}
+                        onChange={(event) => setSelected(event.target.value)}
+                        sx={{ minWidth: 280 }}
+                    >
+                        {options.map((item) => (
+                            <MenuItem key={item.value} value={item.value}>{item.label}</MenuItem>
+                        ))}
+                    </TextField>
+                </Paper>
+                {active.content}
+            </Stack>
+        );
     };
 
     return (
@@ -284,8 +369,9 @@ const Menu = () => {
             >
                 <PageContainer>
                     <Routes>
-                        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                        <Route path="/" element={<Navigate to={isChargingOnly ? "/financeiro/cobranca/dashboard" : "/dashboard"} replace />} />
                         <Route path="dashboard" element={<DashboardView />} />
+                        <Route path="dashboard-clientes" element={hasRole('financial') ? <DashboardClientes /> : semPermissao} />
                         <Route path="registro/registrar" element={hasRole('technical') ? <Inicio /> : semPermissao} />
                         <Route path="registro/dashboard-registro" element={hasRole('technical') ? <OverviewRegistro /> : semPermissao} />
                         <Route path="registro/settings" element={hasRole('technical') ? <SettingsRegistros /> : semPermissao} />
@@ -293,13 +379,19 @@ const Menu = () => {
                         <Route path="redes/equipamento" element={hasRole('technical') ? <CadastroEquipamento /> : semPermissao} />
                         <Route path="redes/tecnico" element={hasRole('technical') ? <EquipesTecnicas /> : semPermissao} />
                         <Route path="map" element={hasRole('technical') ? <MapPage /> : semPermissao} />
+                        <Route path="noc-eventos" element={hasRole('technical') ? <AcpEventos /> : semPermissao} />
                         <Route path="comercial/atividades" element={hasRole('commercial') ? <AtividadesComercial /> : semPermissao} />
-                        <Route path="comercial/dashboards" element={hasRole('commercial') ? <DashBoardsComercial /> : semPermissao} />
-                        <Route path="comercial/configuration" element={hasRole('commercial') ? <SettingsAtividades /> : semPermissao} />
+                        <Route path="comercial/dashboards" element={hasRole('commercial') ? <DashBoardsComercial segmento="ATIVIDADE" allowSegmentSelect={false} /> : semPermissao} />
+                        <Route path="comercial/configuration" element={hasRole('commercial') ? <SettingsAtividades allowedSegments={['ATIVIDADE']} /> : semPermissao} />
                         <Route path="perfil/settings" element={<SettingsPerfil />} />
+                        <Route path="/financeiro/dashboard-clientes" element={hasRole('financial') ? <DashboardClientes /> : semPermissao} />
                         <Route path="/financeiro/dados" element={hasRole('financial') ? <Financeiro /> : semPermissao} />
-                        <Route path="/financeiro/cobranca/bloqueados" element={hasRole('financial') ? <Inadiplentes /> : semPermissao} />
-                        <Route path="/financeiro/cobranca/suspenso" element={hasRole('financial') ? <Suspensos /> : semPermissao} />
+                        <Route path="/financeiro/cobranca/registrar" element={hasRole('charging') ? <Cobrancas mode="cadastro" /> : semPermissao} />
+                        <Route path="/financeiro/cobranca/dashboard" element={hasRole('charging') ? <Cobrancas mode="dashboard" /> : semPermissao} />
+                        <Route path="/financeiro/cobranca/acompanhamento" element={hasRole('charging') ? <Cobrancas mode="acompanhamento" /> : semPermissao} />
+                        <Route path="/financeiro/cobranca/bloqueados" element={hasRole('charging') ? <Inadiplentes /> : semPermissao} />
+                        <Route path="/financeiro/cobranca/suspenso" element={hasRole('charging') ? <Suspensos /> : semPermissao} />
+                        <Route path="/financeiro/cobranca/configuracoes" element={hasRole('charging') ? <SettingsAtividades initialSegment="COBRANCA" allowedSegments={['COBRANCA']} /> : semPermissao} />
                         <Route path="/settinguser/ativar" element={hasRole('admin') ? <UsuariosNAtivos /> : semPermissao} />
                         <Route path="/settinguser/management" element={hasRole('admin') ? <ManagementUser /> : semPermissao} />
                         <Route path="/settinguser/pendentpass" element={hasRole('admin') ? <PendentPass /> : semPermissao} />

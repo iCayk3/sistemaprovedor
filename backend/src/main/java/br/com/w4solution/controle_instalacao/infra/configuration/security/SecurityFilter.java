@@ -7,6 +7,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -20,11 +21,9 @@ import java.util.List;
 public class SecurityFilter extends OncePerRequestFilter {
     private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
     private static final List<String> PUBLIC_PATHS = List.of(
-            "/usuario",
             "/usuario/logar",
             "/usuario/userchek",
-            "/usuario/solicitaredefinirsenha",
-            "/usuario/ativar/**"
+            "/usuario/solicitaredefinirsenha"
     );
 
     @Autowired
@@ -40,6 +39,10 @@ public class SecurityFilter extends OncePerRequestFilter {
         }
 
         String servletPath = request.getServletPath();
+        if (HttpMethod.POST.matches(request.getMethod()) && PATH_MATCHER.match("/usuario", servletPath)) {
+            return true;
+        }
+
         return PUBLIC_PATHS.stream().anyMatch(path -> PATH_MATCHER.match(path, servletPath));
     }
 

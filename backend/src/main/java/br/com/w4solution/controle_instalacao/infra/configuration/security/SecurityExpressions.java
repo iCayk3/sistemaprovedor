@@ -13,4 +13,8 @@ public final class SecurityExpressions {
             "hasAnyRole('ADMIN','COMERCIAL','TECNICO_COMERCIAL','COMERCIAL_FINANCEIRO')";
     public static final String FINANCIAL_ACCESS =
             "hasAnyRole('ADMIN','FINANCEIRO','TECNICO_FINANCEIRO','COMERCIAL_FINANCEIRO')";
+    public static final String CHARGING_ACCESS =
+            "hasAnyRole('ADMIN','FINANCEIRO','TECNICO_FINANCEIRO','COMERCIAL_FINANCEIRO','COBRANCA')";
+    public static final String COMMERCIAL_OR_FINANCIAL_ACCESS =
+            "hasAnyRole('ADMIN','COMERCIAL','TECNICO_COMERCIAL','FINANCEIRO','TECNICO_FINANCEIRO','COMERCIAL_FINANCEIRO','COBRANCA')";
 }
