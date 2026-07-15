@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "atividades")
@@ -23,6 +24,13 @@ public class Atividade {
     private String usuario;
     private String segmento;
     private Double valor;
+    private String status;
+    private Integer codigoCliente;
+    private String grupoCliente;
+    private String plano;
+    private Double valorPlano;
+    private LocalDateTime convertidoEm;
+    private String convertidoPor;
 
     public Atividade(CadastrarAtividadesDTO atv, String usuario){
         this.evento = atv.evento();
@@ -31,5 +39,10 @@ public class Atividade {
         this.usuario = usuario;
         this.segmento = atv.segmento() != null ? atv.segmento() : "ATIVIDADE";
         this.valor = atv.valor();
+        this.status = atv.status() != null ? atv.status() : ("LEAD".equalsIgnoreCase(this.segmento) ? "ABERTO" : null);
+        this.codigoCliente = atv.codigoCliente();
+        this.grupoCliente = atv.grupoCliente();
+        this.plano = atv.plano();
+        this.valorPlano = atv.valorPlano();
     }
 }

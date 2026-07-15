@@ -3,6 +3,7 @@ import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import TimelineRoundedIcon from '@mui/icons-material/TimelineRounded';
+import { BarChart, PieChart } from '@mui/x-charts';
 import {
     Alert,
     Box,
@@ -28,6 +29,8 @@ import {
     Typography,
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
+import ChartValueList from '../../Componentes/ChartValueList';
+import ExportDashboardPdfButton from '../../Componentes/ExportDashboardPdfButton';
 import Api from '../../Services/Api';
 
 const UseApi = Api();
@@ -43,11 +46,31 @@ const actionOptions = [
     'Negativacao',
     'Pago',
 ];
+const chartPalette = ['#4454f6', '#ffb627', '#ff5b6e', '#28b8ee', '#2fc878', '#ec79c1', '#8e6ce8', '#19b5a5', '#8aa0ad'];
+const clientGroupNames = {
+    9: 'PADRAO',
+    10: 'SJP',
+    11: 'PMV',
+    13: 'STN',
+    15: 'QT',
+    16: 'BV',
+    17: 'SEM COBRANCA',
+    26: 'MB',
+    32: 'MRC',
+    33: 'MRP',
+    34: 'SAL',
+    36: 'RADIO - PIRABAS',
+    40: 'TESTE',
+    41: 'PRE',
+    42: 'CON',
+    43: 'SOL',
+};
 
 const emptyForm = {
     acao: 'Contato',
     codigoCliente: '',
     cliente: '',
+    grupoCliente: '',
     data: new Date().toISOString().slice(0, 10),
     dataPromessa: '',
     valor: '',
@@ -88,6 +111,7 @@ function normalizeCharge(charge) {
         action: charge.acao,
         clientCode: charge.codigoCliente,
         client: charge.cliente,
+        clientGroup: formatClientGroup(charge.grupoCliente),
         date: charge.data,
         promiseDate: charge.dataPromessa,
         value: Number(charge.valor || 0),
@@ -96,6 +120,9 @@ function normalizeCharge(charge) {
         createdAt: charge.criadoEm,
         updatedAt: charge.atualizadoEm,
         closedAt: charge.fechadoEm,
+        createdBy: charge.criadoPor,
+        updatedBy: charge.atualizadoPor,
+        lastUser: charge.ultimoUsuario || charge.atualizadoPor || charge.criadoPor || '',
         editable: charge.editavel !== false,
         history: Array.isArray(charge.historico)
             ? charge.historico.map((item) => ({
@@ -117,6 +144,7 @@ function toForm(charge) {
         acao: charge?.action || 'Contato',
         codigoCliente: charge?.clientCode || '',
         cliente: charge?.client || '',
+        grupoCliente: charge?.clientGroup || '',
         data: charge?.date || new Date().toISOString().slice(0, 10),
         dataPromessa: charge?.promiseDate || '',
         valor: charge?.value ? String(charge.value) : '',
@@ -150,6 +178,11 @@ function readClientField(cliente, lowerKey, upperKey) {
     return cliente?.[lowerKey] ?? cliente?.[upperKey] ?? '';
 }
 
+function formatClientGroup(group) {
+    const normalized = String(group || '').trim();
+    return clientGroupNames[normalized] || normalized;
+}
+
 function normalizeRbxClient(response) {
     const client = Array.isArray(response) ? response[0] : response?.data || response;
 
@@ -162,6 +195,7 @@ function normalizeRbxClient(response) {
         nome: readClientField(client, 'nome', 'Nome'),
         cpfCnpj: readClientField(client, 'cpfCnpj', 'CNPJ_CNPF'),
         sigla: readClientField(client, 'sigla', 'Sigla'),
+        grupo: formatClientGroup(readClientField(client, 'grupoNome', 'Grupo_Nome') || readClientField(client, 'grupo', 'Grupo')),
         situacao: readClientField(client, 'situacao', 'Situacao'),
     };
 }
@@ -178,6 +212,33 @@ function formatClientStatus(status) {
     return statuses[normalized] || status || '';
 }
 
+function normalizeLabel(value, fallback = 'Nao informado') {
+    return String(value || '').trim() || fallback;
+}
+
+function countBy(items, selector) {
+    return items.reduce((acc, item) => {
+        const key = normalizeLabel(selector(item));
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+    }, {});
+}
+
+function sumBy(items, selector, valueSelector) {
+    return items.reduce((acc, item) => {
+        const key = normalizeLabel(selector(item));
+        acc[key] = (acc[key] || 0) + Number(valueSelector(item) || 0);
+        return acc;
+    }, {});
+}
+
+function compactChartEntries(entries, limit = 8) {
+    if (entries.length <= limit) return entries;
+    const visible = entries.slice(0, limit - 1);
+    const othersTotal = entries.slice(limit - 1).reduce((total, [, value]) => total + Number(value || 0), 0);
+    return [...visible, ['Outros', othersTotal]];
+}
+
 const ClienteRbxPanel = ({ cliente }) => {
     if (!cliente) return null;
 
@@ -188,7 +249,7 @@ const ClienteRbxPanel = ({ cliente }) => {
                 sx={{
                     display: 'grid',
                     gap: 1,
-                    gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', md: 'repeat(5, minmax(0, 1fr))' },
+                    gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', md: 'repeat(6, minmax(0, 1fr))' },
                     mt: 1,
                 }}
             >
@@ -197,6 +258,7 @@ const ClienteRbxPanel = ({ cliente }) => {
                     ['Nome', cliente.nome],
                     ['CPF/CNPJ', cliente.cpfCnpj],
                     ['Sigla', cliente.sigla],
+                    ['Grupo', cliente.grupo],
                     ['Situacao', formatClientStatus(cliente.situacao)],
                 ].map(([label, value]) => (
                     <Box key={label}>
@@ -220,6 +282,9 @@ const Cobrancas = ({ readOnly = false, mode }) => {
     const [rbxClient, setRbxClient] = useState(null);
     const [statusFilter, setStatusFilter] = useState(isTracking ? 'Em aberto' : 'Todos');
     const [searchFilter, setSearchFilter] = useState('');
+    const [userFilter, setUserFilter] = useState('Todos');
+    const [actionFilter, setActionFilter] = useState('Todos');
+    const [groupFilter, setGroupFilter] = useState('Todos');
     const [trackingNote, setTrackingNote] = useState('');
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -244,23 +309,16 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         loadCharges();
     }, []);
 
-    const metrics = useMemo(() => {
-        const abertas = charges.filter((charge) => !isFinalStatus(charge.status));
-        const pagas = charges.filter((charge) => String(charge.status || '').toUpperCase() === 'PAGO');
-        const promessasHoje = charges.filter((charge) => isPromiseStatus(charge.status) && charge.promiseDate === todayIso());
-        const promessasVencidas = charges.filter((charge) => isPromiseStatus(charge.status) && charge.promiseDate && charge.promiseDate < todayIso());
-        const valorAberto = abertas.reduce((total, charge) => total + charge.value, 0);
-        const valorPago = pagas.reduce((total, charge) => total + charge.value, 0);
+    const userOptions = useMemo(() => {
+        return Array.from(new Set(charges.map((charge) => normalizeLabel(charge.lastUser)).filter(Boolean))).sort();
+    }, [charges]);
 
-        return {
-            total: charges.length,
-            abertas: abertas.length,
-            pagas: pagas.length,
-            promessasHoje: promessasHoje.length,
-            promessasVencidas: promessasVencidas.length,
-            valorAberto,
-            valorPago,
-        };
+    const actionFilterOptions = useMemo(() => {
+        return Array.from(new Set(charges.map((charge) => normalizeLabel(charge.action)).filter(Boolean))).sort();
+    }, [charges]);
+
+    const groupOptions = useMemo(() => {
+        return Array.from(new Set(charges.map((charge) => normalizeLabel(charge.clientGroup)).filter(Boolean))).sort();
     }, [charges]);
 
     const filteredCharges = useMemo(() => {
@@ -274,6 +332,9 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 if (statusFilter === 'Promessas vencidas') return isPromiseStatus(charge.status) && charge.promiseDate && charge.promiseDate < todayIso();
                 return charge.status === statusFilter;
             })
+            .filter((charge) => userFilter === 'Todos' || normalizeLabel(charge.lastUser) === userFilter)
+            .filter((charge) => actionFilter === 'Todos' || normalizeLabel(charge.action) === actionFilter)
+            .filter((charge) => groupFilter === 'Todos' || normalizeLabel(charge.clientGroup) === groupFilter)
             .filter((charge) => {
                 if (!search) return true;
                 return [
@@ -282,10 +343,81 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                     charge.clientCode,
                     charge.action,
                     charge.status,
+                    charge.lastUser,
+                    charge.clientGroup,
                 ].some((value) => String(value || '').toLowerCase().includes(search));
             })
             .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
-    }, [charges, statusFilter, searchFilter]);
+    }, [charges, statusFilter, searchFilter, userFilter, actionFilter, groupFilter]);
+
+    const metrics = useMemo(() => {
+        const source = isDashboard ? filteredCharges : charges;
+        const abertas = source.filter((charge) => !isFinalStatus(charge.status));
+        const pagas = source.filter((charge) => String(charge.status || '').toUpperCase() === 'PAGO');
+        const promessasHoje = source.filter((charge) => isPromiseStatus(charge.status) && charge.promiseDate === todayIso());
+        const promessasVencidas = source.filter((charge) => isPromiseStatus(charge.status) && charge.promiseDate && charge.promiseDate < todayIso());
+        const valorAberto = abertas.reduce((total, charge) => total + charge.value, 0);
+        const valorPago = pagas.reduce((total, charge) => total + charge.value, 0);
+        const valorTotal = source.reduce((total, charge) => total + charge.value, 0);
+
+        return {
+            total: source.length,
+            abertas: abertas.length,
+            pagas: pagas.length,
+            promessasHoje: promessasHoje.length,
+            promessasVencidas: promessasVencidas.length,
+            valorAberto,
+            valorPago,
+            valorTotal,
+        };
+    }, [charges, filteredCharges, isDashboard]);
+
+    const chartData = useMemo(() => {
+        const statusCounts = countBy(filteredCharges, (charge) => charge.status);
+        const userCounts = countBy(filteredCharges, (charge) => charge.lastUser);
+        const userValues = sumBy(filteredCharges, (charge) => charge.lastUser, (charge) => charge.value);
+        const groupValues = sumBy(filteredCharges, (charge) => charge.clientGroup, (charge) => charge.value);
+        const statusEntries = Object.entries(statusCounts).sort((a, b) => b[1] - a[1]);
+        const userEntries = Object.entries(userCounts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+        const userValueEntries = compactChartEntries(Object.entries(userValues)
+            .filter(([, value]) => Number(value) > 0)
+            .sort((a, b) => Number(b[1]) - Number(a[1]))
+        );
+        const groupValueEntries = compactChartEntries(Object.entries(groupValues)
+            .filter(([, value]) => Number(value) > 0)
+            .sort((a, b) => Number(b[1]) - Number(a[1]))
+        );
+        const userLabels = userEntries.map(([label]) => label);
+        const visibleStatuses = statusOptions.filter((status) => filteredCharges.some((charge) => charge.status === status));
+        const statusByUserSeries = visibleStatuses.map((status) => ({
+            label: status,
+            data: userLabels.map((user) => filteredCharges.filter((charge) => normalizeLabel(charge.lastUser) === user && charge.status === status).length),
+        }));
+        const statusByUserTotals = userLabels.map((user, index) => ({
+            label: user,
+            value: statusByUserSeries.reduce((total, serie) => total + Number(serie.data[index] || 0), 0),
+            color: chartPalette[index % chartPalette.length],
+        }));
+
+        return {
+            statusPie: statusEntries.map(([label, value], index) => ({ id: index, label, value, color: chartPalette[index % chartPalette.length] })),
+            userLabels,
+            statusByUserSeries,
+            statusByUserTotals,
+            userValuePie: userValueEntries.map(([label, value], index) => ({
+                id: index,
+                label,
+                value: Number(value),
+                color: chartPalette[index % chartPalette.length],
+            })),
+            groupValuePie: groupValueEntries.map(([label, value], index) => ({
+                id: index,
+                label,
+                value: Number(value),
+                color: chartPalette[index % chartPalette.length],
+            })),
+        };
+    }, [filteredCharges]);
 
     const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
@@ -317,8 +449,12 @@ const Cobrancas = ({ readOnly = false, mode }) => {
             const response = await UseApi(`cobrancas/rbx/clientes/${code}`);
             const normalizedClient = normalizeRbxClient(response);
             setRbxClient(normalizedClient);
-            if (isRegister && normalizedClient?.nome) {
-                setForm((current) => ({ ...current, cliente: normalizedClient.nome }));
+            if (normalizedClient?.nome || normalizedClient?.grupo) {
+                setForm((current) => ({
+                    ...current,
+                    cliente: normalizedClient?.nome || current.cliente,
+                    grupoCliente: normalizedClient?.grupo || current.grupoCliente,
+                }));
             }
         } catch (requestError) {
             setError(requestError.message || 'Erro ao buscar cliente no RBX.');
@@ -338,6 +474,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 acao: form.acao,
                 codigoCliente: form.codigoCliente ? Number(form.codigoCliente) : null,
                 cliente: form.cliente,
+                grupoCliente: form.grupoCliente,
                 data: form.data || null,
                 valor: Number(String(form.valor || 0).replace(',', '.')),
                 dataPromessa: isPromiseStatus(form.status) ? form.dataPromessa || null : null,
@@ -392,7 +529,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
     }[viewMode];
 
     return (
-        <Box sx={{ py: 2 }}>
+        <Box id="dashboard-cobrancas-export" sx={{ py: 2 }}>
             <Paper variant="outlined" sx={{ p: 2.5, mb: 2, borderRadius: 2 }}>
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2}>
                     <Box>
@@ -401,11 +538,20 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                         </Typography>
                         <Typography color="text.secondary">{pageSubtitle}</Typography>
                     </Box>
-                    {isRegister && (
-                        <Button variant="contained" startIcon={<AddCircleRoundedIcon />} onClick={openNew}>
-                            Nova cobranca
-                        </Button>
-                    )}
+                    <Stack direction={{ xs: 'column', sm: 'row' }} gap={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                        {isDashboard && (
+                            <ExportDashboardPdfButton
+                                targetId="dashboard-cobrancas-export"
+                                title="Dashboard de cobrancas"
+                                fileName="dashboard-cobrancas"
+                            />
+                        )}
+                        {isRegister && (
+                            <Button variant="contained" startIcon={<AddCircleRoundedIcon />} onClick={openNew}>
+                                Nova cobranca
+                            </Button>
+                        )}
+                    </Stack>
                 </Stack>
             </Paper>
 
@@ -423,7 +569,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                     ['Cobrancas', metrics.total, 'registros no sistema'],
                     ['Em aberto', metrics.abertas, formatCurrency(metrics.valorAberto)],
                     ['Promessas hoje', metrics.promessasHoje, `${metrics.promessasVencidas} vencidas`],
-                    ['Pagas', metrics.pagas, formatCurrency(metrics.valorPago)],
+                    ['Pagas', metrics.pagas, `${formatCurrency(metrics.valorPago)} de ${formatCurrency(metrics.valorTotal)}`],
                 ].map(([label, value, detail]) => (
                     <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }} key={label}>
                         <Stack direction="row" alignItems="center" spacing={1.2}>
@@ -437,6 +583,151 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                     </Paper>
                 ))}
             </Box>
+
+            {isDashboard && (
+                <Box
+                    sx={{
+                        display: 'grid',
+                        gap: 2,
+                        gridTemplateColumns: '1fr',
+                        mb: 2,
+                    }}
+                >
+                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                        <Typography variant="h6" fontWeight={800}>Status por usuario</Typography>
+                        <Typography color="text.secondary" variant="body2" sx={{ mb: 1 }}>
+                            {userFilter === 'Todos'
+                                ? 'Distribuicao de status da fila filtrada. Selecione um usuario para detalhar.'
+                                : `Distribuicao de status de ${userFilter}.`}
+                        </Typography>
+                        {chartData.statusPie.length ? (
+                            <Box
+                                sx={{
+                                    display: 'grid',
+                                    gap: 2,
+                                    gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 240px' },
+                                    alignItems: 'center',
+                                }}
+                            >
+                                <Box sx={{ minWidth: 0 }}>
+                                    <PieChart
+                                        height={260}
+                                        series={[{
+                                            data: chartData.statusPie,
+                                            innerRadius: 45,
+                                            paddingAngle: 2,
+                                        }]}
+                                        slotProps={{ legend: { hidden: true } }}
+                                    />
+                                </Box>
+                                <ChartValueList items={chartData.statusPie} />
+                            </Box>
+                        ) : (
+                            <Stack alignItems="center" justifyContent="center" minHeight={220}>
+                                <Typography color="text.secondary">Sem dados para exibir.</Typography>
+                            </Stack>
+                        )}
+                    </Paper>
+                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                        <Typography variant="h6" fontWeight={800}>Status por usuario</Typography>
+                        <Typography color="text.secondary" variant="body2" sx={{ mb: 1 }}>
+                            Compare a quantidade de cobrancas por status em cada responsavel.
+                        </Typography>
+                        {chartData.userLabels.length && chartData.statusByUserSeries.length ? (
+                            <Box
+                                sx={{
+                                    display: 'grid',
+                                    gap: 2,
+                                    gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 240px' },
+                                    alignItems: 'center',
+                                }}
+                            >
+                                <Box sx={{ minWidth: 0 }}>
+                                    <BarChart
+                                        height={260}
+                                        xAxis={[{ scaleType: 'band', data: chartData.userLabels }]}
+                                        series={chartData.statusByUserSeries}
+                                        margin={{ left: 35, right: 10, top: 25, bottom: 70 }}
+                                    />
+                                </Box>
+                                <ChartValueList items={chartData.statusByUserTotals} showPercent={false} />
+                            </Box>
+                        ) : (
+                            <Stack alignItems="center" justifyContent="center" minHeight={220}>
+                                <Typography color="text.secondary">Sem dados para exibir.</Typography>
+                            </Stack>
+                        )}
+                    </Paper>
+                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                        <Typography variant="h6" fontWeight={800}>Valor por usuario</Typography>
+                        <Typography color="text.secondary" variant="body2" sx={{ mb: 1 }}>
+                            Participacao em valor por ultimo responsavel.
+                        </Typography>
+                        {chartData.userValuePie.length ? (
+                            <Box
+                                sx={{
+                                    display: 'grid',
+                                    gap: 2,
+                                    gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 260px' },
+                                    alignItems: 'center',
+                                }}
+                            >
+                                <Box sx={{ minWidth: 0 }}>
+                                    <PieChart
+                                        height={260}
+                                        series={[{
+                                            data: chartData.userValuePie,
+                                            innerRadius: 45,
+                                            paddingAngle: 2,
+                                            valueFormatter: (item) => formatCurrency(item.value),
+                                        }]}
+                                        slotProps={{ legend: { hidden: true } }}
+                                    />
+                                </Box>
+                                <ChartValueList items={chartData.userValuePie} valueFormatter={formatCurrency} />
+                            </Box>
+                        ) : (
+                            <Stack alignItems="center" justifyContent="center" minHeight={220}>
+                                <Typography color="text.secondary">Sem dados para exibir.</Typography>
+                            </Stack>
+                        )}
+                    </Paper>
+                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                        <Typography variant="h6" fontWeight={800}>Valor por grupo</Typography>
+                        <Typography color="text.secondary" variant="body2" sx={{ mb: 1 }}>
+                            Participacao em valor por grupo do cliente.
+                        </Typography>
+                        {chartData.groupValuePie.length ? (
+                            <Box
+                                sx={{
+                                    display: 'grid',
+                                    gap: 2,
+                                    gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 260px' },
+                                    alignItems: 'center',
+                                }}
+                            >
+                                <Box sx={{ minWidth: 0 }}>
+                                    <PieChart
+                                        height={260}
+                                        series={[{
+                                            data: chartData.groupValuePie,
+                                            innerRadius: 45,
+                                            paddingAngle: 2,
+                                            valueFormatter: (item) => formatCurrency(item.value),
+                                        }]}
+                                        slotProps={{ legend: { hidden: true } }}
+                                    />
+                                </Box>
+                                <ChartValueList items={chartData.groupValuePie} valueFormatter={formatCurrency} />
+                            </Box>
+                        ) : (
+                            <Stack alignItems="center" justifyContent="center" minHeight={220}>
+                                <Typography color="text.secondary">Sem dados para exibir.</Typography>
+                            </Stack>
+                        )}
+                    </Paper>
+                </Box>
+            )}
 
             <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2} mb={2}>
@@ -470,6 +761,47 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                             <MenuItem value="Promessas vencidas">Promessas vencidas</MenuItem>
                             {statusOptions.map((status) => <MenuItem key={status} value={status}>{status}</MenuItem>)}
                         </TextField>
+                        {(isDashboard || isTracking) && (
+                            <>
+                                {isDashboard && (
+                                    <>
+                                        <TextField
+                                            select
+                                            size="small"
+                                            label="Usuario"
+                                            value={userFilter}
+                                            onChange={(event) => setUserFilter(event.target.value)}
+                                            sx={{ minWidth: 190 }}
+                                        >
+                                            <MenuItem value="Todos">Todos</MenuItem>
+                                            {userOptions.map((user) => <MenuItem key={user} value={user}>{user}</MenuItem>)}
+                                        </TextField>
+                                        <TextField
+                                            select
+                                            size="small"
+                                            label="Acao"
+                                            value={actionFilter}
+                                            onChange={(event) => setActionFilter(event.target.value)}
+                                            sx={{ minWidth: 210 }}
+                                        >
+                                            <MenuItem value="Todos">Todas</MenuItem>
+                                            {actionFilterOptions.map((action) => <MenuItem key={action} value={action}>{action}</MenuItem>)}
+                                        </TextField>
+                                    </>
+                                )}
+                                <TextField
+                                    select
+                                    size="small"
+                                    label="Grupo"
+                                    value={groupFilter}
+                                    onChange={(event) => setGroupFilter(event.target.value)}
+                                    sx={{ minWidth: 190 }}
+                                >
+                                    <MenuItem value="Todos">Todos</MenuItem>
+                                    {groupOptions.map((group) => <MenuItem key={group} value={group}>{group}</MenuItem>)}
+                                </TextField>
+                            </>
+                        )}
                     </Stack>
                 </Stack>
 
@@ -482,10 +814,12 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                 <TableRow>
                                     <TableCell>Protocolo</TableCell>
                                     <TableCell>Cliente</TableCell>
+                                    <TableCell>Grupo</TableCell>
                                     <TableCell>Acao</TableCell>
                                     <TableCell>Data</TableCell>
                                     <TableCell>Valor</TableCell>
                                     <TableCell>Status</TableCell>
+                                    <TableCell>Usuario</TableCell>
                                     <TableCell align="right">Detalhes</TableCell>
                                 </TableRow>
                             </TableHead>
@@ -499,6 +833,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                                 Codigo {charge.clientCode || '-'}
                                             </Typography>
                                         </TableCell>
+                                        <TableCell>{charge.clientGroup || 'Nao informado'}</TableCell>
                                         <TableCell>{charge.action}</TableCell>
                                         <TableCell>{formatDate(charge.date)}</TableCell>
                                         <TableCell>{formatCurrency(charge.value)}</TableCell>
@@ -514,6 +849,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                                 </Typography>
                                             )}
                                         </TableCell>
+                                        <TableCell>{charge.lastUser || 'sem usuario'}</TableCell>
                                         <TableCell align="right">
                                             <IconButton size="small" onClick={() => openCharge(charge)}>
                                                 {isDashboard || !charge.editable ? <InfoOutlinedIcon fontSize="small" /> : <EditRoundedIcon fontSize="small" />}
@@ -523,7 +859,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                 ))}
                                 {!filteredCharges.length && (
                                     <TableRow>
-                                        <TableCell colSpan={7} align="center">Nenhuma cobranca cadastrada.</TableCell>
+                                        <TableCell colSpan={9} align="center">Nenhuma cobranca cadastrada.</TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>
@@ -567,6 +903,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                 onChange={(event) => {
                                     updateForm('codigoCliente', event.target.value);
                                     updateForm('cliente', '');
+                                    updateForm('grupoCliente', '');
                                     setRbxClient(null);
                                 }}
                                 disabled={!canEditSelected}
@@ -601,6 +938,15 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                 value={form.cliente}
                                 disabled
                                 helperText="Preenchido pela busca do codigo no RBX"
+                            />
+                        </Box>
+                        <Box sx={{ gridColumn: fieldSpan.third }}>
+                            <TextField
+                                fullWidth
+                                label="Grupo"
+                                value={form.grupoCliente}
+                                disabled
+                                helperText="Grupo do cliente no RBX"
                             />
                         </Box>
                         <Box sx={{ gridColumn: fieldSpan.third }}>
@@ -676,17 +1022,29 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                     <Typography fontWeight={700}>
                                         {selected.createdAt ? new Date(selected.createdAt).toLocaleString('pt-BR') : '-'}
                                     </Typography>
+                                    <Typography color="text.secondary" variant="caption">
+                                        {selected.createdBy ? `por ${selected.createdBy}` : ''}
+                                    </Typography>
                                 </Box>
                                 <Box>
                                     <Typography variant="caption" color="text.secondary">Atualizado em</Typography>
                                     <Typography fontWeight={700}>
                                         {selected.updatedAt ? new Date(selected.updatedAt).toLocaleString('pt-BR') : '-'}
                                     </Typography>
+                                    <Typography color="text.secondary" variant="caption">
+                                        {selected.updatedBy ? `por ${selected.updatedBy}` : ''}
+                                    </Typography>
                                 </Box>
                                 <Box>
                                     <Typography variant="caption" color="text.secondary">Fechado em</Typography>
                                     <Typography fontWeight={700}>
                                         {selected.closedAt ? new Date(selected.closedAt).toLocaleString('pt-BR') : '-'}
+                                    </Typography>
+                                </Box>
+                                <Box>
+                                    <Typography variant="caption" color="text.secondary">Ultimo usuario</Typography>
+                                    <Typography fontWeight={700}>
+                                        {selected.lastUser || '-'}
                                     </Typography>
                                 </Box>
                             </Stack>

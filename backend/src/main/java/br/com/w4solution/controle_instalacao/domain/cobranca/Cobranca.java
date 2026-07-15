@@ -32,6 +32,7 @@ public class Cobranca {
     private String acao;
     private Integer codigoCliente;
     private String cliente;
+    private String grupoCliente;
     private LocalDate data;
     private LocalDate dataPromessa;
     private BigDecimal valor;
@@ -43,4 +44,6 @@ public class Cobranca {
     private LocalDateTime criadoEm = LocalDateTime.now();
     private LocalDateTime atualizadoEm;
     private LocalDateTime fechadoEm;
+    private String criadoPor;
+    private String atualizadoPor;
 }

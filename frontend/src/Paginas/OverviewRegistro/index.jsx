@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Box, Paper, Typography } from "@mui/material";
+import { Box, Paper, Stack, Typography } from "@mui/material";
 import ResumoMensal from "../../Componentes/ResumoMensal";
 import Api from "../../Services/Api";
 import DashPizza from "../../Componentes/DashPizza";
 import TabelaExibicao from "../../Componentes/TabelaExibicao";
 import Filtros from "../../Componentes/Filtros";
+import ExportDashboardPdfButton from "../../Componentes/ExportDashboardPdfButton";
 
 const today = new Date();
 
@@ -74,10 +75,19 @@ const OverviewRegistro = () => {
     }, [dataConsulta]);
 
     return (
-        <Box sx={{ display: 'grid', gap: 2 }}>
+        <Box id="overview-registros-export" sx={{ display: 'grid', gap: 2 }}>
             <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
-                <Typography variant="h5" fontWeight={800}>Overview de registros</Typography>
-                <Typography color="text.secondary">Consulta operacional com filtros, resumo mensal e distribuicao por tecnico.</Typography>
+                <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2} alignItems={{ xs: 'stretch', md: 'center' }}>
+                    <Box>
+                        <Typography variant="h5" fontWeight={800}>Overview de registros</Typography>
+                        <Typography color="text.secondary">Consulta operacional com filtros, resumo mensal e distribuicao por tecnico.</Typography>
+                    </Box>
+                    <ExportDashboardPdfButton
+                        targetId="overview-registros-export"
+                        title="Overview de registros"
+                        fileName="overview-registros"
+                    />
+                </Stack>
             </Paper>
 
             <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, minWidth: 0 }}>

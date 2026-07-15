@@ -2,6 +2,7 @@ import * as React from 'react';
 import { PieChart } from '@mui/x-charts/PieChart';
 import Api from '../../Services/Api';
 import { Box, CircularProgress, Paper, Typography } from '@mui/material';
+import ChartValueList from '../ChartValueList';
 
 const colorMap = {
   "INSTALAÃ‡ÃƒO": "#00F07A",
@@ -31,6 +32,10 @@ const EmptyState = () => (
     <Typography color="text.secondary">Nenhum dado para exibir.</Typography>
   </Box>
 );
+
+function formatMoney(value) {
+  return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
 
 const DashPizza = ({ filtro, uri, financeiro, sx, metodo = 'GET' }) => {
   const [data, setData] = React.useState();
@@ -74,16 +79,29 @@ const DashPizza = ({ filtro, uri, financeiro, sx, metodo = 'GET' }) => {
       : [];
 
     return chartData.length ? (
-      <Box sx={{ width: '100%', minHeight: 320 }}>
-        <PieChart
-          series={[{
-            data: chartData,
-            highlightScope: { fade: 'global', highlight: 'item' },
-            faded: { innerRadius: 30, additionalRadius: -30, color: 'gray' },
-          }]}
-          height={320}
-          sx={sx}
-        />
+      <Box
+        sx={{
+          width: '100%',
+          minHeight: 320,
+          display: 'grid',
+          gap: 2,
+          gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 260px' },
+          alignItems: 'center',
+        }}
+      >
+        <Box sx={{ minWidth: 0 }}>
+          <PieChart
+            series={[{
+              data: chartData,
+              highlightScope: { fade: 'global', highlight: 'item' },
+              faded: { innerRadius: 30, additionalRadius: -30, color: 'gray' },
+            }]}
+            slotProps={{ legend: { hidden: true } }}
+            height={320}
+            sx={sx}
+          />
+        </Box>
+        <ChartValueList items={chartData} valueFormatter={formatMoney} />
       </Box>
     ) : <EmptyState />;
   }
@@ -95,15 +113,31 @@ const DashPizza = ({ filtro, uri, financeiro, sx, metodo = 'GET' }) => {
       {equipes.map((dados, index) => (
         <Paper key={`${dados.nome}-${index}`} variant="outlined" sx={{ p: 2, borderRadius: 2, minWidth: 0 }}>
           <Typography variant="subtitle1" fontWeight={800} mb={1}>{dados.nome}</Typography>
-          <PieChart
-            series={[{
-              data: dados.servicos.map((servico) => ({ ...servico, color: servico.cor || '#7192ff' })),
-              highlightScope: { fade: 'global', highlight: 'item' },
-              faded: { innerRadius: 30, additionalRadius: -30, color: 'gray' },
-            }]}
-            height={300}
-            sx={sx}
-          />
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 2,
+              gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 240px' },
+              alignItems: 'center',
+            }}
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <PieChart
+                series={[{
+                  data: dados.servicos.map((servico) => ({ ...servico, color: servico.cor || '#7192ff' })),
+                  highlightScope: { fade: 'global', highlight: 'item' },
+                  faded: { innerRadius: 30, additionalRadius: -30, color: 'gray' },
+                }]}
+                slotProps={{ legend: { hidden: true } }}
+                height={300}
+                sx={sx}
+              />
+            </Box>
+            <ChartValueList
+              items={dados.servicos.map((servico) => ({ ...servico, color: servico.cor || '#7192ff' }))}
+              showPercent={false}
+            />
+          </Box>
         </Paper>
       ))}
     </Box>

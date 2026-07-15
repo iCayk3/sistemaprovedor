@@ -13,6 +13,10 @@ public record ClienteFiltradoDTO(
         String cpfCnpj,
         @JsonProperty("Sigla")
         String sigla,
+        @JsonProperty("Grupo")
+        String grupo,
+        @JsonProperty("Grupo_Nome")
+        String grupoNome,
         @JsonProperty("Situacao")
         String situacao
 ) {

@@ -31,6 +31,7 @@ import {
     Tab,
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
+import ExportDashboardPdfButton from '../../Componentes/ExportDashboardPdfButton';
 import Api from '../../Services/Api';
 
 const UseApi = Api();
@@ -406,7 +407,7 @@ const AcpEventos = ({ readOnly = false }) => {
     };
 
     return (
-        <Box sx={{ py: 2 }}>
+        <Box id="dashboard-acp-eventos-export" sx={{ py: 2 }}>
             <Paper
                 variant="outlined"
                 sx={{
@@ -425,9 +426,16 @@ const AcpEventos = ({ readOnly = false }) => {
                             : 'Registro e acompanhamento de eventos do NOC dentro do sistema principal.'}
                     </Typography>
                 </Box>
-                {!readOnly && <Button variant="contained" startIcon={<AddCircleRoundedIcon />} onClick={() => setOpen(true)}>
-                    Novo evento
-                </Button>}
+                <Stack direction={{ xs: 'column', sm: 'row' }} gap={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                    <ExportDashboardPdfButton
+                        targetId="dashboard-acp-eventos-export"
+                        title="Dashboard ACP Eventos"
+                        fileName="dashboard-acp-eventos"
+                    />
+                    {!readOnly && <Button variant="contained" startIcon={<AddCircleRoundedIcon />} onClick={() => setOpen(true)}>
+                        Novo evento
+                    </Button>}
+                </Stack>
             </Stack>
             {!readOnly && <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mt: 2 }}>
                 <Tab value="eventos" label="Eventos" />

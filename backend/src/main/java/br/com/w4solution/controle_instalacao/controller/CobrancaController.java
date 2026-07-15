@@ -36,14 +36,18 @@ public class CobrancaController {
 
     @PostMapping
     @PreAuthorize(CHARGING_ACCESS)
-    public ResponseEntity<?> cadastrar(@RequestBody CobrancaCadastroDTO dto) {
-        return ResponseEntity.ok(service.cadastrar(dto));
+    public ResponseEntity<?> cadastrar(@RequestBody CobrancaCadastroDTO dto, @AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(service.cadastrar(dto, nomeUsuario(usuario)));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize(CHARGING_ACCESS)
-    public ResponseEntity<?> atualizar(@PathVariable Long id, @RequestBody CobrancaCadastroDTO dto) {
-        return ResponseEntity.ok(service.atualizar(id, dto));
+    public ResponseEntity<?> atualizar(
+            @PathVariable Long id,
+            @RequestBody CobrancaCadastroDTO dto,
+            @AuthenticationPrincipal Usuario usuario
+    ) {
+        return ResponseEntity.ok(service.atualizar(id, dto, nomeUsuario(usuario)));
     }
 
     @PatchMapping("/{id}/acompanhamento")
@@ -53,13 +57,16 @@ public class CobrancaController {
             @RequestBody CobrancaAcompanhamentoDTO dto,
             @AuthenticationPrincipal Usuario usuario
     ) {
-        String nomeUsuario = usuario == null ? "sistema" : usuario.getUsuario();
-        return ResponseEntity.ok(service.acompanhar(id, dto, nomeUsuario));
+        return ResponseEntity.ok(service.acompanhar(id, dto, nomeUsuario(usuario)));
     }
 
     @GetMapping("/rbx/clientes/{codigo}")
     @PreAuthorize(CHARGING_ACCESS)
     public ResponseEntity<?> buscarClienteRbx(@PathVariable Long codigo) {
         return ResponseEntity.ok(service.buscarClienteRbx(codigo));
+    }
+
+    private String nomeUsuario(Usuario usuario) {
+        return usuario == null ? "sistema" : usuario.getUsuario();
     }
 }

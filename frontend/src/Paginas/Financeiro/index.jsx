@@ -5,6 +5,7 @@ import DashPizza from "../../Componentes/DashPizza";
 import Api from "../../Services/Api";
 import dayjs from "dayjs";
 import { Box, Paper, Stack, Typography } from "@mui/material";
+import ExportDashboardPdfButton from "../../Componentes/ExportDashboardPdfButton";
 
 const today = new Date();
 const UseApi = Api();
@@ -30,20 +31,27 @@ const Financeiro = () => {
     }, [dataConsulta]);
 
     return (
-        <Box sx={{ display: 'grid', gap: 2 }}>
+        <Box id="dashboard-financeiro-export" sx={{ display: 'grid', gap: 2 }}>
             <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} gap={2}>
                     <Box>
                         <Typography variant="h5" fontWeight={800}>Financeiro</Typography>
                         <Typography color="text.secondary">Boletos baixados e boletos em aberto por cidade.</Typography>
                     </Box>
-                    <Box sx={{ width: { xs: '100%', sm: 220 } }}>
-                        <BasicDatePicker
-                            valor={dayjs(dataConsulta)}
-                            aoAlterado={(value) => setDataConsulta(value.toISOString().slice(0, 10))}
-                            label="Data"
+                    <Stack direction={{ xs: 'column', sm: 'row' }} gap={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                        <ExportDashboardPdfButton
+                            targetId="dashboard-financeiro-export"
+                            title="Dashboard financeiro"
+                            fileName="dashboard-financeiro"
                         />
-                    </Box>
+                        <Box sx={{ width: { xs: '100%', sm: 220 } }}>
+                            <BasicDatePicker
+                                valor={dayjs(dataConsulta)}
+                                aoAlterado={(value) => setDataConsulta(value.toISOString().slice(0, 10))}
+                                label="Data"
+                            />
+                        </Box>
+                    </Stack>
                 </Stack>
             </Paper>
 

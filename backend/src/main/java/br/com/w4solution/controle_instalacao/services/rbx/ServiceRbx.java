@@ -360,6 +360,51 @@ public class ServiceRbx {
     }
 
 
+    public Optional<ContratoRbxDTO> buscarContratoMaisRecenteComValor(Integer codigoCliente) {
+        var corpoMessage = """
+                {
+                   "ConsultaContratos": {
+                      "Autenticacao": {
+                         "ChaveIntegracao": "%s"
+                      },
+                      "Filtro": "Cliente_Codigo = '%d'"
+                   }
+                }
+                """.formatted(chaveApi, codigoCliente);
+        try {
+            List<ContratoRbxDTO> contratos = integracaoRbx.fazerRequest(
+                    corpoMessage,
+                    new TypeReference<RespostaAPI<ContratoRbxDTO>>() {
+                    }
+            );
+
+            return contratos.stream()
+                    .filter(contrato -> valorContrato(contrato) > 0)
+                    .max(Comparator.comparingLong(this::numeroContrato));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private long numeroContrato(ContratoRbxDTO contrato) {
+        try {
+            return Long.parseLong(Optional.ofNullable(contrato.numero()).orElse("0").replaceAll("\\D", ""));
+        } catch (Exception e) {
+            return 0L;
+        }
+    }
+
+    public double valorContrato(ContratoRbxDTO contrato) {
+        String valor = Optional.ofNullable(contrato.valorLiquido())
+                .filter(v -> !v.isBlank())
+                .orElse(contrato.valorBruto());
+        try {
+            return Double.parseDouble(Optional.ofNullable(valor).orElse("0").replace(",", "."));
+        } catch (Exception e) {
+            return 0.0;
+        }
+    }
+
     private List<ClienteRbxDTO> buscarClientesRbx(String status) throws Exception {
 
         String bodyClientes;

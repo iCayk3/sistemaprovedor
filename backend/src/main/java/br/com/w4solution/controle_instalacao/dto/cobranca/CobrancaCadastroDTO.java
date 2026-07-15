@@ -7,6 +7,7 @@ public record CobrancaCadastroDTO(
         String acao,
         Integer codigoCliente,
         String cliente,
+        String grupoCliente,
         LocalDate data,
         LocalDate dataPromessa,
         BigDecimal valor,

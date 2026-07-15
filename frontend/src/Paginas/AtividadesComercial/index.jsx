@@ -1,4 +1,4 @@
-import { Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Fab, FormControl, IconButton, Paper, Stack, Typography } from "@mui/material"
+import { Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Fab, FormControl, IconButton, Paper, Stack, TextField, Typography } from "@mui/material"
 import FieldAutoComplet from "../../Componentes/FieldAutoComplet"
 import TextoInput from "../../Componentes/TextoInput"
 import { useCallback, useEffect, useState } from "react";
@@ -10,6 +10,7 @@ import BasicDatePicker from "../../Componentes/BasicDatePicker";
 import dayjs from "dayjs";
 import TabelaExibicao from "../../Componentes/TabelaExibicao";
 import DeleteIcon from '@mui/icons-material/Delete';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { GridActionsCellItem } from "@mui/x-data-grid";
 
 const UseApi = Api()
@@ -44,11 +45,15 @@ const segmentConfig = {
     },
 };
 
-const AtividadesComercial = ({ segmento = 'ATIVIDADE' }) => {
+const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
     const config = segmentConfig[segmento] || segmentConfig.ATIVIDADE;
     const [atividades, setAtividades] = useState([]);
     const [data, setData] = useState([]);
     const [refreshTable, setRefreshTable] = useState(true);
+    const [conversionLead, setConversionLead] = useState(null);
+    const [conversionCode, setConversionCode] = useState('');
+    const [conversionError, setConversionError] = useState('');
+    const isTracking = mode === 'acompanhamento';
 
     useEffect(() => {
         setAtividades([{ id: null, nome: '', evento: '', eventoInput: '', data: today, valor: '' }]);
@@ -76,6 +81,7 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE' }) => {
             data,
             segmento,
             valor: segmento === 'COBRANCA' && valor !== '' ? Number(String(valor).replace(',', '.')) : null,
+            status: segmento === 'LEAD' ? 'ABERTO' : null,
         }));
 
         try {
@@ -157,23 +163,91 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE' }) => {
         []
     );
 
+    const abrirConversao = (lead) => {
+        setConversionLead(lead);
+        setConversionCode(lead.codigoCliente || '');
+        setConversionError('');
+    };
+
+    const converterLead = async () => {
+        if (!conversionLead || !conversionCode) {
+            setConversionError('Informe o codigo do cliente.');
+            return;
+        }
+
+        try {
+            await UseApi(`atividades/${conversionLead.id}/converter-lead`, 'PATCH', {
+                codigoCliente: Number(conversionCode),
+            });
+            setConversionLead(null);
+            setConversionCode('');
+            handleFormSubmit();
+        } catch (error) {
+            setConversionError(error.message || 'Erro ao converter lead.');
+        }
+    };
+
     const colunas = [
         {
             field: 'options',
             width: 10,
             type: 'actions',
-            getActions: (params) => [
-                <DeletarRegistro
-                    label="Delete"
-                    showInMenu
-                    icon={<DeleteIcon />}
-                    deleteUser={deleteRegistro(params.id)}
-                    closeMenuOnClick={false}
-                />
-            ]
+            getActions: (params) => {
+                if (isTracking && segmento === 'LEAD' && params.row.status !== 'CONVERTIDO') {
+                    return [
+                        <GridActionsCellItem
+                            label="Converter em venda"
+                            showInMenu
+                            icon={<CheckCircleIcon />}
+                            onClick={() => abrirConversao(params.row)}
+                        />
+                    ];
+                }
+
+                if (isTracking) {
+                    return [];
+                }
+
+                return [
+                    <DeletarRegistro
+                        label="Delete"
+                        showInMenu
+                        icon={<DeleteIcon />}
+                        deleteUser={deleteRegistro(params.id)}
+                        closeMenuOnClick={false}
+                    />
+                ];
+            }
         },
         { field: 'cliente', headerName: config.targetLabel, width: 500 },
         { field: 'evento', headerName: config.eventLabel, width: 250 },
+        ...(segmento === 'LEAD' ? [
+            {
+                field: 'status',
+                headerName: 'Status',
+                width: 140,
+                renderCell: (params) => (
+                    <Chip
+                        size="small"
+                        color={params.value === 'CONVERTIDO' ? 'success' : 'warning'}
+                        label={params.value || 'ABERTO'}
+                    />
+                ),
+            },
+            { field: 'codigoCliente', headerName: 'Codigo cliente', width: 130 },
+            { field: 'grupoCliente', headerName: 'Grupo', width: 130 },
+            { field: 'plano', headerName: 'Plano', width: 180 },
+            {
+                field: 'valorPlano',
+                headerName: 'Valor plano',
+                width: 140,
+                valueFormatter: (value) => {
+                    if (value === null || value === undefined || value === '') return '';
+                    return Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                },
+            },
+            { field: 'convertidoPor', headerName: 'Convertido por', width: 160 },
+        ] : []),
         ...(config.showValue ? [{
             field: 'valor',
             headerName: 'Valor',
@@ -203,11 +277,13 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE' }) => {
             <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
             <FormControl sx={{ width: '100%', display: 'flex', gap: 2 }}>
                 <Box>
-                    <Typography variant="h4" fontWeight={800}>{config.title}</Typography>
-                    <Typography color="text.secondary">{config.subtitle} do comercial no sistema principal.</Typography>
+                    <Typography variant="h4" fontWeight={800}>{isTracking ? `Acompanhamento de ${config.subtitle.toLowerCase()}` : config.title}</Typography>
+                    <Typography color="text.secondary">
+                        {isTracking ? 'Fila operacional para acompanhamento e conversao de leads.' : `${config.subtitle} do comercial no sistema principal.`}
+                    </Typography>
                 </Box>
 
-                {atividades.map((item, index) => (
+                {!isTracking && atividades.map((item, index) => (
                     <Stack key={index} direction={{ xs: 'column', md: 'row' }} gap={2} alignItems={{ xs: 'stretch', md: 'center' }}>
                         <IconButton color="error" onClick={() => removerAtividade(index)}>
                             <ClearIcon />
@@ -260,18 +336,43 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE' }) => {
                     </Stack>
                 ))}
 
-                <Fab size="small" color="primary" onClick={adicionarAtividade} sx={{ marginTop: 1 }}>
-                    <AddIcon />
-                </Fab>
+                {!isTracking && (
+                    <Fab size="small" color="primary" onClick={adicionarAtividade} sx={{ marginTop: 1 }}>
+                        <AddIcon />
+                    </Fab>
+                )}
 
-                <Button variant="contained" color="primary" onClick={enviarDados} sx={{ marginTop: 2 }}>
-                    {config.action} <PersonAddIcon sx={{ marginLeft: 2 }} />
-                </Button>
+                {!isTracking && (
+                    <Button variant="contained" color="primary" onClick={enviarDados} sx={{ marginTop: 2 }}>
+                        {config.action} <PersonAddIcon sx={{ marginLeft: 2 }} />
+                    </Button>
+                )}
             </FormControl>
             </Paper>
 
             <Divider sx={{ marginTop: 2, marginBottom: 2 }} />
             <TabelaExibicao rows={data} columns={colunas} />
+            <Dialog open={Boolean(conversionLead)} onClose={() => setConversionLead(null)} maxWidth="sm" fullWidth>
+                <DialogTitle>Converter lead em venda</DialogTitle>
+                <DialogContent>
+                    <Typography color="text.secondary" sx={{ mb: 2 }}>
+                        Informe o codigo do cliente na base RBX. O sistema buscara o nome, grupo, plano e valor do contrato mais recente com valor.
+                    </Typography>
+                    <TextField
+                        fullWidth
+                        type="number"
+                        label="Codigo do cliente"
+                        value={conversionCode}
+                        onChange={(event) => setConversionCode(event.target.value)}
+                        error={Boolean(conversionError)}
+                        helperText={conversionError || conversionLead?.cliente || ''}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setConversionLead(null)}>Cancelar</Button>
+                    <Button variant="contained" onClick={converterLead}>Converter</Button>
+                </DialogActions>
+            </Dialog>
         </>
     );
 };

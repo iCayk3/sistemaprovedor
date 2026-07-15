@@ -40,4 +40,7 @@ public interface AtividadeRepository extends JpaRepository<Atividade, Long> {
 
     @Query("SELECT a FROM Atividade a WHERE (a.segmento = :segmento OR (:segmento = 'ATIVIDADE' AND a.segmento IS NULL)) AND EXTRACT(MONTH FROM a.data) = :mes AND EXTRACT(YEAR FROM a.data) = :ano ORDER BY a.id DESC")
     List<Atividade> listarAtividadesDoMes(String segmento, Integer ano, Integer mes);
+
+    @Query("SELECT a FROM Atividade a WHERE (a.segmento = :segmento OR (:segmento = 'ATIVIDADE' AND a.segmento IS NULL)) AND EXTRACT(YEAR FROM a.data) = :ano ORDER BY a.id DESC")
+    List<Atividade> listarAtividadesDoAno(String segmento, Integer ano);
 }

@@ -24,6 +24,7 @@ import {
 } from '@mui/material';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Api from '../../Services/Api';
+import ExportDashboardPdfButton from '../../Componentes/ExportDashboardPdfButton';
 
 const UseApi = Api();
 const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -325,25 +326,33 @@ const DashboardClientes = () => {
     const isLoading = useMemo(() => clients.loading || financial.loading || attendance.loading, [attendance.loading, clients.loading, financial.loading]);
 
     return (
-        <Box sx={{ py: 2 }}>
+        <Box id="dashboard-clientes-export" sx={{ py: 2 }}>
             <Paper variant="outlined" sx={{ p: 2.5, mb: 2, borderRadius: 2 }}>
             <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2}>
                 <Box>
                     <Typography variant="h5" fontWeight={800}>Dashboard de clientes</Typography>
                     <Typography color="text.secondary">Indicadores do RouterBox processados pelo backend Spring Boot.</Typography>
                 </Box>
-                <Button
-                    variant="contained"
-                    startIcon={isLoading ? <CircularProgress color="inherit" size={16} /> : <RefreshRoundedIcon />}
-                    disabled={isLoading}
-                    onClick={() => {
-                        loadClients();
-                        loadFinancial(period);
-                        loadAttendance(period);
-                    }}
-                >
-                    Atualizar dados
-                </Button>
+                <Stack direction={{ xs: 'column', sm: 'row' }} gap={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                    <ExportDashboardPdfButton
+                        targetId="dashboard-clientes-export"
+                        title="Dashboard de clientes"
+                        fileName="dashboard-clientes"
+                        disabled={isLoading}
+                    />
+                    <Button
+                        variant="contained"
+                        startIcon={isLoading ? <CircularProgress color="inherit" size={16} /> : <RefreshRoundedIcon />}
+                        disabled={isLoading}
+                        onClick={() => {
+                            loadClients();
+                            loadFinancial(period);
+                            loadAttendance(period);
+                        }}
+                    >
+                        Atualizar dados
+                    </Button>
+                </Stack>
             </Stack>
             </Paper>
 

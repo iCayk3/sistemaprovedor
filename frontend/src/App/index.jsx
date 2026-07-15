@@ -12,6 +12,7 @@ import MapIcon from '@mui/icons-material/Map';
 import MapPage from "../Paginas/MapPage";
 import SettingsApplicationsIcon from '@mui/icons-material/SettingsApplications';
 import FiberNewIcon from '@mui/icons-material/FiberNew';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import Financeiro from '../Paginas/Financeiro';
 import Inadiplentes from '../Paginas/Inadiplentes';
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
@@ -253,6 +254,28 @@ const Menu = () => {
                         icon: <FiberNewIcon />,
                     },
                     {
+                        segment: 'leads',
+                        title: 'Leads',
+                        icon: <PersonAddIcon />,
+                        children: [
+                            {
+                                segment: 'registrar',
+                                title: 'Registrar lead',
+                                icon: <FiberNewIcon />,
+                            },
+                            {
+                                segment: 'dashboard',
+                                title: 'Dashboard leads',
+                                icon: <DashboardIcon />,
+                            },
+                            {
+                                segment: 'acompanhamento',
+                                title: 'Acompanhamento',
+                                icon: <DescriptionIcon />,
+                            },
+                        ],
+                    },
+                    {
                         segment: 'dashboards',
                         title: 'Dashboards comercial',
                         icon: <FiberNewIcon />,
@@ -381,6 +404,9 @@ const Menu = () => {
                         <Route path="map" element={hasRole('technical') ? <MapPage /> : semPermissao} />
                         <Route path="noc-eventos" element={hasRole('technical') ? <AcpEventos /> : semPermissao} />
                         <Route path="comercial/atividades" element={hasRole('commercial') ? <AtividadesComercial /> : semPermissao} />
+                        <Route path="comercial/leads/registrar" element={hasRole('commercial') ? <AtividadesComercial segmento="LEAD" /> : semPermissao} />
+                        <Route path="comercial/leads/dashboard" element={hasRole('commercial') ? <DashBoardsComercial segmento="LEAD" allowSegmentSelect={false} /> : semPermissao} />
+                        <Route path="comercial/leads/acompanhamento" element={hasRole('commercial') ? <AtividadesComercial segmento="LEAD" mode="acompanhamento" /> : semPermissao} />
                         <Route path="comercial/dashboards" element={hasRole('commercial') ? <DashBoardsComercial segmento="ATIVIDADE" allowSegmentSelect={false} /> : semPermissao} />
                         <Route path="comercial/configuration" element={hasRole('commercial') ? <SettingsAtividades allowedSegments={['ATIVIDADE']} /> : semPermissao} />
                         <Route path="perfil/settings" element={<SettingsPerfil />} />

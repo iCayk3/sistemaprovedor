@@ -4,6 +4,7 @@ import BasicLineChart from '../../Componentes/BasicLineChart';
 import FieldAutoComplet from '../../Componentes/FieldAutoComplet';
 import { useEffect, useState } from 'react';
 import Api from '../../Services/Api';
+import ExportDashboardPdfButton from '../../Componentes/ExportDashboardPdfButton';
 
 const DashboardPrincipal = () => {
     const [procedimento, setProcedimento] = useState(null);
@@ -60,15 +61,24 @@ const DashboardPrincipal = () => {
     }, [procedimentoService]);
 
     return (
-        <Box sx={{ display: 'grid', gap: 2 }}>
+        <Box id="dashboard-registros-tecnicos-export" sx={{ display: 'grid', gap: 2 }}>
             <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
-                <Typography variant="h5" fontWeight={800}>Registros tecnicos</Typography>
-                <Typography color="text.secondary">
-                    Evolucao mensal dos servicos e distribuicao por equipe tecnica.
-                </Typography>
+                <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2} alignItems={{ xs: 'stretch', md: 'center' }}>
+                    <Box>
+                        <Typography variant="h5" fontWeight={800}>Registros tecnicos</Typography>
+                        <Typography color="text.secondary">
+                            Evolucao mensal dos servicos e distribuicao por equipe tecnica.
+                        </Typography>
+                    </Box>
+                    <ExportDashboardPdfButton
+                        targetId="dashboard-registros-tecnicos-export"
+                        title="Dashboard de registros tecnicos"
+                        fileName="dashboard-registros-tecnicos"
+                    />
+                </Stack>
             </Paper>
 
-            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', xl: '1fr 1fr' } }}>
+            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: '1fr' }}>
                 <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, minWidth: 0 }}>
                     <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} gap={2} mb={2}>
                         <Box>

@@ -7,6 +7,7 @@ import br.com.w4solution.controle_instalacao.repository.eventos.AtividadeReposit
 import br.com.w4solution.controle_instalacao.repository.eventos.EventoRepository;
 import br.com.w4solution.controle_instalacao.repository.usuarios.UsuarioRepository;
 import br.com.w4solution.controle_instalacao.services.ExtratorToken;
+import br.com.w4solution.controle_instalacao.services.rbx.ServiceRbx;
 import br.com.w4solution.controle_instalacao.services.usuarios.TokenService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -37,6 +39,9 @@ public class AtividadesService {
 
     @Autowired
     ExtratorToken extrator;
+
+    @Autowired
+    ServiceRbx serviceRbx;
 
 
     public List<AtividadesDTO> cadastrarAtividade(List<CadastrarAtividadesDTO> dados, HttpServletRequest request) {
@@ -122,6 +127,45 @@ public class AtividadesService {
         return repository.listarAtividadesDoMes(segmentoNormalizado, dataConvertida.getYear(), dataConvertida.getMonthValue()).stream().map(AtividadesDTO::new).toList();
     }
 
+    public List<AtividadesDTO> listarAtividadesPorAno(String data, String segmento) {
+        var segmentoNormalizado = normalizarSegmento(segmento);
+        var dataConvertida = data == null || data.isBlank() ? LocalDate.now() : LocalDate.parse(data);
+        return repository.listarAtividadesDoAno(segmentoNormalizado, dataConvertida.getYear()).stream().map(AtividadesDTO::new).toList();
+    }
+
+    public AtividadesDTO converterLead(Long id, ConverterLeadDTO dto, HttpServletRequest request) {
+        if (dto.codigoCliente() == null) {
+            throw new IllegalArgumentException("Informe o codigo do cliente.");
+        }
+
+        var atividade = repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Lead nao encontrado."));
+
+        if (!"LEAD".equalsIgnoreCase(atividade.getSegmento())) {
+            throw new IllegalArgumentException("Apenas leads podem ser convertidos em venda.");
+        }
+
+        var cliente = serviceRbx.buscarClienteId(dto.codigoCliente().longValue()).stream()
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Cliente nao encontrado no RBX."));
+
+        var contrato = serviceRbx.buscarContratoMaisRecenteComValor(dto.codigoCliente())
+                .orElseThrow(() -> new IllegalArgumentException("Nenhum contrato com valor encontrado para o cliente."));
+
+        atividade.setStatus("CONVERTIDO");
+        atividade.setEvento("Venda");
+        atividade.setCodigoCliente(dto.codigoCliente());
+        atividade.setCliente(cliente.nome());
+        atividade.setGrupoCliente(grupoCliente(cliente.grupoNome() != null && !cliente.grupoNome().isBlank() ? cliente.grupoNome() : cliente.grupo()));
+        atividade.setPlano(contrato.planoDescricao());
+        atividade.setValorPlano(serviceRbx.valorContrato(contrato));
+        atividade.setValor(serviceRbx.valorContrato(contrato));
+        atividade.setConvertidoEm(LocalDateTime.now());
+        atividade.setConvertidoPor(extrator.extrairUsuario(request));
+
+        return new AtividadesDTO(repository.save(atividade));
+    }
+
     public void deletarAtividade(Long id) {
         repository.deleteById(id);
     }
@@ -131,6 +175,31 @@ public class AtividadesService {
             return "ATIVIDADE";
         }
         return segmento.trim().toUpperCase();
+    }
+
+    private String grupoCliente(String grupo) {
+        if (grupo == null || grupo.isBlank()) {
+            return grupo;
+        }
+        return switch (grupo.trim()) {
+            case "9" -> "PADRAO";
+            case "10" -> "SJP";
+            case "11" -> "PMV";
+            case "13" -> "STN";
+            case "15" -> "QT";
+            case "16" -> "BV";
+            case "17" -> "SEM COBRANCA";
+            case "26" -> "MB";
+            case "32" -> "MRC";
+            case "33" -> "MRP";
+            case "34" -> "SAL";
+            case "36" -> "RADIO - PIRABAS";
+            case "40" -> "TESTE";
+            case "41" -> "PRE";
+            case "42" -> "CON";
+            case "43" -> "SOL";
+            default -> grupo;
+        };
     }
 }
 

@@ -39,25 +39,34 @@ public class CobrancaService {
                 .toList();
     }
 
-    public CobrancaDTO cadastrar(CobrancaCadastroDTO dto) {
+    public CobrancaDTO cadastrar(CobrancaCadastroDTO dto, String usuario) {
         Cobranca cobranca = new Cobranca();
         cobranca.setProtocolo(proximoProtocolo());
         aplicarDados(cobranca, dto);
         cobranca.setCriadoEm(LocalDateTime.now());
+        cobranca.setCriadoPor(fallback(usuario, "sistema"));
+        cobranca.setAtualizadoPor(fallback(usuario, "sistema"));
         fecharSeFinalizada(cobranca);
-        return toDto(repository.save(cobranca));
+        Cobranca salva = repository.save(cobranca);
+        salvarHistorico(salva, null, salva.getStatus(), null, salva.getValor(), fallback(dto.observacao(), "Cobranca cadastrada."), usuario);
+        return toDto(salva);
     }
 
-    public CobrancaDTO atualizar(Long id, CobrancaCadastroDTO dto) {
+    public CobrancaDTO atualizar(Long id, CobrancaCadastroDTO dto, String usuario) {
         Cobranca cobranca = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Cobranca nao encontrada."));
         if (!isEditavel(cobranca.getStatus())) {
             throw new IllegalStateException("Cobranca paga, fechada ou cancelada nao pode ser editada.");
         }
+        String statusAnterior = cobranca.getStatus();
+        BigDecimal valorAnterior = cobranca.getValor();
         aplicarDados(cobranca, dto);
         cobranca.setAtualizadoEm(LocalDateTime.now());
+        cobranca.setAtualizadoPor(fallback(usuario, "sistema"));
         fecharSeFinalizada(cobranca);
-        return toDto(repository.save(cobranca));
+        Cobranca salva = repository.save(cobranca);
+        salvarHistorico(salva, statusAnterior, salva.getStatus(), valorAnterior, salva.getValor(), fallback(dto.observacao(), "Cobranca atualizada."), usuario);
+        return toDto(salva);
     }
 
     public CobrancaDTO acompanhar(Long id, CobrancaAcompanhamentoDTO dto, String usuario) {
@@ -84,19 +93,11 @@ public class CobrancaService {
         cobranca.setDataPromessa(isPromessa(statusNovo) ? dto.dataPromessa() : null);
         cobranca.setValor(valorNovo == null ? BigDecimal.ZERO : valorNovo);
         cobranca.setAtualizadoEm(LocalDateTime.now());
+        cobranca.setAtualizadoPor(fallback(usuario, "sistema"));
         fecharSeFinalizada(cobranca);
         Cobranca salva = repository.save(cobranca);
 
-        CobrancaHistorico historico = new CobrancaHistorico();
-        historico.setCobranca(salva);
-        historico.setStatusAnterior(statusAnterior);
-        historico.setStatusNovo(statusNovo);
-        historico.setValorAnterior(valorAnterior);
-        historico.setValorNovo(salva.getValor());
-        historico.setObservacao(dto.observacao());
-        historico.setUsuario(fallback(usuario, "sistema"));
-        historico.setCriadoEm(LocalDateTime.now());
-        historicoRepository.save(historico);
+        salvarHistorico(salva, statusAnterior, statusNovo, valorAnterior, salva.getValor(), dto.observacao(), usuario);
 
         return toDto(salva);
     }
@@ -113,6 +114,7 @@ public class CobrancaService {
         cobranca.setAcao(fallback(dto.acao(), "Contato"));
         cobranca.setCodigoCliente(dto.codigoCliente());
         cobranca.setCliente(dto.cliente());
+        cobranca.setGrupoCliente(dto.grupoCliente());
         cobranca.setData(dto.data() == null ? LocalDate.now() : dto.data());
         cobranca.setDataPromessa(isPromessa(dto.status()) ? dto.dataPromessa() : null);
         cobranca.setValor(dto.valor() == null ? BigDecimal.ZERO : dto.valor());
@@ -135,6 +137,27 @@ public class CobrancaService {
         if (cobranca.getFechadoEm() == null) {
             cobranca.setFechadoEm(LocalDateTime.now());
         }
+    }
+
+    private void salvarHistorico(
+            Cobranca cobranca,
+            String statusAnterior,
+            String statusNovo,
+            BigDecimal valorAnterior,
+            BigDecimal valorNovo,
+            String observacao,
+            String usuario
+    ) {
+        CobrancaHistorico historico = new CobrancaHistorico();
+        historico.setCobranca(cobranca);
+        historico.setStatusAnterior(statusAnterior);
+        historico.setStatusNovo(statusNovo);
+        historico.setValorAnterior(valorAnterior);
+        historico.setValorNovo(valorNovo);
+        historico.setObservacao(observacao);
+        historico.setUsuario(fallback(usuario, "sistema"));
+        historico.setCriadoEm(LocalDateTime.now());
+        historicoRepository.save(historico);
     }
 
     private String proximoProtocolo() {

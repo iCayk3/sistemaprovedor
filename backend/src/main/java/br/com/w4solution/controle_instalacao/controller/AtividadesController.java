@@ -39,6 +39,12 @@ public class AtividadesController {
         return ResponseEntity.ok().body(atividades);
     }
 
+    @GetMapping("/registro/anual")
+    public ResponseEntity<List<AtividadesDTO>> registroAnual(@RequestParam(required = false) String data, @RequestParam(required = false) String segmento){
+        var atividades = service.listarAtividadesPorAno(data, segmento);
+        return ResponseEntity.ok().body(atividades);
+    }
+
     @GetMapping("/usuario")
     public ResponseEntity<List<ServicoPorUsuarioDiario>> listarAtividadesPorUsuario(@RequestParam(required = false) String filtro, @RequestParam(required = false) String segmento) {
         var atividades = service.listarAtividadesPorUsuario(filtro, segmento);
@@ -56,6 +62,13 @@ public class AtividadesController {
     public ResponseEntity<List<AtividadesDTO>> cadastrarAtividade(@RequestBody List<CadastrarAtividadesDTO> dados, HttpServletRequest request){
         var atividades = service.cadastrarAtividade(dados, request);
         return ResponseEntity.ok().body(atividades);
+    }
+
+    @PatchMapping("/{id}/converter-lead")
+    @Transactional
+    public ResponseEntity<AtividadesDTO> converterLead(@PathVariable Long id, @RequestBody ConverterLeadDTO dados, HttpServletRequest request){
+        var atividade = service.converterLead(id, dados, request);
+        return ResponseEntity.ok().body(atividade);
     }
 
     @DeleteMapping
