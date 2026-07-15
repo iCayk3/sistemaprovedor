@@ -40,6 +40,7 @@ public class CobrancaService {
     }
 
     public CobrancaDTO cadastrar(CobrancaCadastroDTO dto, String usuario) {
+        validarCobrancaEmAndamento(dto.codigoCliente(), null);
         Cobranca cobranca = new Cobranca();
         cobranca.setProtocolo(proximoProtocolo());
         aplicarDados(cobranca, dto);
@@ -58,6 +59,7 @@ public class CobrancaService {
         if (!isEditavel(cobranca.getStatus())) {
             throw new IllegalStateException("Cobranca paga, fechada ou cancelada nao pode ser editada.");
         }
+        validarCobrancaEmAndamento(dto.codigoCliente(), cobranca.getId());
         String statusAnterior = cobranca.getStatus();
         BigDecimal valorAnterior = cobranca.getValor();
         aplicarDados(cobranca, dto);
@@ -177,6 +179,25 @@ public class CobrancaService {
         }
         String normalizado = status.trim().toUpperCase();
         return !normalizado.equals("PAGO") && !normalizado.equals("FECHADO") && !normalizado.equals("CANCELADO");
+    }
+
+    private void validarCobrancaEmAndamento(Integer codigoCliente, Long idAtual) {
+        if (codigoCliente == null) {
+            return;
+        }
+
+        repository.findAllByCodigoCliente(codigoCliente).stream()
+                .filter(cobranca -> idAtual == null || !cobranca.getId().equals(idAtual))
+                .filter(cobranca -> !isStatusPagoOuFechado(cobranca.getStatus()))
+                .findFirst()
+                .ifPresent(cobranca -> {
+                    throw new IllegalStateException("Ja existe uma cobranca em andamento para o codigo informado: " + cobranca.getProtocolo());
+                });
+    }
+
+    private boolean isStatusPagoOuFechado(String status) {
+        String normalizado = String.valueOf(status).trim().toUpperCase();
+        return normalizado.equals("PAGO") || normalizado.equals("FECHADO");
     }
 
     private boolean isPromessa(String status) {

@@ -166,6 +166,10 @@ function isFinalStatus(status) {
     return ['PAGO', 'FECHADO', 'CANCELADO'].includes(String(status || '').trim().toUpperCase());
 }
 
+function isPaidOrClosedStatus(status) {
+    return ['PAGO', 'FECHADO'].includes(String(status || '').trim().toUpperCase());
+}
+
 function isPromiseStatus(status) {
     return String(status || '').trim().toUpperCase() === 'PROMESSA DE PAGAMENTO';
 }
@@ -421,6 +425,17 @@ const Cobrancas = ({ readOnly = false, mode }) => {
 
     const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
+    const findChargeInProgressByCode = (code, ignoredId = selected?.id) => {
+        const normalizedCode = String(code || '').trim();
+        if (!normalizedCode) return null;
+
+        return charges.find((charge) => (
+            String(charge.clientCode || '').trim() === normalizedCode
+            && charge.id !== ignoredId
+            && !isPaidOrClosedStatus(charge.status)
+        ));
+    };
+
     const openNew = () => {
         setSelected(null);
         setRbxClient(null);
@@ -441,6 +456,12 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         const code = form.codigoCliente || selected?.clientCode;
         if (!code) {
             setError('Informe o codigo do cliente para buscar no RBX.');
+            return;
+        }
+        const chargeInProgress = isRegister && !selected ? findChargeInProgressByCode(code, null) : null;
+        if (chargeInProgress) {
+            setError(`Ja existe uma cobranca em andamento para o codigo ${code}: ${chargeInProgress.protocol} (${chargeInProgress.status}).`);
+            setRbxClient(null);
             return;
         }
         setRbxLoading(true);
@@ -469,6 +490,10 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         try {
             if (isTracking && !trackingNote.trim()) {
                 throw new Error('Informe o que foi realizado no acompanhamento.');
+            }
+            const chargeInProgress = !selected ? findChargeInProgressByCode(form.codigoCliente, null) : null;
+            if (chargeInProgress) {
+                throw new Error(`Ja existe uma cobranca em andamento para o codigo ${form.codigoCliente}: ${chargeInProgress.protocol} (${chargeInProgress.status}).`);
             }
             const payload = {
                 acao: form.acao,
@@ -555,7 +580,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 </Stack>
             </Paper>
 
-            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+            {error && !open && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
             {(metrics.promessasHoje > 0 || metrics.promessasVencidas > 0) && (
                 <Alert severity={metrics.promessasVencidas > 0 ? 'error' : 'warning'} sx={{ mb: 2 }}>
                     {metrics.promessasVencidas > 0
@@ -881,6 +906,11 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                         : 'Nova cobranca'}
                 </DialogTitle>
                 <DialogContent sx={{ overflowX: 'hidden' }}>
+                    {error && (
+                        <Alert severity="error" sx={{ mb: 2 }}>
+                            {error}
+                        </Alert>
+                    )}
                     <Box sx={{ ...formGridSx, pt: 1 }}>
                         <Box sx={{ gridColumn: fieldSpan.third }}>
                             <TextField
