@@ -273,6 +273,11 @@ const Menu = () => {
                                 title: 'Acompanhamento',
                                 icon: <DescriptionIcon />,
                             },
+                            {
+                                segment: 'configuracoes',
+                                title: 'Configuracoes leads',
+                                icon: <Groups2Icon />,
+                            },
                         ],
                     },
                     {
@@ -407,6 +412,7 @@ const Menu = () => {
                         <Route path="comercial/leads/registrar" element={hasRole('commercial') ? <AtividadesComercial segmento="LEAD" /> : semPermissao} />
                         <Route path="comercial/leads/dashboard" element={hasRole('commercial') ? <DashBoardsComercial segmento="LEAD" allowSegmentSelect={false} /> : semPermissao} />
                         <Route path="comercial/leads/acompanhamento" element={hasRole('commercial') ? <AtividadesComercial segmento="LEAD" mode="acompanhamento" /> : semPermissao} />
+                        <Route path="comercial/leads/configuracoes" element={hasRole('commercial') ? <SettingsAtividades initialSegment="LEAD" allowedSegments={['LEAD']} /> : semPermissao} />
                         <Route path="comercial/dashboards" element={hasRole('commercial') ? <DashBoardsComercial segmento="ATIVIDADE" allowSegmentSelect={false} /> : semPermissao} />
                         <Route path="comercial/configuration" element={hasRole('commercial') ? <SettingsAtividades allowedSegments={['ATIVIDADE']} /> : semPermissao} />
                         <Route path="perfil/settings" element={<SettingsPerfil />} />
