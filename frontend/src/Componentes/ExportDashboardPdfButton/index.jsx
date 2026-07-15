@@ -49,8 +49,59 @@ const reportCss = `
         max-width: 100% !important;
     }
 
+    .pdf-export-report .commercial-dashboard-title {
+        padding: 18px !important;
+    }
+
+    .pdf-export-report .commercial-dashboard-title .MuiStack-root {
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+    }
+
+    .pdf-export-report .commercial-dashboard-title .MuiTypography-h4 {
+        font-size: 30px !important;
+        line-height: 1.1 !important;
+    }
+
+    .pdf-export-report .commercial-metric-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 10px !important;
+    }
+
+    .pdf-export-report .commercial-metric-card {
+        min-height: 84px !important;
+        padding: 14px !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .pdf-export-report .commercial-two-column-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 14px !important;
+        align-items: stretch !important;
+    }
+
+    .pdf-export-report .commercial-chart-card {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+
+    .pdf-export-report .commercial-chart-card [style*="grid-template-columns"] {
+        grid-template-columns: minmax(0, 1fr) 260px !important;
+        align-items: center !important;
+    }
+
+    .pdf-export-report .commercial-two-column-grid .commercial-chart-card [style*="grid-template-columns"] {
+        grid-template-columns: 1fr !important;
+    }
+
     .pdf-export-report .chart-value-list-row {
         grid-template-columns: 12px minmax(0, 1fr) auto !important;
+        min-height: 30px !important;
+        padding: 6px 8px !important;
     }
 
     .pdf-export-report .MuiStack-root {
@@ -254,12 +305,13 @@ const ExportDashboardPdfButton = ({
                 }
 
                 doc.setTextColor('#ffffff');
+                const textX = logo ? 148 : margin;
                 doc.setFontSize(16);
                 doc.setFont(undefined, 'bold');
-                doc.text(brandName, logo ? 148 : margin, 28);
+                doc.text(brandName, textX, 28);
                 doc.setFontSize(14);
                 doc.setFont(undefined, 'bold');
-                doc.text(title, margin, 58);
+                doc.text(title, textX, 58);
                 doc.setFontSize(8);
                 doc.setFont(undefined, 'normal');
                 doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, pageWidth - margin, 28, { align: 'right' });

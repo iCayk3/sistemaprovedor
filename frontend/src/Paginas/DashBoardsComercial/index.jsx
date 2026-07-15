@@ -1,5 +1,7 @@
 import * as React from 'react';
 import { BarChart } from '@mui/x-charts/BarChart';
+import { LineChart } from '@mui/x-charts/LineChart';
+import { PieChart } from '@mui/x-charts/PieChart';
 import dayjs from 'dayjs';
 import BasicDatePicker from '../../Componentes/BasicDatePicker';
 import {
@@ -31,6 +33,86 @@ const chartSetting = {
     height: 340,
     margin: { top: 42, right: 24, bottom: 56, left: 54 },
 };
+
+const chartColors = ['#17e2e8', '#38bdf8', '#22c55e', '#f97316', '#a3e635', '#facc15', '#fb7185', '#a78bfa'];
+const reportPanelSx = {
+    bgcolor: '#121329',
+    color: '#f8fbff',
+    border: '1px solid #0b7fbd',
+    borderRadius: 1.5,
+    boxShadow: '0 0 0 1px rgba(23, 226, 232, 0.25), 0 0 14px rgba(0, 145, 220, 0.32)',
+};
+const reportChartSx = {
+    '& .MuiChartsAxis-line, & .MuiChartsAxis-tick': { stroke: '#dce8f5 !important' },
+    '& .MuiChartsAxis-tickLabel, & .MuiChartsAxis-label': { fill: '#f8fbff !important' },
+    '& .MuiChartsLegend-label': { fill: '#f8fbff !important' },
+    '& .MuiChartsGrid-line': { stroke: 'rgba(255,255,255,0.12)' },
+};
+
+function formatMoney(value) {
+    return Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function formatNumber(value) {
+    return Number(value || 0).toLocaleString('pt-BR');
+}
+
+function sumBy(items, keyGetter, valueGetter = () => 1) {
+    return items.reduce((acc, item) => {
+        const key = keyGetter(item) || 'Nao informado';
+        const atual = acc[key] || { label: key, quantidade: 0, valor: 0 };
+        atual.quantidade += 1;
+        atual.valor += Number(valueGetter(item) || 0);
+        acc[key] = atual;
+        return acc;
+    }, {});
+}
+
+function rankedItems(grouped, limit = 10, sortKey = 'valor') {
+    return Object.values(grouped)
+        .sort((a, b) => Number(b[sortKey] || 0) - Number(a[sortKey] || 0) || b.quantidade - a.quantidade)
+        .slice(0, limit);
+}
+
+function cleanClientName(value) {
+    return String(value || 'Nao informado').replace(/^\s*\d+\s*-\s*/, '').trim() || 'Nao informado';
+}
+
+const planByValue = [
+    { value: 74.99, label: '250MB' },
+    { value: 109.99, label: '500MB' },
+    { value: 129.99, label: '600MB' },
+    { value: 149.99, label: '800MB' },
+    { value: 199.99, label: '1G' },
+];
+
+function planLabelByValue(value) {
+    const numericValue = Number(value || 0);
+    const found = planByValue.find((plan) => Math.abs(plan.value - numericValue) < 0.01);
+    return found ? found.label : `Outro (${formatMoney(numericValue)})`;
+}
+
+const ChartCard = ({ title, subtitle, children, dark = false, sx, className }) => (
+    <Paper
+        className={className}
+        variant="outlined"
+        sx={{
+            p: 2,
+            borderRadius: dark ? 1.5 : 2,
+            minWidth: 0,
+            ...(dark ? reportPanelSx : {}),
+            ...sx,
+        }}
+    >
+        <Typography variant="h6" fontWeight={800} sx={{ color: dark ? '#f8fbff' : 'inherit' }}>{title}</Typography>
+        {subtitle && (
+            <Typography color={dark ? '#7befff' : 'text.secondary'} variant="body2" mb={2}>
+                {subtitle}
+            </Typography>
+        )}
+        {children}
+    </Paper>
+);
 
 const DashBoardsComercial = ({
     segmento: segmentoInicial = 'ATIVIDADE',
@@ -167,45 +249,126 @@ const DashBoardsComercial = ({
     const monthlySalesItems = monthlySales.map((item, index) => ({
         label: item.mes,
         value: item.vendas,
-        color: ['#4454f6', '#ffb627', '#ff5b6e', '#28b8ee', '#2fc878', '#ec79c1'][index % 6],
+        color: chartColors[index % chartColors.length],
     }));
 
-    const leadSalesRanking = React.useMemo(() => {
-        const porUsuario = registrosMensais
-            .filter((item) => item.status === 'CONVERTIDO')
-            .reduce((acc, item) => {
-                const usuario = item.convertidoPor || item.usuario || 'Nao informado';
-                const atual = acc[usuario] || { usuario, quantidade: 0, valor: 0 };
-                atual.quantidade += 1;
-                atual.valor += Number(item.valorPlano || item.valor || 0);
-                acc[usuario] = atual;
-                return acc;
-            }, {});
+    const convertedMonth = React.useMemo(
+        () => registrosMensais.filter((item) => item.status === 'CONVERTIDO'),
+        [registrosMensais],
+    );
 
-        return Object.values(porUsuario).sort((a, b) => b.valor - a.valor || b.quantidade - a.quantidade);
-    }, [registrosMensais]);
+    const convertedYear = React.useMemo(
+        () => registrosAnuais.filter((item) => item.status === 'CONVERTIDO'),
+        [registrosAnuais],
+    );
 
-    const leadValueDataset = leadSalesRanking.map((item) => ({ usuario: item.usuario, valor: Number(item.valor.toFixed(2)) }));
+    const leadSalesRanking = React.useMemo(() => (
+        rankedItems(
+            sumBy(convertedMonth, (item) => item.convertidoPor || item.usuario, (item) => item.valorPlano || item.valor),
+            10,
+            'valor',
+        ).map((item) => ({ usuario: item.label, quantidade: item.quantidade, valor: item.valor }))
+    ), [convertedMonth]);
+
     const leadCountDataset = leadSalesRanking.map((item) => ({ usuario: item.usuario, vendas: item.quantidade }));
-    const leadValueItems = leadSalesRanking.map((item, index) => ({
-        label: item.usuario,
-        value: item.valor,
-        color: ['#4454f6', '#ffb627', '#ff5b6e', '#28b8ee', '#2fc878', '#ec79c1'][index % 6],
-    }));
     const leadCountItems = leadSalesRanking.map((item, index) => ({
         label: item.usuario,
         value: item.quantidade,
-        color: ['#4454f6', '#ffb627', '#ff5b6e', '#28b8ee', '#2fc878', '#ec79c1'][index % 6],
+        color: chartColors[index % chartColors.length],
     }));
 
+    const monthlyPlanDistribution = React.useMemo(() => {
+        const grouped = convertedMonth.reduce((acc, item) => {
+            const valor = Number(item.valorPlano || item.valor || 0);
+            const label = planLabelByValue(valor);
+            const atual = acc[label] || { label, quantidade: 0, valorUnitario: valor, receita: 0 };
+            atual.quantidade += 1;
+            atual.receita += valor;
+            acc[label] = atual;
+            return acc;
+        }, {});
+
+        return Object.values(grouped)
+            .sort((a, b) => b.quantidade - a.quantidade || b.receita - a.receita)
+            .map((item, index) => ({
+                id: item.label,
+                label: `${item.label} - ${formatMoney(item.valorUnitario)}`,
+                value: item.quantidade,
+                receita: item.receita,
+                color: chartColors[index % chartColors.length],
+            }));
+    }, [convertedMonth]);
+
+    const commercialReport = React.useMemo(() => {
+        const totalMes = convertedMonth.reduce((total, item) => total + Number(item.valorPlano || item.valor || 0), 0);
+        const totalAno = convertedYear.reduce((total, item) => total + Number(item.valorPlano || item.valor || 0), 0);
+        const ticketMedio = convertedMonth.length ? totalMes / convertedMonth.length : 0;
+
+        const topClientes = rankedItems(
+            sumBy(convertedYear, (item) => cleanClientName(item.cliente), (item) => item.valorPlano || item.valor),
+            8,
+            'valor',
+        );
+        const planos = rankedItems(
+            sumBy(convertedYear, (item) => item.plano, (item) => item.valorPlano || item.valor),
+            10,
+            'quantidade',
+        );
+        const origens = rankedItems(
+            sumBy(convertedYear, (item) => item.evento, (item) => item.valorPlano || item.valor),
+            10,
+            'quantidade',
+        );
+        const grupos = rankedItems(
+            sumBy(convertedYear, (item) => item.grupoCliente, (item) => item.valorPlano || item.valor),
+            10,
+            'valor',
+        );
+
+        return { totalMes, totalAno, ticketMedio, topClientes, planos, origens, grupos };
+    }, [convertedMonth, convertedYear]);
+
+    const reportListItems = (items, valueKey = 'valor') => items.map((item, index) => ({
+        label: item.label,
+        value: valueKey === 'valor' ? item.valor : item.quantidade,
+        color: chartColors[index % chartColors.length],
+    }));
+    const isLeadDashboard = segmento === 'LEAD';
+
     return (
-        <Box id="dashboard-comercial-export" sx={{ display: 'grid', gap: 2 }}>
-            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+        <Box
+            id="dashboard-comercial-export"
+            sx={{
+                display: 'grid',
+                gap: isLeadDashboard ? 1.5 : 2,
+                ...(isLeadDashboard ? {
+                    bgcolor: '#070b18',
+                    p: { xs: 1, md: 1.5 },
+                    borderRadius: 1,
+                    border: '1px solid rgba(23, 226, 232, 0.22)',
+                } : {}),
+            }}
+        >
+            <Paper
+                className={isLeadDashboard ? 'commercial-dashboard-title' : undefined}
+                variant="outlined"
+                sx={{
+                    p: isLeadDashboard ? 1.5 : 2.5,
+                    borderRadius: isLeadDashboard ? 1 : 2,
+                    ...(isLeadDashboard ? {
+                        bgcolor: '#1677bd',
+                        color: '#fff',
+                        border: '1px solid #17e2e8',
+                        borderBottom: '3px solid #f97316',
+                        textAlign: 'center',
+                    } : {}),
+                }}
+            >
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2} alignItems={{ xs: 'stretch', md: 'center' }}>
                     <Box>
-                        <Typography variant="h5" fontWeight={800}>Dashboard comercial</Typography>
-                        <Typography color="text.secondary">
-                            {segmentOptions[segmento]} por usuario com visao diaria ou mensal.
+                        <Typography variant={isLeadDashboard ? 'h4' : 'h5'} fontWeight={800}>Dashboard comercial</Typography>
+                        <Typography color={isLeadDashboard ? '#e8f8ff' : 'text.secondary'}>
+                            {isLeadDashboard ? 'Acompanhamento executivo de vendas convertidas' : `${segmentOptions[segmento]} por usuario com visao diaria ou mensal.`}
                         </Typography>
                     </Box>
                     <Stack direction={{ xs: 'column', sm: 'row' }} gap={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
@@ -214,6 +377,51 @@ const DashBoardsComercial = ({
                             title={`Dashboard comercial - ${segmentOptions[segmento]}`}
                             fileName={`dashboard-comercial-${segmento.toLowerCase()}`}
                         />
+                        {isLeadDashboard && (
+                            <Box
+                                sx={{
+                                    width: { xs: '100%', sm: 220 },
+                                }}
+                            >
+                                <TextField
+                                    fullWidth
+                                    size="small"
+                                    label="Mes/ano"
+                                    type="month"
+                                    value={dataMensal.slice(0, 7)}
+                                    onChange={(event) => setDataMensal(`${event.target.value}-01`)}
+                                    InputLabelProps={{ shrink: true }}
+                                    sx={{
+                                        '& .MuiOutlinedInput-root': {
+                                            bgcolor: '#111a2e',
+                                            color: '#f8fbff',
+                                            borderRadius: 1,
+                                            '& fieldset': {
+                                                borderColor: '#17e2e8',
+                                            },
+                                            '&:hover fieldset': {
+                                                borderColor: '#7befff',
+                                            },
+                                            '&.Mui-focused fieldset': {
+                                                borderColor: '#7befff',
+                                            },
+                                        },
+                                        '& .MuiInputBase-input': {
+                                            color: '#f8fbff',
+                                            fontWeight: 800,
+                                            colorScheme: 'dark',
+                                        },
+                                        '& .MuiInputLabel-root': {
+                                            color: '#b8f7ff',
+                                            fontWeight: 700,
+                                        },
+                                        '& .MuiInputLabel-root.Mui-focused': {
+                                            color: '#7befff',
+                                        },
+                                    }}
+                                />
+                            </Box>
+                        )}
                         {allowSegmentSelect && (
                             <TextField
                                 select
@@ -233,73 +441,54 @@ const DashBoardsComercial = ({
             </Paper>
 
             {segmento === 'LEAD' && (
-                <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' } }}>
+                <Box className="commercial-metric-grid" sx={{ display: 'grid', gap: 1.25, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' } }}>
                     {[
                         ['Leads no mes', registrosMensais.length, 'registros cadastrados'],
                         ['Convertidos', leadMetrics.convertidos, 'vendas confirmadas'],
-                        ['Vendas no mes', leadMetrics.convertidos, leadMetrics.valorConvertido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })],
+                        ['Vendas no mes', leadMetrics.convertidos, formatMoney(leadMetrics.valorConvertido)],
                         ['Em acompanhamento', leadMetrics.abertos, 'aguardando conversao'],
-                        ['Valor convertido', leadMetrics.valorConvertido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), `${leadMetrics.grupos} grupo(s)`],
-                        ['Vendas no ano', leadMetrics.vendasAnuais, leadMetrics.valorAnual.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })],
+                        ['Valor convertido', formatMoney(leadMetrics.valorConvertido), `${leadMetrics.grupos} grupo(s)`],
+                        ['Vendas no ano', leadMetrics.vendasAnuais, formatMoney(leadMetrics.valorAnual)],
+                        ['Total anual', formatMoney(commercialReport.totalAno), `${formatNumber(convertedYear.length)} venda(s)`],
+                        ['Ticket medio', formatMoney(commercialReport.ticketMedio), 'media do mes selecionado'],
                     ].map(([label, value, detail]) => (
-                        <Paper key={label} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                            <Typography color="text.secondary" variant="body2">{label}</Typography>
-                            <Typography variant="h5" fontWeight={800}>{value}</Typography>
-                            <Typography color="text.secondary" variant="caption">{detail}</Typography>
+                        <Paper
+                            className="commercial-metric-card"
+                            key={label}
+                            variant="outlined"
+                            sx={{
+                                ...reportPanelSx,
+                                p: 1.5,
+                                minHeight: 96,
+                                borderLeft: '5px solid #17e2e8',
+                            }}
+                        >
+                            <Typography color="#7befff" variant="body2" fontWeight={700}>{label}</Typography>
+                            <Typography variant="h5" fontWeight={900}>{value}</Typography>
+                            <Typography color="#c9d7e8" variant="caption">{detail}</Typography>
                         </Paper>
                     ))}
                 </Box>
             )}
 
             {segmento === 'LEAD' && (
-                <Box sx={{ display: 'grid', gap: 2 }}>
-                    <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, minWidth: 0 }}>
-                        <Typography variant="h6" fontWeight={800}>Valores convertidos por usuario</Typography>
-                        <Typography color="text.secondary" variant="body2" mb={2}>
-                            Ranking mensal de vendas convertidas pelo usuario responsavel.
-                        </Typography>
-                        {leadSalesRanking.length ? (
-                            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 280px' }, alignItems: 'center' }}>
-                                <Box sx={{ minWidth: 0 }}>
-                                    <BarChart
-                                        dataset={leadValueDataset}
-                                        xAxis={[{ dataKey: 'usuario', scaleType: 'band' }]}
-                                        series={[{
-                                            dataKey: 'valor',
-                                            label: 'Valor convertido',
-                                            valueFormatter: (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-                                        }]}
-                                        height={340}
-                                        margin={{ top: 35, right: 20, bottom: 70, left: 70 }}
-                                    />
-                                </Box>
-                                <ChartValueList
-                                    items={leadValueItems}
-                                    valueFormatter={(value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                    showPercent={false}
-                                />
-                            </Box>
-                        ) : (
-                            <Box sx={{ height: 260, display: 'grid', placeItems: 'center' }}>
-                                <Typography color="text.secondary">Nenhuma venda convertida no mes selecionado.</Typography>
-                            </Box>
-                        )}
-                    </Paper>
-
-                    <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, minWidth: 0 }}>
-                        <Typography variant="h6" fontWeight={800}>Vendas por mes no ano</Typography>
-                        <Typography color="text.secondary" variant="body2" mb={2}>
-                            Quantidade de leads convertidos em cada mes do ano selecionado.
-                        </Typography>
+                <Box sx={{ display: 'grid', gap: 1.5 }}>
+                    <ChartCard
+                        className="commercial-chart-card"
+                        dark
+                        title="Evolucao de vendas no ano"
+                        subtitle="Linha do tempo de vendas convertidas."
+                    >
                         {monthlySales.some((item) => item.vendas > 0) ? (
                             <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 280px' }, alignItems: 'center' }}>
                                 <Box sx={{ minWidth: 0 }}>
-                                    <BarChart
+                                    <LineChart
                                         dataset={monthlySales}
-                                        xAxis={[{ dataKey: 'mes', scaleType: 'band' }]}
-                                        series={[{ dataKey: 'vendas', label: 'Vendas' }]}
-                                        height={320}
-                                        margin={{ top: 35, right: 20, bottom: 56, left: 54 }}
+                                        xAxis={[{ dataKey: 'mes', scaleType: 'point' }]}
+                                        series={[{ dataKey: 'vendas', label: 'Vendas', area: true, color: '#17e2e8' }]}
+                                        height={340}
+                                        margin={{ top: 35, right: 24, bottom: 56, left: 54 }}
+                                        sx={reportChartSx}
                                     />
                                 </Box>
                                 <ChartValueList items={monthlySalesItems} showPercent={false} />
@@ -309,22 +498,60 @@ const DashBoardsComercial = ({
                                 <Typography color="text.secondary">Nenhuma venda convertida no ano selecionado.</Typography>
                             </Box>
                         )}
-                    </Paper>
+                    </ChartCard>
 
-                    <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, minWidth: 0 }}>
-                        <Typography variant="h6" fontWeight={800}>Quantidade de vendas por usuario</Typography>
-                        <Typography color="text.secondary" variant="body2" mb={2}>
-                            Ranking mensal pela quantidade de leads convertidos em venda.
-                        </Typography>
+                    <ChartCard
+                        className="commercial-chart-card"
+                        dark
+                        title="Planos convertidos por valor"
+                        subtitle="Pizza mensal pela quantidade vendida em cada plano."
+                    >
+                        {monthlyPlanDistribution.length ? (
+                            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 280px' }, alignItems: 'center' }}>
+                                <Box sx={{ minWidth: 0 }}>
+                                    <PieChart
+                                        series={[{
+                                            data: monthlyPlanDistribution,
+                                            innerRadius: 70,
+                                            outerRadius: 135,
+                                            paddingAngle: 2,
+                                            cornerRadius: 3,
+                                            valueFormatter: ({ value }) => `${formatNumber(value)} venda(s)`,
+                                        }]}
+                                        slotProps={{ legend: { hidden: true } }}
+                                        height={340}
+                                        sx={reportChartSx}
+                                    />
+                                </Box>
+                                <ChartValueList
+                                    items={monthlyPlanDistribution}
+                                    valueFormatter={(value) => `${formatNumber(value)} venda(s)`}
+                                    showPercent
+                                />
+                            </Box>
+                        ) : (
+                            <Box sx={{ height: 260, display: 'grid', placeItems: 'center' }}>
+                                <Typography color="text.secondary">Nenhum plano convertido no mes selecionado.</Typography>
+                            </Box>
+                        )}
+                    </ChartCard>
+
+                    <ChartCard
+                        className="commercial-chart-card"
+                        dark
+                        title="Quantidade de vendas por usuario"
+                        subtitle="Ranking mensal pela quantidade de leads convertidos em venda."
+                    >
                         {leadSalesRanking.length ? (
                             <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 280px' }, alignItems: 'center' }}>
                                 <Box sx={{ minWidth: 0 }}>
                                     <BarChart
                                         dataset={leadCountDataset}
                                         xAxis={[{ dataKey: 'usuario', scaleType: 'band' }]}
-                                        series={[{ dataKey: 'vendas', label: 'Vendas' }]}
+                                        series={[{ dataKey: 'vendas', label: 'Vendas', color: '#17e2e8' }]}
                                         height={320}
                                         margin={{ top: 35, right: 20, bottom: 70, left: 54 }}
+                                        sx={reportChartSx}
                                     />
                                 </Box>
                                 <ChartValueList items={leadCountItems} showPercent={false} />
@@ -334,11 +561,136 @@ const DashBoardsComercial = ({
                                 <Typography color="text.secondary">Nenhuma venda convertida no mes selecionado.</Typography>
                             </Box>
                         )}
-                    </Paper>
+                    </ChartCard>
+
+                    <ChartCard
+                        className="commercial-chart-card"
+                        dark
+                        title="Top clientes convertidos"
+                        subtitle="Clientes com maior valor vendido no ano selecionado."
+                    >
+                        {commercialReport.topClientes.length ? (
+                            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 280px' }, alignItems: 'center' }}>
+                                <Box sx={{ minWidth: 0 }}>
+                                    <BarChart
+                                        dataset={commercialReport.topClientes}
+                                        yAxis={[{ dataKey: 'label', scaleType: 'band', width: 260 }]}
+                                        series={[{
+                                            dataKey: 'valor',
+                                            label: 'Valor',
+                                            color: '#17e2e8',
+                                            valueFormatter: formatMoney,
+                                        }]}
+                                        layout="horizontal"
+                                        height={320}
+                                        margin={{ top: 35, right: 24, bottom: 36, left: 260 }}
+                                        sx={reportChartSx}
+                                    />
+                                </Box>
+                                <ChartValueList items={reportListItems(commercialReport.topClientes, 'valor')} valueFormatter={formatMoney} showPercent={false} />
+                            </Box>
+                        ) : (
+                            <Box sx={{ height: 240, display: 'grid', placeItems: 'center' }}>
+                                <Typography color="text.secondary">Nenhum cliente convertido no ano selecionado.</Typography>
+                            </Box>
+                        )}
+                    </ChartCard>
+
+                    <ChartCard
+                        className="commercial-chart-card"
+                        dark
+                        title="Produtos mais vendidos"
+                        subtitle="Planos com maior quantidade de vendas convertidas no ano."
+                    >
+                        {commercialReport.planos.length ? (
+                            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 280px' }, alignItems: 'center' }}>
+                                <Box sx={{ minWidth: 0 }}>
+                                    <BarChart
+                                        dataset={commercialReport.planos}
+                                        xAxis={[{ dataKey: 'label', scaleType: 'band' }]}
+                                        series={[{ dataKey: 'quantidade', label: 'Vendas', color: '#17e2e8' }]}
+                                        height={320}
+                                        margin={{ top: 35, right: 24, bottom: 70, left: 54 }}
+                                        sx={reportChartSx}
+                                    />
+                                </Box>
+                                <ChartValueList items={reportListItems(commercialReport.planos, 'quantidade')} showPercent={false} />
+                            </Box>
+                        ) : (
+                            <Box sx={{ height: 240, display: 'grid', placeItems: 'center' }}>
+                                <Typography color="text.secondary">Nenhum plano vendido no ano selecionado.</Typography>
+                            </Box>
+                        )}
+                    </ChartCard>
+
+                    <Box className="commercial-two-column-grid" sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' } }}>
+                        <ChartCard
+                            className="commercial-chart-card"
+                            dark
+                            title="Participacao por origem"
+                            subtitle="De onde vieram os leads que foram convertidos no ano."
+                        >
+                            {commercialReport.origens.length ? (
+                                <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 260px' }, alignItems: 'center' }}>
+                                    <PieChart
+                                        series={[{
+                                            data: commercialReport.origens.map((item, index) => ({
+                                                id: item.label,
+                                                label: item.label,
+                                                value: item.quantidade,
+                                                color: chartColors[index % chartColors.length],
+                                            })),
+                                            innerRadius: 55,
+                                        }]}
+                                        slotProps={{ legend: { hidden: true } }}
+                                        height={300}
+                                        sx={reportChartSx}
+                                    />
+                                    <ChartValueList items={reportListItems(commercialReport.origens, 'quantidade')} showPercent={false} />
+                                </Box>
+                            ) : (
+                                <Box sx={{ height: 220, display: 'grid', placeItems: 'center' }}>
+                                    <Typography color="text.secondary">Nenhuma origem convertida no ano.</Typography>
+                                </Box>
+                            )}
+                        </ChartCard>
+
+                        <ChartCard
+                            className="commercial-chart-card"
+                            dark
+                            title="Vendas por grupo"
+                            subtitle="Valor vendido por grupo de cliente no ano selecionado."
+                        >
+                            {commercialReport.grupos.length ? (
+                                <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 260px' }, alignItems: 'center' }}>
+                                    <PieChart
+                                        series={[{
+                                            data: commercialReport.grupos.map((item, index) => ({
+                                                id: item.label,
+                                                label: item.label,
+                                                value: Number(item.valor.toFixed(2)),
+                                                color: chartColors[index % chartColors.length],
+                                            })),
+                                            innerRadius: 55,
+                                            valueFormatter: ({ value }) => formatMoney(value),
+                                        }]}
+                                        slotProps={{ legend: { hidden: true } }}
+                                        height={300}
+                                        sx={reportChartSx}
+                                    />
+                                    <ChartValueList items={reportListItems(commercialReport.grupos, 'valor')} valueFormatter={formatMoney} showPercent={false} />
+                                </Box>
+                            ) : (
+                                <Box sx={{ height: 220, display: 'grid', placeItems: 'center' }}>
+                                    <Typography color="text.secondary">Nenhum grupo convertido no ano.</Typography>
+                                </Box>
+                            )}
+                        </ChartCard>
+                    </Box>
                 </Box>
             )}
 
-            <Box sx={{ display: 'grid', gap: 2 }}>
+            {segmento !== 'LEAD' && <Box sx={{ display: 'grid', gap: 2 }}>
                 <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, minWidth: 0 }}>
                     <Stack direction={{ xs: 'column', lg: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', lg: 'center' }} gap={2} mb={2}>
                         <Box>
@@ -422,7 +774,7 @@ const DashBoardsComercial = ({
                     </Stack>
                     <TabelaResumo rows={resumoMensal} />
                 </Paper>
-            </Box>
+            </Box>}
         </Box>
     );
 };

@@ -7,7 +7,7 @@ import { Box, useMediaQuery } from '@mui/material';
 
 const currentYear = dayjs();
 
-export default function BasicDatePicker({ aoAlterado, label, views, open, valor, sx }) {
+export default function BasicDatePicker({ aoAlterado, label, views, open, valor, sx, textFieldSx }) {
   const isMobile = useMediaQuery('(max-width:768px)');
   const Picker = isMobile ? MobileDatePicker : DatePicker;
 
@@ -22,6 +22,11 @@ export default function BasicDatePicker({ aoAlterado, label, views, open, valor,
           views={views}
           maxDate={currentYear}
           openTo={open}
+          slotProps={{
+            textField: {
+              sx: textFieldSx,
+            },
+          }}
         />
       </Box>
     </LocalizationProvider>

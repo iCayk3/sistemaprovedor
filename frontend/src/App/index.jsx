@@ -286,6 +286,11 @@ const Menu = () => {
                         icon: <FiberNewIcon />,
                     },
                     {
+                        segment: 'relatorio-vendas',
+                        title: 'Relatorio comercial',
+                        icon: <DashboardIcon />,
+                    },
+                    {
                         segment: 'configuration',
                         title: 'Configuracoes comercial',
                         icon: <Groups2Icon />,
@@ -414,6 +419,7 @@ const Menu = () => {
                         <Route path="comercial/leads/acompanhamento" element={hasRole('commercial') ? <AtividadesComercial segmento="LEAD" mode="acompanhamento" /> : semPermissao} />
                         <Route path="comercial/leads/configuracoes" element={hasRole('commercial') ? <SettingsAtividades initialSegment="LEAD" allowedSegments={['LEAD']} /> : semPermissao} />
                         <Route path="comercial/dashboards" element={hasRole('commercial') ? <DashBoardsComercial segmento="ATIVIDADE" allowSegmentSelect={false} /> : semPermissao} />
+                        <Route path="comercial/relatorio-vendas" element={hasRole('commercial') ? <DashBoardsComercial segmento="LEAD" allowSegmentSelect={false} /> : semPermissao} />
                         <Route path="comercial/configuration" element={hasRole('commercial') ? <SettingsAtividades allowedSegments={['ATIVIDADE']} /> : semPermissao} />
                         <Route path="perfil/settings" element={<SettingsPerfil />} />
                         <Route path="/financeiro/dashboard-clientes" element={hasRole('financial') ? <DashboardClientes /> : semPermissao} />

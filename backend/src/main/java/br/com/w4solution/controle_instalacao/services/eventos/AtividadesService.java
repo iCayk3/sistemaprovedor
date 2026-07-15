@@ -153,7 +153,6 @@ public class AtividadesService {
                 .orElseThrow(() -> new IllegalArgumentException("Nenhum contrato com valor encontrado para o cliente."));
 
         atividade.setStatus("CONVERTIDO");
-        atividade.setEvento("Venda");
         atividade.setCodigoCliente(dto.codigoCliente());
         atividade.setCliente(cliente.nome());
         atividade.setGrupoCliente(grupoCliente(cliente.grupoNome() != null && !cliente.grupoNome().isBlank() ? cliente.grupoNome() : cliente.grupo()));
