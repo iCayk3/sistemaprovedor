@@ -51,10 +51,33 @@ public class AtividadesService {
 
         var usuario = extrator.extrairUsuario(request);
 
-        var atividades = dados.stream().map(a -> new Atividade(a, usuario)).toList();
+        var atividades = dados.stream()
+                .map(a -> prepararAtividade(a, usuario))
+                .toList();
         repository.saveAll(atividades);
 
         return atividades.stream().map(AtividadesDTO::new).toList();
+    }
+
+    public AtividadeClienteRbxDTO buscarClienteAtividadeRbx(Integer codigoCliente) {
+        if (codigoCliente == null) {
+            throw new IllegalArgumentException("Informe o codigo do cliente.");
+        }
+
+        var cliente = serviceRbx.buscarClienteId(codigoCliente.longValue()).stream()
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Cliente nao encontrado no RBX."));
+
+        var contrato = serviceRbx.buscarContratoMaisRecenteComValor(codigoCliente)
+                .orElseThrow(() -> new IllegalArgumentException("Nenhum contrato com valor encontrado para o cliente."));
+
+        return new AtividadeClienteRbxDTO(
+                codigoCliente,
+                cliente.nome(),
+                grupoCliente(cliente.grupoNome() != null && !cliente.grupoNome().isBlank() ? cliente.grupoNome() : cliente.grupo()),
+                contrato.planoDescricao(),
+                serviceRbx.valorContrato(contrato)
+        );
     }
 
     public List<AtividadesDTO> listarAtividades() {
@@ -167,6 +190,22 @@ public class AtividadesService {
 
     public void deletarAtividade(Long id) {
         repository.deleteById(id);
+    }
+
+    private Atividade prepararAtividade(CadastrarAtividadesDTO dto, String usuario) {
+        var atividade = new Atividade(dto, usuario);
+        if (!"ATIVIDADE".equalsIgnoreCase(atividade.getSegmento())) {
+            return atividade;
+        }
+
+        var clienteRbx = buscarClienteAtividadeRbx(dto.codigoCliente());
+        atividade.setCodigoCliente(clienteRbx.codigoCliente());
+        atividade.setCliente(clienteRbx.cliente());
+        atividade.setGrupoCliente(clienteRbx.grupoCliente());
+        atividade.setPlano(clienteRbx.plano());
+        atividade.setValorPlano(clienteRbx.valorPlano());
+        atividade.setValor(clienteRbx.valorPlano());
+        return atividade;
     }
 
     private String normalizarSegmento(String segmento) {

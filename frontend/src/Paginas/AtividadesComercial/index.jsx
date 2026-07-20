@@ -1,4 +1,4 @@
-import { Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Fab, FormControl, IconButton, Paper, Stack, TextField, Typography } from "@mui/material"
+import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Fab, FormControl, IconButton, InputAdornment, Paper, Stack, TextField, Typography } from "@mui/material"
 import FieldAutoComplet from "../../Componentes/FieldAutoComplet"
 import TextoInput from "../../Componentes/TextoInput"
 import { useCallback, useEffect, useState } from "react";
@@ -11,11 +11,33 @@ import dayjs from "dayjs";
 import TabelaExibicao from "../../Componentes/TabelaExibicao";
 import DeleteIcon from '@mui/icons-material/Delete';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import { GridActionsCellItem } from "@mui/x-data-grid";
 
 const UseApi = Api()
 
 const today = new Date().toISOString().slice(0, 10);
+
+const emptyActivity = () => ({
+    id: null,
+    nome: '',
+    evento: '',
+    eventoInput: '',
+    data: today,
+    valor: '',
+    codigoCliente: '',
+    grupoCliente: '',
+    plano: '',
+    valorPlano: '',
+    clienteBuscado: false,
+    clienteErro: '',
+    clienteLoading: false,
+});
+
+function formatCurrency(value) {
+    if (value === null || value === undefined || value === '') return '';
+    return Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
 
 const segmentConfig = {
     ATIVIDADE: {
@@ -53,15 +75,17 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
     const [conversionLead, setConversionLead] = useState(null);
     const [conversionCode, setConversionCode] = useState('');
     const [conversionError, setConversionError] = useState('');
+    const [formError, setFormError] = useState('');
     const isTracking = mode === 'acompanhamento';
+    const isActivity = segmento === 'ATIVIDADE';
 
     useEffect(() => {
-        setAtividades([{ id: null, nome: '', evento: '', eventoInput: '', data: today, valor: '' }]);
+        setAtividades([emptyActivity()]);
+        setFormError('');
     }, [segmento]);
 
     const adicionarAtividade = () => {
-        const today = new Date().toISOString().slice(0, 10);
-        setAtividades([...atividades, { id: null, nome: '', evento: '', eventoInput: '', data: today, valor: '' }]);
+        setAtividades([...atividades, emptyActivity()]);
     };
 
     const removerAtividade = (index) => {
@@ -74,23 +98,74 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
         setAtividades(novas);
     };
 
+    const atualizarAtividade = (index, campos) => {
+        setAtividades((atuais) => atuais.map((item, itemIndex) => (
+            itemIndex === index ? { ...item, ...campos } : item
+        )));
+    };
+
+    const buscarClienteAtividade = async (index) => {
+        const codigo = atividades[index]?.codigoCliente;
+        if (!codigo) {
+            atualizarAtividade(index, { clienteErro: 'Informe o codigo do cliente.' });
+            return;
+        }
+
+        atualizarAtividade(index, { clienteLoading: true, clienteErro: '', clienteBuscado: false });
+        try {
+            const response = await UseApi(`atividades/rbx/clientes/${codigo}`);
+            atualizarAtividade(index, {
+                nome: response.cliente || '',
+                grupoCliente: response.grupoCliente || '',
+                plano: response.plano || '',
+                valorPlano: response.valorPlano ?? '',
+                valor: response.valorPlano ?? '',
+                clienteBuscado: true,
+                clienteErro: '',
+            });
+        } catch (error) {
+            atualizarAtividade(index, {
+                nome: '',
+                grupoCliente: '',
+                plano: '',
+                valorPlano: '',
+                valor: '',
+                clienteBuscado: false,
+                clienteErro: error.message || 'Nao foi possivel buscar o cliente no RBX.',
+            });
+        } finally {
+            atualizarAtividade(index, { clienteLoading: false });
+        }
+    };
+
     const enviarDados = async () => {
-        const payload = atividades.map(({ nome, evento, data, valor }) => ({
+        setFormError('');
+
+        if (isActivity && atividades.some((item) => !item.clienteBuscado || !item.nome || !item.codigoCliente)) {
+            setFormError('Busque e valide o codigo do cliente no RBX antes de registrar a atividade.');
+            return;
+        }
+
+        const payload = atividades.map(({ nome, evento, data, valor, codigoCliente, grupoCliente, plano, valorPlano }) => ({
             cliente: nome,
             evento: evento.label,
             data,
             segmento,
-            valor: segmento === 'COBRANCA' && valor !== '' ? Number(String(valor).replace(',', '.')) : null,
+            valor: (segmento === 'COBRANCA' || segmento === 'ATIVIDADE') && valor !== '' ? Number(String(valor).replace(',', '.')) : null,
             status: segmento === 'LEAD' ? 'ABERTO' : null,
+            codigoCliente: codigoCliente ? Number(codigoCliente) : null,
+            grupoCliente: grupoCliente || null,
+            plano: plano || null,
+            valorPlano: valorPlano !== '' ? Number(String(valorPlano).replace(',', '.')) : null,
         }));
 
         try {
             await UseApi(`atividades`, 'POST', payload);
             handleFormSubmit();
+            setAtividades([emptyActivity()])
         } catch (err) {
             console.error("Erro :" + err)
-        } finally {
-            setAtividades([{ id: null, nome: '', evento: '', eventoInput: '', data: today, valor: '' }])
+            setFormError(err.message || 'Erro ao registrar atividade.');
         }
 
     };
@@ -226,6 +301,17 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
         },
         { field: 'cliente', headerName: config.targetLabel, width: 500 },
         { field: 'evento', headerName: config.eventLabel, width: 250 },
+        ...(segmento === 'ATIVIDADE' ? [
+            { field: 'codigoCliente', headerName: 'Codigo cliente', width: 130 },
+            { field: 'grupoCliente', headerName: 'Grupo', width: 140 },
+            { field: 'plano', headerName: 'Plano', width: 180 },
+            {
+                field: 'valorPlano',
+                headerName: 'Valor plano',
+                width: 140,
+                valueFormatter: formatCurrency,
+            },
+        ] : []),
         ...(segmento === 'LEAD' ? [
             {
                 field: 'status',
@@ -246,10 +332,7 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
                 field: 'valorPlano',
                 headerName: 'Valor plano',
                 width: 140,
-                valueFormatter: (value) => {
-                    if (value === null || value === undefined || value === '') return '';
-                    return Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                },
+                valueFormatter: formatCurrency,
             },
             { field: 'convertidoPor', headerName: 'Convertido por', width: 160 },
         ] : []),
@@ -257,10 +340,7 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
             field: 'valor',
             headerName: 'Valor',
             width: 140,
-            valueFormatter: (value) => {
-                if (value === null || value === undefined || value === '') return '';
-                return Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            },
+            valueFormatter: formatCurrency,
         }] : []),
         { field: 'usuario', headerName: 'Usuario', width: 200 },
         {
@@ -288,9 +368,11 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
                     </Typography>
                 </Box>
 
+                {formError && <Alert severity="error">{formError}</Alert>}
+
                 {!isTracking && atividades.map((item, index) => (
-                    <Stack key={index} direction={{ xs: 'column', md: 'row' }} gap={2} alignItems={{ xs: 'stretch', md: 'center' }}>
-                        <IconButton color="error" onClick={() => removerAtividade(index)}>
+                    <Stack key={index} direction={{ xs: 'column', md: 'row' }} gap={2} alignItems={{ xs: 'stretch', md: 'flex-start' }} flexWrap="wrap">
+                        <IconButton color="error" onClick={() => removerAtividade(index)} sx={{ mt: { md: 1 } }}>
                             <ClearIcon />
                         </IconButton>
 
@@ -307,16 +389,73 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
                             />
                         </Box>
 
-                        <Box sx={{ flex: 1 }}>
-                            <TextoInput
-                                labelProp={config.targetLabel}
-                                valor={item.nome}
-                                aoAlterado={(valor) => atualizarCampo(index, 'nome', valor.target.value)}
-                                sx={{ width: '100%' }}
-                            />
-                        </Box>
+                        {isActivity ? (
+                            <>
+                                <Box sx={{ flex: 1, minWidth: 220 }}>
+                                    <TextField
+                                        fullWidth
+                                        type="number"
+                                        label="Codigo do cliente"
+                                        value={item.codigoCliente}
+                                        onChange={(event) => atualizarAtividade(index, {
+                                            codigoCliente: event.target.value,
+                                            nome: '',
+                                            grupoCliente: '',
+                                            plano: '',
+                                            valorPlano: '',
+                                            valor: '',
+                                            clienteBuscado: false,
+                                            clienteErro: '',
+                                        })}
+                                        onKeyDown={(event) => {
+                                            if (event.key === 'Enter') {
+                                                event.preventDefault();
+                                                buscarClienteAtividade(index);
+                                            }
+                                        }}
+                                        error={Boolean(item.clienteErro)}
+                                        helperText={item.clienteErro || 'Busque no RBX para preencher os dados.'}
+                                        FormHelperTextProps={{ sx: { minHeight: 40, mx: 0, mt: 0.75 } }}
+                                        InputProps={{
+                                            endAdornment: (
+                                                <InputAdornment position="end">
+                                                    <IconButton
+                                                        edge="end"
+                                                        onClick={() => buscarClienteAtividade(index)}
+                                                        disabled={item.clienteLoading}
+                                                    >
+                                                        {item.clienteLoading ? <CircularProgress size={20} /> : <SearchRoundedIcon />}
+                                                    </IconButton>
+                                                </InputAdornment>
+                                            ),
+                                        }}
+                                    />
+                                </Box>
+                                <Box sx={{ flex: 1.4, minWidth: 260 }}>
+                                    <TextField fullWidth disabled label={config.targetLabel} value={item.nome} />
+                                </Box>
+                                <Box sx={{ flex: 1, minWidth: 160 }}>
+                                    <TextField fullWidth disabled label="Grupo" value={item.grupoCliente} />
+                                </Box>
+                                <Box sx={{ flex: 1, minWidth: 180 }}>
+                                    <TextField fullWidth disabled label="Plano" value={item.plano} />
+                                </Box>
+                                <Box sx={{ flex: 1, minWidth: 150 }}>
+                                    <TextField fullWidth disabled label="Valor do plano" value={formatCurrency(item.valorPlano)} />
+                                </Box>
+                            </>
+                        ) : (
+                            <Box sx={{ flex: 1 }}>
+                                <TextoInput
+                                    labelProp={config.targetLabel}
+                                    valor={item.nome}
+                                    aoAlterado={(valor) => atualizarCampo(index, 'nome', valor.target.value)}
+                                    sx={{ width: '100%' }}
+                                />
+                            </Box>
+                        )}
 
-                        <Box sx={{ flex: 1 }}>
+                        <Box sx={{ flex: 1, minWidth: 220 }}>
                             <BasicDatePicker
                                 aoAlterado={(value) => {
                                     if (value !== null) {
@@ -325,6 +464,7 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
                                 }}
                                 label={"Selecione a data"}
                                 valor={dayjs(item.data)}
+                                sx={{ pt: 0 }}
                             />
                         </Box>
                         {config.showValue && (

@@ -105,6 +105,10 @@ function cleanClientName(value) {
     return String(value || 'Nao informado').replace(/^\s*\d+\s*-\s*/, '').trim() || 'Nao informado';
 }
 
+function isCancellationEvent(item) {
+    return normalizeChartLabel(item?.evento) === 'CANCELAMENTO';
+}
+
 const planByValue = [
     { value: 74.99, label: '250MB' },
     { value: 109.99, label: '500MB' },
@@ -154,6 +158,7 @@ const DashBoardsComercial = ({
     const [resumoMensal, setResumoMensal] = React.useState([]);
     const [registrosMensais, setRegistrosMensais] = React.useState([]);
     const [registrosAnuais, setRegistrosAnuais] = React.useState([]);
+    const [cancelamentosAtividadeAnuais, setCancelamentosAtividadeAnuais] = React.useState([]);
     const visibleSegments = React.useMemo(() => segmentKeys.filter((key) => segmentOptions[key]), [segmentKeys]);
 
     React.useEffect(() => {
@@ -221,6 +226,24 @@ const DashBoardsComercial = ({
         fetchData();
     }, [dataMensal, segmento]);
 
+    React.useEffect(() => {
+        const fetchData = async () => {
+            if (segmento !== 'LEAD') {
+                setCancelamentosAtividadeAnuais([]);
+                return;
+            }
+
+            try {
+                const registros = await UseApi(`atividades/registro/anual?data=${dataMensal}&segmento=ATIVIDADE`);
+                setCancelamentosAtividadeAnuais(Array.isArray(registros) ? registros.filter(isCancellationEvent) : []);
+            } catch (err) {
+                console.error(err);
+                setCancelamentosAtividadeAnuais([]);
+            }
+        };
+        fetchData();
+    }, [dataMensal, segmento]);
+
     const labels = resumoMensal.map((item) => item.label.toLowerCase());
     const datasetConvertido = atividades.map((item) => {
         const novoItem = { usuario: item.usuario };
@@ -230,10 +253,10 @@ const DashBoardsComercial = ({
         });
         return novoItem;
     });
-    const series = labels.map((label) => ({
+    const series = labels.map((label, index) => ({
         dataKey: label,
         label: label.charAt(0).toUpperCase() + label.slice(1),
-        color: chartColorForLabel(label),
+        color: chartColorForLabel(label, index),
     }));
     const hasChartData = datasetConvertido.some((item) => labels.some((label) => Number(item[label]) > 0));
     const totalMensal = resumoMensal.reduce((total, item) => total + (Number(item.value) || 0), 0);
@@ -279,6 +302,30 @@ const DashBoardsComercial = ({
         value: item.vendas,
         color: chartColors[index % chartColors.length],
     }));
+
+    const monthlySalesVsCancellations = React.useMemo(() => (
+        monthlySales.map((item, index) => ({
+            mes: item.mes,
+            vendidos: item.vendas,
+            cancelados: cancelamentosAtividadeAnuais.filter((cancelamento) => {
+                if (!cancelamento.data) return false;
+                return new Date(`${cancelamento.data}T00:00:00`).getMonth() === index;
+            }).length,
+        }))
+    ), [cancelamentosAtividadeAnuais, monthlySales]);
+
+    const monthlySalesVsCancellationsItems = [
+        {
+            label: 'Vendidos',
+            value: monthlySalesVsCancellations.reduce((total, item) => total + item.vendidos, 0),
+            color: '#0f4c81',
+        },
+        {
+            label: 'Cancelados',
+            value: monthlySalesVsCancellations.reduce((total, item) => total + item.cancelados, 0),
+            color: cancellationColor,
+        },
+    ];
 
     const convertedMonth = React.useMemo(
         () => registrosMensais.filter((item) => item.status === 'CONVERTIDO'),
@@ -356,6 +403,32 @@ const DashBoardsComercial = ({
 
         return { totalMes, totalAno, ticketMedio, ticketMedioAnual, topClientes, planos, origens, grupos };
     }, [convertedMonth, convertedYear]);
+
+    const cancellationDashboard = React.useMemo(() => {
+        const cancelamentosMes = registrosMensais.filter(isCancellationEvent);
+        const cancelamentosAno = registrosAnuais.filter(isCancellationEvent);
+        const valorMes = cancelamentosMes.reduce((total, item) => total + Number(item.valorPlano || item.valor || 0), 0);
+        const valorAno = cancelamentosAno.reduce((total, item) => total + Number(item.valorPlano || item.valor || 0), 0);
+        const porGrupoValor = rankedItems(
+            sumBy(cancelamentosMes, (item) => item.grupoCliente, (item) => item.valorPlano || item.valor),
+            12,
+            'valor',
+        );
+        const porGrupoQuantidade = rankedItems(
+            sumBy(cancelamentosMes, (item) => item.grupoCliente, () => 1),
+            12,
+            'quantidade',
+        );
+
+        return {
+            cancelamentosMes,
+            cancelamentosAno,
+            valorMes,
+            valorAno,
+            porGrupoValor,
+            porGrupoQuantidade,
+        };
+    }, [registrosAnuais, registrosMensais]);
 
     const reportListItems = (items, valueKey = 'valor') => items.map((item, index) => ({
         label: item.label,
@@ -487,6 +560,36 @@ const DashBoardsComercial = ({
                         ) : (
                             <Box sx={{ height: 240, display: 'grid', placeItems: 'center' }}>
                                 <Typography color="text.secondary">Nenhuma venda convertida no ano selecionado.</Typography>
+                            </Box>
+                        )}
+                    </ChartCard>
+
+                    <ChartCard
+                        className="commercial-chart-card"
+                        dark
+                        title="Vendidos x cancelados mensal"
+                        subtitle="Comparativo mensal entre leads convertidos e cancelamentos registrados."
+                    >
+                        {monthlySalesVsCancellations.some((item) => item.vendidos > 0 || item.cancelados > 0) ? (
+                            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 280px' }, alignItems: 'center' }}>
+                                <Box sx={{ minWidth: 0 }}>
+                                    <BarChart
+                                        dataset={monthlySalesVsCancellations}
+                                        xAxis={[{ dataKey: 'mes', scaleType: 'band' }]}
+                                        series={[
+                                            { dataKey: 'vendidos', label: 'Vendidos', color: '#0f4c81' },
+                                            { dataKey: 'cancelados', label: 'Cancelados', color: cancellationColor },
+                                        ]}
+                                        height={340}
+                                        margin={{ top: 35, right: 24, bottom: 56, left: 54 }}
+                                        sx={reportChartSx}
+                                    />
+                                </Box>
+                                <ChartValueList items={monthlySalesVsCancellationsItems} showPercent={false} />
+                            </Box>
+                        ) : (
+                            <Box sx={{ height: 240, display: 'grid', placeItems: 'center' }}>
+                                <Typography color="text.secondary">Nenhuma venda ou cancelamento no ano selecionado.</Typography>
                             </Box>
                         )}
                     </ChartCard>
@@ -678,6 +781,98 @@ const DashBoardsComercial = ({
                             )}
                         </ChartCard>
                     </Box>
+                </Box>
+            )}
+
+            {segmento === 'ATIVIDADE' && (
+                <Box sx={{ display: 'grid', gap: 1.5 }}>
+                    <Box sx={{ display: 'grid', gap: 1.25, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' } }}>
+                        {[
+                            ['Cancelamentos no mes', cancellationDashboard.cancelamentosMes.length, 'registros de cancelamento'],
+                            ['Valor perdido no mes', formatMoney(cancellationDashboard.valorMes), 'soma dos planos cancelados'],
+                            ['Cancelamentos no ano', cancellationDashboard.cancelamentosAno.length, 'ano selecionado'],
+                            ['Valor perdido no ano', formatMoney(cancellationDashboard.valorAno), 'impacto acumulado'],
+                        ].map(([label, value, detail]) => (
+                            <Paper
+                                key={label}
+                                variant="outlined"
+                                sx={{
+                                    ...dashboardMetricSx,
+                                    p: 1.5,
+                                    minHeight: 96,
+                                }}
+                            >
+                                <Typography sx={dashboardSubtleTextSx} variant="body2" fontWeight={700}>{label}</Typography>
+                                <Typography variant="h5" fontWeight={900}>{value}</Typography>
+                                <Typography sx={dashboardMutedTextSx} variant="caption">{detail}</Typography>
+                            </Paper>
+                        ))}
+                    </Box>
+
+                    <ChartCard
+                        dark
+                        title="Valor perdido por grupo"
+                        subtitle="Cancelamentos do mes selecionado agrupados pelo grupo do cliente."
+                    >
+                        {cancellationDashboard.porGrupoValor.length ? (
+                            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 300px' }, alignItems: 'center' }}>
+                                <Box sx={{ minWidth: 0 }}>
+                                    <BarChart
+                                        dataset={cancellationDashboard.porGrupoValor}
+                                        yAxis={[{ dataKey: 'label', scaleType: 'band', width: 160 }]}
+                                        series={[{
+                                            dataKey: 'valor',
+                                            label: 'Valor perdido',
+                                            color: cancellationColor,
+                                            valueFormatter: formatMoney,
+                                        }]}
+                                        layout="horizontal"
+                                        height={340}
+                                        margin={{ top: 35, right: 24, bottom: 36, left: 160 }}
+                                        sx={reportChartSx}
+                                    />
+                                </Box>
+                                <ChartValueList
+                                    items={reportListItems(cancellationDashboard.porGrupoValor, 'valor')}
+                                    valueFormatter={formatMoney}
+                                    showPercent={false}
+                                />
+                            </Box>
+                        ) : (
+                            <Box sx={{ height: 240, display: 'grid', placeItems: 'center' }}>
+                                <Typography sx={dashboardMutedTextSx}>Nenhum cancelamento no mes selecionado.</Typography>
+                            </Box>
+                        )}
+                    </ChartCard>
+
+                    <ChartCard
+                        dark
+                        title="Quantidade de cancelamentos por grupo"
+                        subtitle="Volume de cancelamentos do mes selecionado por grupo."
+                    >
+                        {cancellationDashboard.porGrupoQuantidade.length ? (
+                            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 300px' }, alignItems: 'center' }}>
+                                <Box sx={{ minWidth: 0 }}>
+                                    <BarChart
+                                        dataset={cancellationDashboard.porGrupoQuantidade}
+                                        xAxis={[{ dataKey: 'label', scaleType: 'band' }]}
+                                        series={[{ dataKey: 'quantidade', label: 'Cancelamentos', color: cancellationColor }]}
+                                        height={320}
+                                        margin={{ top: 35, right: 24, bottom: 70, left: 54 }}
+                                        sx={reportChartSx}
+                                    />
+                                </Box>
+                                <ChartValueList
+                                    items={reportListItems(cancellationDashboard.porGrupoQuantidade, 'quantidade')}
+                                    showPercent={false}
+                                />
+                            </Box>
+                        ) : (
+                            <Box sx={{ height: 240, display: 'grid', placeItems: 'center' }}>
+                                <Typography sx={dashboardMutedTextSx}>Nenhum cancelamento no mes selecionado.</Typography>
+                            </Box>
+                        )}
+                    </ChartCard>
                 </Box>
             )}
 

@@ -185,6 +185,10 @@ function isPaidOrClosedStatus(status) {
     return ['PAGO', 'FECHADO'].includes(String(status || '').trim().toUpperCase());
 }
 
+function isClosedStatus(status) {
+    return String(status || '').trim().toUpperCase() === 'FECHADO';
+}
+
 function isPromiseStatus(status) {
     return String(status || '').trim().toUpperCase() === 'PROMESSA DE PAGAMENTO';
 }
@@ -330,7 +334,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         setLoading(true);
         setError('');
         try {
-            const response = await UseApi(isPaidList ? 'cobrancas/pagas' : 'cobrancas');
+            const response = await UseApi(isPaidList ? 'cobrancas/auditoria' : 'cobrancas');
             setCharges(Array.isArray(response) ? response.map(normalizeCharge) : []);
         } catch (requestError) {
             setError(requestError.message || 'Erro ao carregar cobrancas.');
@@ -359,8 +363,16 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         const search = searchFilter.trim().toLowerCase();
         return charges
             .filter((charge) => {
+                if (!isDashboard) return true;
+                return !charge.excluded && !isClosedStatus(charge.status);
+            })
+            .filter((charge) => {
+                if (!isDashboard) return true;
+                return isSameMonth(charge.date, dashboardMonth);
+            })
+            .filter((charge) => {
                 if (statusFilter === 'Todos') return true;
-                if (statusFilter === 'Em aberto') return !isFinalStatus(charge.status);
+                if (statusFilter === 'Em aberto') return !charge.excluded && !isFinalStatus(charge.status);
                 if (statusFilter === 'Finalizadas') return isFinalStatus(charge.status);
                 if (statusFilter === 'Promessas hoje') return isPromiseStatus(charge.status) && charge.promiseDate === todayIso();
                 if (statusFilter === 'Promessas vencidas') return isPromiseStatus(charge.status) && charge.promiseDate && charge.promiseDate < todayIso();
@@ -384,20 +396,24 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 ].some((value) => String(value || '').toLowerCase().includes(search));
             })
             .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
-    }, [charges, statusFilter, searchFilter, userFilter, actionFilter, groupFilter]);
+    }, [charges, dashboardMonth, isDashboard, statusFilter, searchFilter, userFilter, actionFilter, groupFilter]);
 
     const metrics = useMemo(() => {
         const source = isDashboard ? filteredCharges : charges;
-        const abertas = source.filter((charge) => !isFinalStatus(charge.status));
-        const pagas = source.filter((charge) => String(charge.status || '').toUpperCase() === 'PAGO');
+        const abertas = source.filter((charge) => !charge.excluded && !isFinalStatus(charge.status));
+        const pagas = source.filter((charge) => !charge.excluded && String(charge.status || '').toUpperCase() === 'PAGO');
+        const excluidas = source.filter((charge) => charge.excluded);
         const pagasMes = source.filter((charge) => (
+            !charge.excluded
+            &&
             String(charge.status || '').toUpperCase() === 'PAGO'
-            && isSameMonth(charge.closedAt || charge.updatedAt || charge.date, dashboardMonth)
+            && isSameMonth(charge.date, dashboardMonth)
         ));
-        const promessasHoje = source.filter((charge) => isPromiseStatus(charge.status) && charge.promiseDate === todayIso());
-        const promessasVencidas = source.filter((charge) => isPromiseStatus(charge.status) && charge.promiseDate && charge.promiseDate < todayIso());
+        const promessasHoje = source.filter((charge) => !charge.excluded && isPromiseStatus(charge.status) && charge.promiseDate === todayIso());
+        const promessasVencidas = source.filter((charge) => !charge.excluded && isPromiseStatus(charge.status) && charge.promiseDate && charge.promiseDate < todayIso());
         const valorAberto = abertas.reduce((total, charge) => total + charge.value, 0);
         const valorPago = pagas.reduce((total, charge) => total + charge.value, 0);
+        const valorExcluido = excluidas.reduce((total, charge) => total + charge.value, 0);
         const valorPagoMes = pagasMes.reduce((total, charge) => total + charge.value, 0);
         const valorTotal = source.reduce((total, charge) => total + charge.value, 0);
 
@@ -405,11 +421,13 @@ const Cobrancas = ({ readOnly = false, mode }) => {
             total: source.length,
             abertas: abertas.length,
             pagas: pagas.length,
+            excluidas: excluidas.length,
             pagasMes: pagasMes.length,
             promessasHoje: promessasHoje.length,
             promessasVencidas: promessasVencidas.length,
             valorAberto,
             valorPago,
+            valorExcluido,
             valorPagoMes,
             valorTotal,
         };
@@ -417,6 +435,18 @@ const Cobrancas = ({ readOnly = false, mode }) => {
 
     const chartData = useMemo(() => {
         const statusCounts = countBy(filteredCharges, (charge) => charge.status);
+        const auditCounts = {
+            'Em aberto': filteredCharges.filter((charge) => !charge.excluded && !isFinalStatus(charge.status)).length,
+            Pagas: filteredCharges.filter((charge) => !charge.excluded && String(charge.status || '').toUpperCase() === 'PAGO').length,
+        };
+        const auditValues = {
+            'Em aberto': filteredCharges
+                .filter((charge) => !charge.excluded && !isFinalStatus(charge.status))
+                .reduce((total, charge) => total + charge.value, 0),
+            Pagas: filteredCharges
+                .filter((charge) => !charge.excluded && String(charge.status || '').toUpperCase() === 'PAGO')
+                .reduce((total, charge) => total + charge.value, 0),
+        };
         const userCounts = countBy(filteredCharges, (charge) => charge.lastUser);
         const userValues = sumBy(filteredCharges, (charge) => charge.lastUser, (charge) => charge.value);
         const groupValues = sumBy(filteredCharges, (charge) => charge.clientGroup, (charge) => charge.value);
@@ -444,6 +474,12 @@ const Cobrancas = ({ readOnly = false, mode }) => {
 
         return {
             statusPie: statusEntries.map(([label, value], index) => ({ id: index, label, value, color: dashboardPalette[index % dashboardPalette.length] })),
+            auditStatusPie: Object.entries(auditCounts)
+                .filter(([, value]) => value > 0)
+                .map(([label, value], index) => ({ id: label, label, value, color: dashboardPalette[index % dashboardPalette.length] })),
+            auditValuePie: Object.entries(auditValues)
+                .filter(([, value]) => value > 0)
+                .map(([label, value], index) => ({ id: label, label, value, color: dashboardPalette[index % dashboardPalette.length] })),
             userLabels,
             statusByUserSeries,
             statusByUserTotals,
@@ -636,7 +672,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         cadastro: 'Cadastro, acompanhamento e fechamento das acoes de cobranca.',
         dashboard: 'Resumo geral da carteira de cobrancas, sem alteracao de registros.',
         acompanhamento: 'Fila operacional para acompanhar status, priorizando cobrancas em aberto.',
-        pagas: 'Consulta de baixas pagas com exclusao logica auditada.',
+        pagas: 'Consulta de baixas, exclusoes logicas e historico de auditoria.',
     }[viewMode];
 
     return (
@@ -703,11 +739,11 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 </Alert>
             )}
 
-            <Box sx={{ ...pageGridSx, mb: 2 }}>
+            {isDashboard && <Box sx={{ ...pageGridSx, mb: 2 }}>
                 {[
                     ['Cobrancas', metrics.total, 'registros no sistema'],
                     ['Em aberto', metrics.abertas, formatCurrency(metrics.valorAberto)],
-                    ...(isDashboard ? [['Pago no mes', metrics.pagasMes, formatCurrency(metrics.valorPagoMes)]] : []),
+                    ['Pago no mes', metrics.pagasMes, formatCurrency(metrics.valorPagoMes)],
                     ['Promessas hoje', metrics.promessasHoje, `${metrics.promessasVencidas} vencidas`],
                     ['Pagas', metrics.pagas, `${formatCurrency(metrics.valorPago)} de ${formatCurrency(metrics.valorTotal)}`],
                 ].map(([label, value, detail]) => (
@@ -715,22 +751,22 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                         variant="outlined"
                         sx={{
                             p: 2,
-                            borderRadius: isDashboard ? 1.5 : 2,
-                            ...(isDashboard ? dashboardMetricSx : {}),
+                            borderRadius: 1.5,
+                            ...dashboardMetricSx,
                         }}
                         key={label}
                     >
                         <Stack direction="row" alignItems="center" spacing={1.2}>
                             <TimelineRoundedIcon color="primary" />
                             <Box>
-                                <Typography sx={isDashboard ? dashboardSubtleTextSx : undefined} color={isDashboard ? undefined : 'text.secondary'} variant="body2" fontWeight={isDashboard ? 800 : 400}>{label}</Typography>
+                                <Typography sx={dashboardSubtleTextSx} variant="body2" fontWeight={800}>{label}</Typography>
                                 <Typography variant="h5" fontWeight={800}>{value}</Typography>
-                                <Typography sx={isDashboard ? dashboardMutedTextSx : undefined} color={isDashboard ? undefined : 'text.secondary'} variant="caption">{detail}</Typography>
+                                <Typography sx={dashboardMutedTextSx} variant="caption">{detail}</Typography>
                             </Box>
                         </Stack>
                     </Paper>
                 ))}
-            </Box>
+            </Box>}
 
             {isDashboard && (
                 <Box
@@ -741,6 +777,76 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                         mb: 2,
                     }}
                 >
+                    <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
+                        <Typography variant="h6" fontWeight={800}>Pagas x em aberto</Typography>
+                                <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">
+                                    Visao de auditoria por situacao operacional.
+                                </Typography>
+                                {chartData.auditStatusPie.length ? (
+                                    <Box
+                                        sx={{
+                                            display: 'grid',
+                                            gap: 2,
+                                            gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 240px' },
+                                            alignItems: 'center',
+                                        }}
+                                    >
+                                        <Box sx={{ minWidth: 0 }}>
+                                            <PieChart
+                                                height={260}
+                                                series={[{
+                                                    data: chartData.auditStatusPie,
+                                                    innerRadius: 45,
+                                                    paddingAngle: 2,
+                                                }]}
+                                                slotProps={{ legend: { hidden: true } }}
+                                                sx={dashboardChartSx}
+                                            />
+                                        </Box>
+                                        <ChartValueList items={chartData.auditStatusPie} />
+                                    </Box>
+                                ) : (
+                                    <Stack alignItems="center" justifyContent="center" minHeight={220}>
+                                        <Typography sx={dashboardMutedTextSx}>Sem dados para exibir.</Typography>
+                                    </Stack>
+                                )}
+                    </Paper>
+
+                    <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
+                        <Typography variant="h6" fontWeight={800}>Valores por situacao</Typography>
+                                <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">
+                                    Comparativo financeiro entre abertas e pagas.
+                                </Typography>
+                                {chartData.auditValuePie.length ? (
+                                    <Box
+                                        sx={{
+                                            display: 'grid',
+                                            gap: 2,
+                                            gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 260px' },
+                                            alignItems: 'center',
+                                        }}
+                                    >
+                                        <Box sx={{ minWidth: 0 }}>
+                                            <PieChart
+                                                height={260}
+                                                series={[{
+                                                    data: chartData.auditValuePie,
+                                                    innerRadius: 45,
+                                                    paddingAngle: 2,
+                                                    valueFormatter: (item) => formatCurrency(item.value),
+                                                }]}
+                                                slotProps={{ legend: { hidden: true } }}
+                                                sx={dashboardChartSx}
+                                            />
+                                        </Box>
+                                        <ChartValueList items={chartData.auditValuePie} valueFormatter={formatCurrency} />
+                                    </Box>
+                                ) : (
+                                    <Stack alignItems="center" justifyContent="center" minHeight={220}>
+                                        <Typography sx={dashboardMutedTextSx}>Sem dados para exibir.</Typography>
+                                    </Stack>
+                                )}
+                    </Paper>
                     <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
                         <Typography variant="h6" fontWeight={800}>Status por usuario</Typography>
                         <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">

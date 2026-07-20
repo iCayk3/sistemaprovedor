@@ -51,6 +51,16 @@ public class CobrancaService {
                 .toList();
     }
 
+    public List<CobrancaDTO> listarAuditoria() {
+        return repository.findAll().stream()
+                .sorted(Comparator.comparing(Cobranca::getExcluidoEm, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Cobranca::getFechadoEm, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Cobranca::getAtualizadoEm, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Cobranca::getData, Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(this::toDto)
+                .toList();
+    }
+
     public CobrancaDTO cadastrar(CobrancaCadastroDTO dto, String usuario) {
         ClienteFiltradoDTO clienteRbx = validarClienteRbx(dto.codigoCliente());
         validarCobrancaEmAndamento(dto.codigoCliente(), null);
@@ -124,9 +134,6 @@ public class CobrancaService {
         Cobranca cobranca = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Cobranca nao encontrada."));
         validarNaoExcluida(cobranca);
-        if (!"PAGO".equals(String.valueOf(cobranca.getStatus()).trim().toUpperCase())) {
-            throw new IllegalStateException("Somente cobrancas pagas podem ser excluidas.");
-        }
         if (dto.motivo() == null || dto.motivo().isBlank()) {
             throw new IllegalArgumentException("Informe o motivo da exclusao.");
         }

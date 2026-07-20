@@ -41,6 +41,12 @@ public class CobrancaController {
         return ResponseEntity.ok(service.listarPagas());
     }
 
+    @GetMapping("/auditoria")
+    @PreAuthorize(CHARGING_ACCESS)
+    public ResponseEntity<?> listarAuditoria() {
+        return ResponseEntity.ok(service.listarAuditoria());
+    }
+
     @PostMapping
     @PreAuthorize(CHARGING_ACCESS)
     public ResponseEntity<?> cadastrar(@RequestBody CobrancaCadastroDTO dto, @AuthenticationPrincipal Usuario usuario) {

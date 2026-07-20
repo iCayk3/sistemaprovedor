@@ -57,6 +57,12 @@ public class AtividadesController {
         return ResponseEntity.ok().body(atividades);
     }
 
+    @GetMapping("/rbx/clientes/{codigo}")
+    public ResponseEntity<AtividadeClienteRbxDTO> buscarClienteAtividadeRbx(@PathVariable Integer codigo) {
+        var cliente = service.buscarClienteAtividadeRbx(codigo);
+        return ResponseEntity.ok().body(cliente);
+    }
+
     @PostMapping
     @Transactional
     public ResponseEntity<List<AtividadesDTO>> cadastrarAtividade(@RequestBody List<CadastrarAtividadesDTO> dados, HttpServletRequest request){
