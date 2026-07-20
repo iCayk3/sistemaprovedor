@@ -1,7 +1,7 @@
-import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Fab, FormControl, IconButton, InputAdornment, Paper, Stack, TextField, Typography } from "@mui/material"
+import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Fab, FormControl, IconButton, InputAdornment, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material"
 import FieldAutoComplet from "../../Componentes/FieldAutoComplet"
 import TextoInput from "../../Componentes/TextoInput"
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Api from "../../Services/Api";
 import AddIcon from "@mui/icons-material/Add";
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
@@ -37,6 +37,10 @@ const emptyActivity = () => ({
 function formatCurrency(value) {
     if (value === null || value === undefined || value === '') return '';
     return Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function normalizeFilterValue(value, fallback = 'Nao informado') {
+    return String(value || fallback).trim() || fallback;
 }
 
 const segmentConfig = {
@@ -76,8 +80,14 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
     const [conversionCode, setConversionCode] = useState('');
     const [conversionError, setConversionError] = useState('');
     const [formError, setFormError] = useState('');
+    const [leadSearch, setLeadSearch] = useState('');
+    const [leadStatusFilter, setLeadStatusFilter] = useState('Todos');
+    const [leadEventFilter, setLeadEventFilter] = useState('Todos');
+    const [leadUserFilter, setLeadUserFilter] = useState('Todos');
+    const [leadGroupFilter, setLeadGroupFilter] = useState('Todos');
     const isTracking = mode === 'acompanhamento';
     const isActivity = segmento === 'ATIVIDADE';
+    const showLeadFilters = isTracking && segmento === 'LEAD';
 
     useEffect(() => {
         setAtividades([emptyActivity()]);
@@ -187,6 +197,47 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
     const handleFormSubmit = () => {
         setRefreshTable(true);
     };
+
+    const leadFilterOptions = useMemo(() => {
+        const unique = (selector) => Array.from(new Set(data.map(selector).map(normalizeFilterValue))).sort();
+        return {
+            status: unique((item) => item.status || 'ABERTO'),
+            eventos: unique((item) => item.evento),
+            usuarios: unique((item) => item.convertidoPor || item.usuario),
+            grupos: unique((item) => item.grupoCliente),
+        };
+    }, [data]);
+
+    const filteredData = useMemo(() => {
+        if (!showLeadFilters) {
+            return data;
+        }
+
+        const search = leadSearch.trim().toLowerCase();
+        return data.filter((item) => {
+            const status = normalizeFilterValue(item.status || 'ABERTO');
+            const evento = normalizeFilterValue(item.evento);
+            const usuario = normalizeFilterValue(item.convertidoPor || item.usuario);
+            const grupo = normalizeFilterValue(item.grupoCliente);
+
+            if (leadStatusFilter !== 'Todos' && status !== leadStatusFilter) return false;
+            if (leadEventFilter !== 'Todos' && evento !== leadEventFilter) return false;
+            if (leadUserFilter !== 'Todos' && usuario !== leadUserFilter) return false;
+            if (leadGroupFilter !== 'Todos' && grupo !== leadGroupFilter) return false;
+
+            if (!search) return true;
+            return [
+                item.cliente,
+                item.evento,
+                item.status,
+                item.codigoCliente,
+                item.grupoCliente,
+                item.plano,
+                item.usuario,
+                item.convertidoPor,
+            ].some((value) => String(value || '').toLowerCase().includes(search));
+        });
+    }, [data, leadEventFilter, leadGroupFilter, leadSearch, leadStatusFilter, leadUserFilter, showLeadFilters]);
 
     function DeletarRegistro({ deleteUser, ...props }) {
         const [open, setOpen] = useState(false);
@@ -496,7 +547,99 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
             </Paper>
 
             <Divider sx={{ marginTop: 2, marginBottom: 2 }} />
-            <TabelaExibicao rows={data} columns={colunas} />
+            {showLeadFilters && (
+                <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, mb: 2 }}>
+                    <Stack direction={{ xs: 'column', md: 'row' }} gap={1.5} alignItems={{ xs: 'stretch', md: 'center' }}>
+                        <Box sx={{ flex: 1.5, minWidth: 240 }}>
+                            <TextField
+                                fullWidth
+                                size="small"
+                                label="Buscar lead"
+                                placeholder="Cliente, codigo, plano ou usuario"
+                                value={leadSearch}
+                                onChange={(event) => setLeadSearch(event.target.value)}
+                            />
+                        </Box>
+                        <Box sx={{ flex: 1, minWidth: 160 }}>
+                            <TextField
+                                select
+                                fullWidth
+                                size="small"
+                                label="Status"
+                                value={leadStatusFilter}
+                                onChange={(event) => setLeadStatusFilter(event.target.value)}
+                            >
+                                <MenuItem value="Todos">Todos</MenuItem>
+                                {leadFilterOptions.status.map((option) => (
+                                    <MenuItem key={option} value={option}>{option}</MenuItem>
+                                ))}
+                            </TextField>
+                        </Box>
+                        <Box sx={{ flex: 1, minWidth: 180 }}>
+                            <TextField
+                                select
+                                fullWidth
+                                size="small"
+                                label={config.eventLabel}
+                                value={leadEventFilter}
+                                onChange={(event) => setLeadEventFilter(event.target.value)}
+                            >
+                                <MenuItem value="Todos">Todas</MenuItem>
+                                {leadFilterOptions.eventos.map((option) => (
+                                    <MenuItem key={option} value={option}>{option}</MenuItem>
+                                ))}
+                            </TextField>
+                        </Box>
+                        <Box sx={{ flex: 1, minWidth: 160 }}>
+                            <TextField
+                                select
+                                fullWidth
+                                size="small"
+                                label="Usuario"
+                                value={leadUserFilter}
+                                onChange={(event) => setLeadUserFilter(event.target.value)}
+                            >
+                                <MenuItem value="Todos">Todos</MenuItem>
+                                {leadFilterOptions.usuarios.map((option) => (
+                                    <MenuItem key={option} value={option}>{option}</MenuItem>
+                                ))}
+                            </TextField>
+                        </Box>
+                        <Box sx={{ flex: 1, minWidth: 150 }}>
+                            <TextField
+                                select
+                                fullWidth
+                                size="small"
+                                label="Grupo"
+                                value={leadGroupFilter}
+                                onChange={(event) => setLeadGroupFilter(event.target.value)}
+                            >
+                                <MenuItem value="Todos">Todos</MenuItem>
+                                {leadFilterOptions.grupos.map((option) => (
+                                    <MenuItem key={option} value={option}>{option}</MenuItem>
+                                ))}
+                            </TextField>
+                        </Box>
+                        <Button
+                            variant="outlined"
+                            onClick={() => {
+                                setLeadSearch('');
+                                setLeadStatusFilter('Todos');
+                                setLeadEventFilter('Todos');
+                                setLeadUserFilter('Todos');
+                                setLeadGroupFilter('Todos');
+                            }}
+                            sx={{ minWidth: 120 }}
+                        >
+                            Limpar
+                        </Button>
+                    </Stack>
+                    <Typography color="text.secondary" variant="body2" sx={{ mt: 1 }}>
+                        {filteredData.length} de {data.length} leads exibidos.
+                    </Typography>
+                </Paper>
+            )}
+            <TabelaExibicao rows={filteredData} columns={colunas} />
             <Dialog open={Boolean(conversionLead)} onClose={() => setConversionLead(null)} maxWidth="sm" fullWidth>
                 <DialogTitle>Converter lead em venda</DialogTitle>
                 <DialogContent>
