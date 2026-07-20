@@ -4,6 +4,7 @@ import DeleteRoundedIcon from '@mui/icons-material/DeleteRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import TimelineRoundedIcon from '@mui/icons-material/TimelineRounded';
+import { BarChart, PieChart } from '@mui/x-charts';
 import {
     Box,
     Button,
@@ -31,10 +32,25 @@ import {
     Tab,
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
+import ChartValueList from '../../Componentes/ChartValueList';
 import ExportDashboardPdfButton from '../../Componentes/ExportDashboardPdfButton';
 import Api from '../../Services/Api';
 
 const UseApi = Api();
+const chartPalette = ['#17e2e8', '#38bdf8', '#22c55e', '#f97316', '#a3e635', '#facc15', '#fb7185', '#a78bfa', '#8aa0ad'];
+const dashboardPanelSx = {
+    bgcolor: '#121329',
+    color: '#f8fbff',
+    border: '1px solid #0b7fbd',
+    borderRadius: 1.5,
+    boxShadow: '0 0 0 1px rgba(23, 226, 232, 0.25), 0 0 14px rgba(0, 145, 220, 0.32)',
+};
+const dashboardChartSx = {
+    '& .MuiChartsAxis-line, & .MuiChartsAxis-tick': { stroke: '#dce8f5 !important' },
+    '& .MuiChartsAxis-tickLabel, & .MuiChartsAxis-label': { fill: '#f8fbff !important' },
+    '& .MuiChartsLegend-label': { fill: '#f8fbff !important' },
+    '& .MuiChartsGrid-line': { stroke: 'rgba(255,255,255,0.12)' },
+};
 const optionsStorageKey = 'sistemaprovedor-noc-options-v1';
 const defaultOptions = {
     sources: ['Operadoras e transporte', 'Rompimentos e sinistros', 'Links dedicados'],
@@ -136,6 +152,29 @@ function formatHours(hours) {
     if (!Number.isFinite(hours)) return '0h';
     if (hours < 24) return `${hours.toFixed(1).replace('.', ',')}h`;
     return `${(hours / 24).toFixed(1).replace('.', ',')}d`;
+}
+
+function normalizeLabel(value, fallback = 'Nao informado') {
+    return String(value || '').trim() || fallback;
+}
+
+function countBy(items, selector) {
+    return items.reduce((acc, item) => {
+        const key = normalizeLabel(selector(item));
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+    }, {});
+}
+
+function chartItemsFromCounts(counts) {
+    return Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([label, value], index) => ({
+            id: label,
+            label,
+            value,
+            color: chartPalette[index % chartPalette.length],
+        }));
 }
 
 function numberToSlaDuration(hours) {
@@ -250,6 +289,29 @@ const AcpEventos = ({ readOnly = false }) => {
             compliance: closed.length ? Math.round((withinTarget.length / closed.length) * 100) : 0,
         };
     }, [events, options]);
+
+    const dashboardData = useMemo(() => {
+        const enriched = filteredEvents.map((event) => ({
+            ...event,
+            slaExpired: event.durationHours > event.slaHours,
+        }));
+        const slaCounts = {
+            'Dentro do SLA': enriched.filter((event) => !event.slaExpired).length,
+            'SLA vencido': enriched.filter((event) => event.slaExpired).length,
+        };
+        const criticalEvents = enriched
+            .filter((event) => event.slaExpired && !event.end)
+            .sort((a, b) => b.durationHours - a.durationHours)
+            .slice(0, 6);
+
+        return {
+            statusPie: chartItemsFromCounts(countBy(enriched, (event) => event.problemStatus)),
+            slaPie: chartItemsFromCounts(slaCounts),
+            typeBars: chartItemsFromCounts(countBy(enriched, (event) => event.eventType)).slice(0, 8),
+            sourceBars: chartItemsFromCounts(countBy(enriched, (event) => event.source)).slice(0, 8),
+            criticalEvents,
+        };
+    }, [filteredEvents]);
 
     const updateCreateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }));
     const updateTrackingForm = (field, value) => setUpdateForm((current) => ({ ...current, [field]: value }));
@@ -407,20 +469,36 @@ const AcpEventos = ({ readOnly = false }) => {
     };
 
     return (
-        <Box id="dashboard-acp-eventos-export" sx={{ py: 2 }}>
+        <Box
+            id="dashboard-acp-eventos-export"
+            sx={{
+                py: 2,
+                ...(tab === 'eventos' ? {
+                    bgcolor: '#070b18',
+                    p: { xs: 1, md: 1.5 },
+                    borderRadius: 1,
+                    border: '1px solid rgba(23, 226, 232, 0.22)',
+                } : {}),
+            }}
+        >
             <Paper
                 variant="outlined"
                 sx={{
-                    p: 2.5,
+                    p: tab === 'eventos' ? 1.8 : 2.5,
                     mb: 2,
-                    borderRadius: 2,
-                    bgcolor: 'background.paper',
+                    borderRadius: tab === 'eventos' ? 1 : 2,
+                    ...(tab === 'eventos' ? {
+                        bgcolor: '#1677bd',
+                        color: '#fff',
+                        border: '1px solid #17e2e8',
+                        borderBottom: '3px solid #f97316',
+                    } : { bgcolor: 'background.paper' }),
                 }}
             >
             <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2}>
                 <Box>
                     <Typography variant="h5" fontWeight={800}>{readOnly ? 'Acompanhamento ACP Eventos' : 'ACP Eventos'}</Typography>
-                    <Typography color="text.secondary">
+                    <Typography color={tab === 'eventos' ? '#e8f8ff' : 'text.secondary'}>
                         {readOnly
                             ? 'Acompanhamento dos eventos do NOC em tempo real, sem alteracao de registros.'
                             : 'Registro e acompanhamento de eventos do NOC dentro do sistema principal.'}
@@ -453,17 +531,140 @@ const AcpEventos = ({ readOnly = false }) => {
                     ['Criticos', metrics.critical, 'acima de 72h'],
                     ['Dentro da meta', `${metrics.compliance}%`, 'SLA por evento'],
                 ].map(([label, value, detail]) => (
-                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }} key={label}>
+                    <Paper
+                        variant="outlined"
+                        sx={{
+                            p: 2,
+                            ...(tab === 'eventos' ? { ...dashboardPanelSx, borderLeft: '5px solid #17e2e8' } : { borderRadius: 2 }),
+                        }}
+                        key={label}
+                    >
                         <Stack direction="row" alignItems="center" spacing={1.2}>
                             <TimelineRoundedIcon color="primary" />
                             <Box>
-                                <Typography color="text.secondary" variant="body2">{label}</Typography>
+                                <Typography color={tab === 'eventos' ? '#7befff' : 'text.secondary'} variant="body2" fontWeight={tab === 'eventos' ? 800 : 400}>{label}</Typography>
                                 <Typography variant="h5" fontWeight={800}>{value}</Typography>
-                                <Typography color="text.secondary" variant="caption">{detail}</Typography>
+                                <Typography color={tab === 'eventos' ? '#c9d7e8' : 'text.secondary'} variant="caption">{detail}</Typography>
                             </Box>
                         </Stack>
                     </Paper>
                 ))}
+            </Box>
+
+            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: '1fr', mb: 2 }}>
+                <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' } }}>
+                    <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
+                        <Typography variant="h6" fontWeight={800}>Eventos por status</Typography>
+                        <Typography color="#7befff" variant="body2" sx={{ mb: 1 }}>Distribuicao da fila filtrada.</Typography>
+                        {dashboardData.statusPie.length ? (
+                            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 260px' }, alignItems: 'center' }}>
+                                <PieChart
+                                    height={260}
+                                    series={[{ data: dashboardData.statusPie, innerRadius: 48, paddingAngle: 2 }]}
+                                    slotProps={{ legend: { hidden: true } }}
+                                    sx={dashboardChartSx}
+                                />
+                                <ChartValueList items={dashboardData.statusPie} showPercent={false} />
+                            </Box>
+                        ) : (
+                            <Stack alignItems="center" justifyContent="center" minHeight={220}>
+                                <Typography color="#c9d7e8">Sem dados para exibir.</Typography>
+                            </Stack>
+                        )}
+                    </Paper>
+
+                    <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
+                        <Typography variant="h6" fontWeight={800}>SLA da fila</Typography>
+                        <Typography color="#7befff" variant="body2" sx={{ mb: 1 }}>Eventos dentro da meta contra eventos vencidos.</Typography>
+                        {dashboardData.slaPie.some((item) => item.value > 0) ? (
+                            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 260px' }, alignItems: 'center' }}>
+                                <PieChart
+                                    height={260}
+                                    series={[{ data: dashboardData.slaPie, innerRadius: 48, paddingAngle: 2 }]}
+                                    slotProps={{ legend: { hidden: true } }}
+                                    sx={dashboardChartSx}
+                                />
+                                <ChartValueList items={dashboardData.slaPie} showPercent={false} />
+                            </Box>
+                        ) : (
+                            <Stack alignItems="center" justifyContent="center" minHeight={220}>
+                                <Typography color="#c9d7e8">Sem dados para exibir.</Typography>
+                            </Stack>
+                        )}
+                    </Paper>
+                </Box>
+
+                <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' } }}>
+                    <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
+                        <Typography variant="h6" fontWeight={800}>Eventos por tipo</Typography>
+                        <Typography color="#7befff" variant="body2" sx={{ mb: 1 }}>Tipos que mais aparecem na fila filtrada.</Typography>
+                        {dashboardData.typeBars.length ? (
+                            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 240px' }, alignItems: 'center' }}>
+                                <BarChart
+                                    height={280}
+                                    xAxis={[{ scaleType: 'band', data: dashboardData.typeBars.map((item) => item.label) }]}
+                                    series={[{ data: dashboardData.typeBars.map((item) => item.value), label: 'Eventos', color: '#17e2e8' }]}
+                                    margin={{ left: 35, right: 10, top: 25, bottom: 80 }}
+                                    sx={dashboardChartSx}
+                                />
+                                <ChartValueList items={dashboardData.typeBars} showPercent={false} />
+                            </Box>
+                        ) : (
+                            <Stack alignItems="center" justifyContent="center" minHeight={220}>
+                                <Typography color="#c9d7e8">Sem dados para exibir.</Typography>
+                            </Stack>
+                        )}
+                    </Paper>
+
+                    <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
+                        <Typography variant="h6" fontWeight={800}>Eventos por origem</Typography>
+                        <Typography color="#7befff" variant="body2" sx={{ mb: 1 }}>Origem do acionamento dos eventos.</Typography>
+                        {dashboardData.sourceBars.length ? (
+                            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 240px' }, alignItems: 'center' }}>
+                                <BarChart
+                                    height={280}
+                                    xAxis={[{ scaleType: 'band', data: dashboardData.sourceBars.map((item) => item.label) }]}
+                                    series={[{ data: dashboardData.sourceBars.map((item) => item.value), label: 'Eventos', color: '#17e2e8' }]}
+                                    margin={{ left: 35, right: 10, top: 25, bottom: 80 }}
+                                    sx={dashboardChartSx}
+                                />
+                                <ChartValueList items={dashboardData.sourceBars} showPercent={false} />
+                            </Box>
+                        ) : (
+                            <Stack alignItems="center" justifyContent="center" minHeight={220}>
+                                <Typography color="#c9d7e8">Sem dados para exibir.</Typography>
+                            </Stack>
+                        )}
+                    </Paper>
+                </Box>
+
+                <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
+                    <Typography variant="h6" fontWeight={800}>Eventos criticos em aberto</Typography>
+                    <Typography color="#7befff" variant="body2" sx={{ mb: 1 }}>Eventos vencidos por SLA, ordenados pela maior duracao.</Typography>
+                    <Stack spacing={1}>
+                        {dashboardData.criticalEvents.length ? dashboardData.criticalEvents.map((event) => (
+                            <Box
+                                key={event.id}
+                                sx={{
+                                    display: 'grid',
+                                    gridTemplateColumns: { xs: '1fr', md: '160px minmax(0, 1fr) 150px 120px' },
+                                    gap: 1,
+                                    alignItems: 'center',
+                                    border: '1px solid rgba(23, 226, 232, 0.25)',
+                                    borderRadius: 1,
+                                    p: 1,
+                                }}
+                            >
+                                <Typography fontWeight={800}>{event.protocol}</Typography>
+                                <Typography sx={{ overflowWrap: 'anywhere' }}>{event.eventType} - {event.client || event.source || 'Nao informado'}</Typography>
+                                <Typography color="#c9d7e8">{formatHours(event.durationHours)} / SLA {formatHours(event.slaHours)}</Typography>
+                                <Chip size="small" color="error" label={event.problemStatus} />
+                            </Box>
+                        )) : (
+                            <Typography color="#c9d7e8">Nenhum evento critico em aberto.</Typography>
+                        )}
+                    </Stack>
+                </Paper>
             </Box>
 
             <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>

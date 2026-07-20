@@ -46,7 +46,20 @@ const actionOptions = [
     'Negativacao',
     'Pago',
 ];
-const chartPalette = ['#4454f6', '#ffb627', '#ff5b6e', '#28b8ee', '#2fc878', '#ec79c1', '#8e6ce8', '#19b5a5', '#8aa0ad'];
+const dashboardPalette = ['#17e2e8', '#38bdf8', '#22c55e', '#f97316', '#a3e635', '#facc15', '#fb7185', '#a78bfa', '#8aa0ad'];
+const dashboardPanelSx = {
+    bgcolor: '#121329',
+    color: '#f8fbff',
+    border: '1px solid #0b7fbd',
+    borderRadius: 1.5,
+    boxShadow: '0 0 0 1px rgba(23, 226, 232, 0.25), 0 0 14px rgba(0, 145, 220, 0.32)',
+};
+const dashboardChartSx = {
+    '& .MuiChartsAxis-line, & .MuiChartsAxis-tick': { stroke: '#dce8f5 !important' },
+    '& .MuiChartsAxis-tickLabel, & .MuiChartsAxis-label': { fill: '#f8fbff !important' },
+    '& .MuiChartsLegend-label': { fill: '#f8fbff !important' },
+    '& .MuiChartsGrid-line': { stroke: 'rgba(255,255,255,0.12)' },
+};
 const clientGroupNames = {
     9: 'PADRAO',
     10: 'SJP',
@@ -178,6 +191,15 @@ function todayIso() {
     return new Date().toISOString().slice(0, 10);
 }
 
+function currentMonthIso() {
+    return new Date().toISOString().slice(0, 7);
+}
+
+function isSameMonth(value, month) {
+    if (!value || !month) return false;
+    return String(value).slice(0, 7) === month;
+}
+
 function readClientField(cliente, lowerKey, upperKey) {
     return cliente?.[lowerKey] ?? cliente?.[upperKey] ?? '';
 }
@@ -284,11 +306,13 @@ const Cobrancas = ({ readOnly = false, mode }) => {
     const [form, setForm] = useState(emptyForm);
     const [selected, setSelected] = useState(null);
     const [rbxClient, setRbxClient] = useState(null);
+    const [validatedClientCode, setValidatedClientCode] = useState('');
     const [statusFilter, setStatusFilter] = useState(isTracking ? 'Em aberto' : 'Todos');
     const [searchFilter, setSearchFilter] = useState('');
     const [userFilter, setUserFilter] = useState('Todos');
     const [actionFilter, setActionFilter] = useState('Todos');
     const [groupFilter, setGroupFilter] = useState('Todos');
+    const [dashboardMonth, setDashboardMonth] = useState(currentMonthIso());
     const [trackingNote, setTrackingNote] = useState('');
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -358,23 +382,30 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         const source = isDashboard ? filteredCharges : charges;
         const abertas = source.filter((charge) => !isFinalStatus(charge.status));
         const pagas = source.filter((charge) => String(charge.status || '').toUpperCase() === 'PAGO');
+        const pagasMes = source.filter((charge) => (
+            String(charge.status || '').toUpperCase() === 'PAGO'
+            && isSameMonth(charge.closedAt || charge.updatedAt || charge.date, dashboardMonth)
+        ));
         const promessasHoje = source.filter((charge) => isPromiseStatus(charge.status) && charge.promiseDate === todayIso());
         const promessasVencidas = source.filter((charge) => isPromiseStatus(charge.status) && charge.promiseDate && charge.promiseDate < todayIso());
         const valorAberto = abertas.reduce((total, charge) => total + charge.value, 0);
         const valorPago = pagas.reduce((total, charge) => total + charge.value, 0);
+        const valorPagoMes = pagasMes.reduce((total, charge) => total + charge.value, 0);
         const valorTotal = source.reduce((total, charge) => total + charge.value, 0);
 
         return {
             total: source.length,
             abertas: abertas.length,
             pagas: pagas.length,
+            pagasMes: pagasMes.length,
             promessasHoje: promessasHoje.length,
             promessasVencidas: promessasVencidas.length,
             valorAberto,
             valorPago,
+            valorPagoMes,
             valorTotal,
         };
-    }, [charges, filteredCharges, isDashboard]);
+    }, [charges, dashboardMonth, filteredCharges, isDashboard]);
 
     const chartData = useMemo(() => {
         const statusCounts = countBy(filteredCharges, (charge) => charge.status);
@@ -400,11 +431,11 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         const statusByUserTotals = userLabels.map((user, index) => ({
             label: user,
             value: statusByUserSeries.reduce((total, serie) => total + Number(serie.data[index] || 0), 0),
-            color: chartPalette[index % chartPalette.length],
+            color: dashboardPalette[index % dashboardPalette.length],
         }));
 
         return {
-            statusPie: statusEntries.map(([label, value], index) => ({ id: index, label, value, color: chartPalette[index % chartPalette.length] })),
+            statusPie: statusEntries.map(([label, value], index) => ({ id: index, label, value, color: dashboardPalette[index % dashboardPalette.length] })),
             userLabels,
             statusByUserSeries,
             statusByUserTotals,
@@ -412,13 +443,13 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 id: index,
                 label,
                 value: Number(value),
-                color: chartPalette[index % chartPalette.length],
+                color: dashboardPalette[index % dashboardPalette.length],
             })),
             groupValuePie: groupValueEntries.map(([label, value], index) => ({
                 id: index,
                 label,
                 value: Number(value),
-                color: chartPalette[index % chartPalette.length],
+                color: dashboardPalette[index % dashboardPalette.length],
             })),
         };
     }, [filteredCharges]);
@@ -439,6 +470,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
     const openNew = () => {
         setSelected(null);
         setRbxClient(null);
+        setValidatedClientCode('');
         setTrackingNote('');
         setForm({ ...emptyForm, data: new Date().toISOString().slice(0, 10) });
         setOpen(true);
@@ -447,6 +479,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
     const openCharge = (charge) => {
         setSelected(charge);
         setRbxClient(null);
+        setValidatedClientCode(charge.clientCode ? String(charge.clientCode) : '');
         setTrackingNote('');
         setForm(toForm(charge));
         setOpen(true);
@@ -469,7 +502,11 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         try {
             const response = await UseApi(`cobrancas/rbx/clientes/${code}`);
             const normalizedClient = normalizeRbxClient(response);
+            if (!normalizedClient?.nome) {
+                throw new Error('Codigo de cliente nao encontrado no RBX.');
+            }
             setRbxClient(normalizedClient);
+            setValidatedClientCode(String(code).trim());
             if (normalizedClient?.nome || normalizedClient?.grupo) {
                 setForm((current) => ({
                     ...current,
@@ -490,6 +527,9 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         try {
             if (isTracking && !trackingNote.trim()) {
                 throw new Error('Informe o que foi realizado no acompanhamento.');
+            }
+            if (!selected && (!validatedClientCode || String(form.codigoCliente).trim() !== validatedClientCode || !form.cliente)) {
+                throw new Error('Busque e valide um codigo de cliente no RBX antes de cadastrar a cobranca.');
             }
             const chargeInProgress = !selected ? findChargeInProgressByCode(form.codigoCliente, null) : null;
             if (chargeInProgress) {
@@ -539,6 +579,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
     const canEditTrackingValue = canTrackSelected && form.status === 'Em negociacao';
     const saveDisabled = saving
         || (isTracking && canTrackSelected && !trackingNote.trim())
+        || (!selected && isRegister && (!validatedClientCode || String(form.codigoCliente).trim() !== validatedClientCode || !form.cliente))
         || (canSaveSelected && isPromiseStatus(form.status) && !form.dataPromessa);
 
     const pageTitle = {
@@ -554,22 +595,69 @@ const Cobrancas = ({ readOnly = false, mode }) => {
     }[viewMode];
 
     return (
-        <Box id="dashboard-cobrancas-export" sx={{ py: 2 }}>
-            <Paper variant="outlined" sx={{ p: 2.5, mb: 2, borderRadius: 2 }}>
+        <Box
+            id="dashboard-cobrancas-export"
+            sx={{
+                py: 2,
+                ...(isDashboard ? {
+                    bgcolor: '#070b18',
+                    p: { xs: 1, md: 1.5 },
+                    borderRadius: 1,
+                    border: '1px solid rgba(23, 226, 232, 0.22)',
+                } : {}),
+            }}
+        >
+            <Paper
+                variant="outlined"
+                sx={{
+                    p: isDashboard ? 1.8 : 2.5,
+                    mb: 2,
+                    borderRadius: isDashboard ? 1 : 2,
+                    ...(isDashboard ? {
+                        bgcolor: '#1677bd',
+                        color: '#fff',
+                        border: '1px solid #17e2e8',
+                        borderBottom: '3px solid #f97316',
+                    } : {}),
+                }}
+            >
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2}>
                     <Box>
                         <Typography variant="h5" fontWeight={800}>
                             {pageTitle}
                         </Typography>
-                        <Typography color="text.secondary">{pageSubtitle}</Typography>
+                        <Typography color={isDashboard ? '#e8f8ff' : 'text.secondary'}>{pageSubtitle}</Typography>
                     </Box>
                     <Stack direction={{ xs: 'column', sm: 'row' }} gap={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
                         {isDashboard && (
-                            <ExportDashboardPdfButton
-                                targetId="dashboard-cobrancas-export"
-                                title="Dashboard de cobrancas"
-                                fileName="dashboard-cobrancas"
-                            />
+                            <>
+                                <TextField
+                                    size="small"
+                                    type="month"
+                                    label="Mes de pagamento"
+                                    value={dashboardMonth}
+                                    onChange={(event) => setDashboardMonth(event.target.value)}
+                                    InputLabelProps={{ shrink: true }}
+                                    sx={{
+                                        minWidth: 210,
+                                        '& .MuiOutlinedInput-root': {
+                                            bgcolor: '#111a2e',
+                                            color: '#f8fbff',
+                                            '& fieldset': { borderColor: '#17e2e8' },
+                                            '&:hover fieldset': { borderColor: '#7befff' },
+                                            '&.Mui-focused fieldset': { borderColor: '#7befff' },
+                                        },
+                                        '& .MuiInputBase-input': { color: '#f8fbff', colorScheme: 'dark', fontWeight: 800 },
+                                        '& .MuiInputLabel-root': { color: '#b8f7ff', fontWeight: 700 },
+                                        '& .MuiInputLabel-root.Mui-focused': { color: '#7befff' },
+                                    }}
+                                />
+                                <ExportDashboardPdfButton
+                                    targetId="dashboard-cobrancas-export"
+                                    title="Dashboard de cobrancas"
+                                    fileName="dashboard-cobrancas"
+                                />
+                            </>
                         )}
                         {isRegister && (
                             <Button variant="contained" startIcon={<AddCircleRoundedIcon />} onClick={openNew}>
@@ -593,16 +681,25 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 {[
                     ['Cobrancas', metrics.total, 'registros no sistema'],
                     ['Em aberto', metrics.abertas, formatCurrency(metrics.valorAberto)],
+                    ...(isDashboard ? [['Pago no mes', metrics.pagasMes, formatCurrency(metrics.valorPagoMes)]] : []),
                     ['Promessas hoje', metrics.promessasHoje, `${metrics.promessasVencidas} vencidas`],
                     ['Pagas', metrics.pagas, `${formatCurrency(metrics.valorPago)} de ${formatCurrency(metrics.valorTotal)}`],
                 ].map(([label, value, detail]) => (
-                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }} key={label}>
+                    <Paper
+                        variant="outlined"
+                        sx={{
+                            p: 2,
+                            borderRadius: isDashboard ? 1.5 : 2,
+                            ...(isDashboard ? { ...dashboardPanelSx, borderLeft: '5px solid #17e2e8' } : {}),
+                        }}
+                        key={label}
+                    >
                         <Stack direction="row" alignItems="center" spacing={1.2}>
                             <TimelineRoundedIcon color="primary" />
                             <Box>
-                                <Typography color="text.secondary" variant="body2">{label}</Typography>
+                                <Typography color={isDashboard ? '#7befff' : 'text.secondary'} variant="body2" fontWeight={isDashboard ? 800 : 400}>{label}</Typography>
                                 <Typography variant="h5" fontWeight={800}>{value}</Typography>
-                                <Typography color="text.secondary" variant="caption">{detail}</Typography>
+                                <Typography color={isDashboard ? '#c9d7e8' : 'text.secondary'} variant="caption">{detail}</Typography>
                             </Box>
                         </Stack>
                     </Paper>
@@ -618,9 +715,9 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                         mb: 2,
                     }}
                 >
-                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                    <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
                         <Typography variant="h6" fontWeight={800}>Status por usuario</Typography>
-                        <Typography color="text.secondary" variant="body2" sx={{ mb: 1 }}>
+                        <Typography color="#7befff" variant="body2" sx={{ mb: 1 }}>
                             {userFilter === 'Todos'
                                 ? 'Distribuicao de status da fila filtrada. Selecione um usuario para detalhar.'
                                 : `Distribuicao de status de ${userFilter}.`}
@@ -643,19 +740,20 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                             paddingAngle: 2,
                                         }]}
                                         slotProps={{ legend: { hidden: true } }}
+                                        sx={dashboardChartSx}
                                     />
                                 </Box>
                                 <ChartValueList items={chartData.statusPie} />
                             </Box>
                         ) : (
                             <Stack alignItems="center" justifyContent="center" minHeight={220}>
-                                <Typography color="text.secondary">Sem dados para exibir.</Typography>
+                                <Typography color="#c9d7e8">Sem dados para exibir.</Typography>
                             </Stack>
                         )}
                     </Paper>
-                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                    <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
                         <Typography variant="h6" fontWeight={800}>Status por usuario</Typography>
-                        <Typography color="text.secondary" variant="body2" sx={{ mb: 1 }}>
+                        <Typography color="#7befff" variant="body2" sx={{ mb: 1 }}>
                             Compare a quantidade de cobrancas por status em cada responsavel.
                         </Typography>
                         {chartData.userLabels.length && chartData.statusByUserSeries.length ? (
@@ -673,19 +771,20 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                         xAxis={[{ scaleType: 'band', data: chartData.userLabels }]}
                                         series={chartData.statusByUserSeries}
                                         margin={{ left: 35, right: 10, top: 25, bottom: 70 }}
+                                        sx={dashboardChartSx}
                                     />
                                 </Box>
                                 <ChartValueList items={chartData.statusByUserTotals} showPercent={false} />
                             </Box>
                         ) : (
                             <Stack alignItems="center" justifyContent="center" minHeight={220}>
-                                <Typography color="text.secondary">Sem dados para exibir.</Typography>
+                                <Typography color="#c9d7e8">Sem dados para exibir.</Typography>
                             </Stack>
                         )}
                     </Paper>
-                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                    <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
                         <Typography variant="h6" fontWeight={800}>Valor por usuario</Typography>
-                        <Typography color="text.secondary" variant="body2" sx={{ mb: 1 }}>
+                        <Typography color="#7befff" variant="body2" sx={{ mb: 1 }}>
                             Participacao em valor por ultimo responsavel.
                         </Typography>
                         {chartData.userValuePie.length ? (
@@ -707,19 +806,20 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                             valueFormatter: (item) => formatCurrency(item.value),
                                         }]}
                                         slotProps={{ legend: { hidden: true } }}
+                                        sx={dashboardChartSx}
                                     />
                                 </Box>
                                 <ChartValueList items={chartData.userValuePie} valueFormatter={formatCurrency} />
                             </Box>
                         ) : (
                             <Stack alignItems="center" justifyContent="center" minHeight={220}>
-                                <Typography color="text.secondary">Sem dados para exibir.</Typography>
+                                <Typography color="#c9d7e8">Sem dados para exibir.</Typography>
                             </Stack>
                         )}
                     </Paper>
-                    <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                    <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
                         <Typography variant="h6" fontWeight={800}>Valor por grupo</Typography>
-                        <Typography color="text.secondary" variant="body2" sx={{ mb: 1 }}>
+                        <Typography color="#7befff" variant="body2" sx={{ mb: 1 }}>
                             Participacao em valor por grupo do cliente.
                         </Typography>
                         {chartData.groupValuePie.length ? (
@@ -741,13 +841,14 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                             valueFormatter: (item) => formatCurrency(item.value),
                                         }]}
                                         slotProps={{ legend: { hidden: true } }}
+                                        sx={dashboardChartSx}
                                     />
                                 </Box>
                                 <ChartValueList items={chartData.groupValuePie} valueFormatter={formatCurrency} />
                             </Box>
                         ) : (
                             <Stack alignItems="center" justifyContent="center" minHeight={220}>
-                                <Typography color="text.secondary">Sem dados para exibir.</Typography>
+                                <Typography color="#c9d7e8">Sem dados para exibir.</Typography>
                             </Stack>
                         )}
                     </Paper>
@@ -911,6 +1012,11 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                             {error}
                         </Alert>
                     )}
+                    {!selected && isRegister && (!validatedClientCode || String(form.codigoCliente).trim() !== validatedClientCode || !form.cliente) && (
+                        <Alert severity="info" sx={{ mb: 2 }}>
+                            Informe o codigo do cliente e clique na lupa para validar no RBX antes de salvar.
+                        </Alert>
+                    )}
                     <Box sx={{ ...formGridSx, pt: 1 }}>
                         <Box sx={{ gridColumn: fieldSpan.third }}>
                             <TextField
@@ -935,6 +1041,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                     updateForm('cliente', '');
                                     updateForm('grupoCliente', '');
                                     setRbxClient(null);
+                                    setValidatedClientCode('');
                                 }}
                                 disabled={!canEditSelected}
                                 InputProps={{

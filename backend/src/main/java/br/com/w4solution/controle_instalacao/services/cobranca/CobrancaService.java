@@ -40,10 +40,12 @@ public class CobrancaService {
     }
 
     public CobrancaDTO cadastrar(CobrancaCadastroDTO dto, String usuario) {
+        ClienteFiltradoDTO clienteRbx = validarClienteRbx(dto.codigoCliente());
         validarCobrancaEmAndamento(dto.codigoCliente(), null);
         Cobranca cobranca = new Cobranca();
         cobranca.setProtocolo(proximoProtocolo());
         aplicarDados(cobranca, dto);
+        aplicarClienteRbx(cobranca, clienteRbx);
         cobranca.setCriadoEm(LocalDateTime.now());
         cobranca.setCriadoPor(fallback(usuario, "sistema"));
         cobranca.setAtualizadoPor(fallback(usuario, "sistema"));
@@ -122,6 +124,24 @@ public class CobrancaService {
         cobranca.setValor(dto.valor() == null ? BigDecimal.ZERO : dto.valor());
         cobranca.setStatus(fallback(dto.status(), "Aberto"));
         cobranca.setObservacao(dto.observacao());
+    }
+
+    private ClienteFiltradoDTO validarClienteRbx(Integer codigoCliente) {
+        if (codigoCliente == null) {
+            throw new IllegalArgumentException("Informe um codigo de cliente valido para buscar no RBX.");
+        }
+
+        List<ClienteFiltradoDTO> clientes = serviceRbx.buscarClienteId(codigoCliente.longValue());
+        if (clientes == null || clientes.isEmpty() || clientes.get(0).nome() == null || clientes.get(0).nome().isBlank()) {
+            throw new IllegalArgumentException("Codigo de cliente nao encontrado no RBX.");
+        }
+
+        return clientes.get(0);
+    }
+
+    private void aplicarClienteRbx(Cobranca cobranca, ClienteFiltradoDTO clienteRbx) {
+        cobranca.setCliente(clienteRbx.nome());
+        cobranca.setGrupoCliente(fallback(clienteRbx.grupoNome(), clienteRbx.grupo()));
     }
 
     private CobrancaDTO toDto(Cobranca cobranca) {
