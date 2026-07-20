@@ -193,22 +193,25 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
             width: 10,
             type: 'actions',
             getActions: (params) => {
-                if (isTracking && segmento === 'LEAD' && params.row.status !== 'CONVERTIDO') {
-                    return [
+                const canConvertLead = segmento === 'LEAD' && params.row.status !== 'CONVERTIDO';
+                const actions = [];
+
+                if (canConvertLead) {
+                    actions.push(
                         <GridActionsCellItem
                             label="Converter em venda"
                             showInMenu
                             icon={<CheckCircleIcon />}
                             onClick={() => abrirConversao(params.row)}
                         />
-                    ];
+                    );
                 }
 
                 if (isTracking) {
-                    return [];
+                    return actions;
                 }
 
-                return [
+                actions.push(
                     <DeletarRegistro
                         label="Delete"
                         showInMenu
@@ -216,7 +219,9 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
                         deleteUser={deleteRegistro(params.id)}
                         closeMenuOnClick={false}
                     />
-                ];
+                );
+
+                return actions;
             }
         },
         { field: 'cliente', headerName: config.targetLabel, width: 500 },

@@ -140,7 +140,7 @@ const Menu = () => {
         },
         {
             segment: 'pagas',
-            title: 'Cobrancas pagas',
+            title: 'Baixas e auditoria',
             icon: <SavingsOutlinedIcon />,
         },
         {

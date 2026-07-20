@@ -629,14 +629,14 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         cadastro: 'Cobrancas',
         dashboard: 'Dashboard de cobrancas',
         acompanhamento: 'Acompanhamento de cobrancas',
-        pagas: 'Cobrancas pagas',
+        pagas: 'Baixas e auditoria',
     }[viewMode];
 
     const pageSubtitle = {
         cadastro: 'Cadastro, acompanhamento e fechamento das acoes de cobranca.',
         dashboard: 'Resumo geral da carteira de cobrancas, sem alteracao de registros.',
         acompanhamento: 'Fila operacional para acompanhar status, priorizando cobrancas em aberto.',
-        pagas: 'Consulta de cobrancas pagas com exclusao logica auditada.',
+        pagas: 'Consulta de baixas pagas com exclusao logica auditada.',
     }[viewMode];
 
     return (
@@ -885,7 +885,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2} mb={2}>
                     <Box>
                         <Typography variant="h6" fontWeight={800}>
-                            {isDashboard ? 'Resumo da fila' : isPaidList ? 'Pagas registradas' : 'Fila de cobranca'}
+                            {isDashboard ? 'Resumo da fila' : isPaidList ? 'Baixas registradas' : 'Fila de cobranca'}
                         </Typography>
                         <Typography color="text.secondary" variant="body2">{filteredCharges.length} registros encontrados</Typography>
                     </Box>

@@ -44,7 +44,26 @@ const chartSetting = {
     margin: { top: 42, right: 24, bottom: 56, left: 54 },
 };
 
-const chartColors = ['#0f4c81', '#2f80c0', '#2D9C75', '#f97316', '#8a9f20', '#c89b08', '#d85b72', '#8064c8'];
+const chartColors = ['#0f4c81', '#2f80c0', '#2D9C75', '#f97316', '#8a9f20', '#c89b08', '#8064c8', '#8aa0ad'];
+const cancellationColor = '#d32f2f';
+const postSaleColor = '#7c3aed';
+
+function normalizeChartLabel(label) {
+    return String(label || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[-_]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toUpperCase();
+}
+
+function chartColorForLabel(label, index) {
+    const normalized = normalizeChartLabel(label);
+    if (normalized === 'CANCELAMENTO') return cancellationColor;
+    if (normalized === 'POS VENDA') return postSaleColor;
+    return chartColors[index % chartColors.length];
+}
 const reportPanelSx = dashboardPanelSx;
 const reportChartSx = {
     '& .MuiChartsAxis-line, & .MuiChartsAxis-tick': { stroke: '#31545f !important' },
@@ -214,6 +233,7 @@ const DashBoardsComercial = ({
     const series = labels.map((label) => ({
         dataKey: label,
         label: label.charAt(0).toUpperCase() + label.slice(1),
+        color: chartColorForLabel(label),
     }));
     const hasChartData = datasetConvertido.some((item) => labels.some((label) => Number(item[label]) > 0));
     const totalMensal = resumoMensal.reduce((total, item) => total + (Number(item.value) || 0), 0);
@@ -224,7 +244,7 @@ const DashBoardsComercial = ({
     const chartSummaryItems = datasetConvertido.map((item, index) => ({
         label: item.usuario || 'Nao informado',
         value: labels.reduce((total, label) => total + Number(item[label] || 0), 0),
-        color: ['#4454f6', '#ffb627', '#ff5b6e', '#28b8ee', '#2fc878', '#ec79c1', '#8e6ce8', '#19b5a5'][index % 8],
+        color: chartColors[index % chartColors.length],
     }));
     const leadMetrics = React.useMemo(() => {
         const convertidos = registrosMensais.filter((item) => item.status === 'CONVERTIDO');
@@ -311,6 +331,7 @@ const DashBoardsComercial = ({
         const totalMes = convertedMonth.reduce((total, item) => total + Number(item.valorPlano || item.valor || 0), 0);
         const totalAno = convertedYear.reduce((total, item) => total + Number(item.valorPlano || item.valor || 0), 0);
         const ticketMedio = convertedMonth.length ? totalMes / convertedMonth.length : 0;
+        const ticketMedioAnual = convertedYear.length ? totalAno / convertedYear.length : 0;
 
         const topClientes = rankedItems(
             sumBy(convertedYear, (item) => cleanClientName(item.cliente), (item) => item.valorPlano || item.valor),
@@ -333,13 +354,13 @@ const DashBoardsComercial = ({
             'valor',
         );
 
-        return { totalMes, totalAno, ticketMedio, topClientes, planos, origens, grupos };
+        return { totalMes, totalAno, ticketMedio, ticketMedioAnual, topClientes, planos, origens, grupos };
     }, [convertedMonth, convertedYear]);
 
     const reportListItems = (items, valueKey = 'valor') => items.map((item, index) => ({
         label: item.label,
         value: valueKey === 'valor' ? item.valor : item.quantidade,
-        color: chartColors[index % chartColors.length],
+        color: chartColorForLabel(item.label, index),
     }));
     const isLeadDashboard = segmento === 'LEAD';
     const isExecutiveDashboard = true;
@@ -416,12 +437,12 @@ const DashBoardsComercial = ({
                     {[
                         ['Leads no mes', registrosMensais.length, 'registros cadastrados'],
                         ['Convertidos', leadMetrics.convertidos, 'vendas confirmadas'],
-                        ['Vendas no mes', leadMetrics.convertidos, formatMoney(leadMetrics.valorConvertido)],
+                        ['Vendas no mes', formatMoney(commercialReport.totalMes), `${formatNumber(leadMetrics.convertidos)} venda(s)`],
                         ['Em acompanhamento', leadMetrics.abertos, 'aguardando conversao'],
-                        ['Valor convertido', formatMoney(leadMetrics.valorConvertido), `${leadMetrics.grupos} grupo(s)`],
+                        ['Ticket medio mensal', formatMoney(commercialReport.ticketMedio), `${formatNumber(leadMetrics.convertidos)} venda(s) no mes`],
                         ['Vendas no ano', leadMetrics.vendasAnuais, formatMoney(leadMetrics.valorAnual)],
                         ['Total anual', formatMoney(commercialReport.totalAno), `${formatNumber(convertedYear.length)} venda(s)`],
-                        ['Ticket medio', formatMoney(commercialReport.ticketMedio), 'media do mes selecionado'],
+                        ['Ticket medio anual', formatMoney(commercialReport.ticketMedioAnual), 'media do ano selecionado'],
                     ].map(([label, value, detail]) => (
                         <Paper
                             className="commercial-metric-card"
@@ -608,7 +629,7 @@ const DashBoardsComercial = ({
                                                 id: item.label,
                                                 label: item.label,
                                                 value: item.quantidade,
-                                                color: chartColors[index % chartColors.length],
+                                                color: chartColorForLabel(item.label, index),
                                             })),
                                             innerRadius: 55,
                                         }]}
