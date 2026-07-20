@@ -1,4 +1,5 @@
 import AddCircleRoundedIcon from '@mui/icons-material/AddCircleRounded';
+import DeleteRoundedIcon from '@mui/icons-material/DeleteRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
@@ -32,6 +33,17 @@ import { useEffect, useMemo, useState } from 'react';
 import ChartValueList from '../../Componentes/ChartValueList';
 import ExportDashboardPdfButton from '../../Componentes/ExportDashboardPdfButton';
 import Api from '../../Services/Api';
+import {
+    dashboardChartSx,
+    dashboardHeaderSx,
+    dashboardInputSx,
+    dashboardMetricSx,
+    dashboardMutedTextSx,
+    dashboardPalette,
+    dashboardPanelSx,
+    dashboardShellSx,
+    dashboardSubtleTextSx,
+} from '../../Utils/DashboardTheme';
 
 const UseApi = Api();
 
@@ -46,20 +58,6 @@ const actionOptions = [
     'Negativacao',
     'Pago',
 ];
-const dashboardPalette = ['#17e2e8', '#38bdf8', '#22c55e', '#f97316', '#a3e635', '#facc15', '#fb7185', '#a78bfa', '#8aa0ad'];
-const dashboardPanelSx = {
-    bgcolor: '#121329',
-    color: '#f8fbff',
-    border: '1px solid #0b7fbd',
-    borderRadius: 1.5,
-    boxShadow: '0 0 0 1px rgba(23, 226, 232, 0.25), 0 0 14px rgba(0, 145, 220, 0.32)',
-};
-const dashboardChartSx = {
-    '& .MuiChartsAxis-line, & .MuiChartsAxis-tick': { stroke: '#dce8f5 !important' },
-    '& .MuiChartsAxis-tickLabel, & .MuiChartsAxis-label': { fill: '#f8fbff !important' },
-    '& .MuiChartsLegend-label': { fill: '#f8fbff !important' },
-    '& .MuiChartsGrid-line': { stroke: 'rgba(255,255,255,0.12)' },
-};
 const clientGroupNames = {
     9: 'PADRAO',
     10: 'SJP',
@@ -137,6 +135,10 @@ function normalizeCharge(charge) {
         updatedBy: charge.atualizadoPor,
         lastUser: charge.ultimoUsuario || charge.atualizadoPor || charge.criadoPor || '',
         editable: charge.editavel !== false,
+        excluded: Boolean(charge.excluida),
+        excludedAt: charge.excluidoEm,
+        excludedBy: charge.excluidoPor,
+        exclusionReason: charge.motivoExclusao,
         history: Array.isArray(charge.historico)
             ? charge.historico.map((item) => ({
                 id: item.id,
@@ -302,6 +304,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
     const isDashboard = viewMode === 'dashboard';
     const isTracking = viewMode === 'acompanhamento';
     const isRegister = viewMode === 'cadastro';
+    const isPaidList = viewMode === 'pagas';
     const [charges, setCharges] = useState([]);
     const [form, setForm] = useState(emptyForm);
     const [selected, setSelected] = useState(null);
@@ -315,6 +318,9 @@ const Cobrancas = ({ readOnly = false, mode }) => {
     const [dashboardMonth, setDashboardMonth] = useState(currentMonthIso());
     const [trackingNote, setTrackingNote] = useState('');
     const [open, setOpen] = useState(false);
+    const [deleteOpen, setDeleteOpen] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState(null);
+    const [deleteReason, setDeleteReason] = useState('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [rbxLoading, setRbxLoading] = useState(false);
@@ -324,7 +330,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         setLoading(true);
         setError('');
         try {
-            const response = await UseApi('cobrancas');
+            const response = await UseApi(isPaidList ? 'cobrancas/pagas' : 'cobrancas');
             setCharges(Array.isArray(response) ? response.map(normalizeCharge) : []);
         } catch (requestError) {
             setError(requestError.message || 'Erro ao carregar cobrancas.');
@@ -335,7 +341,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
 
     useEffect(() => {
         loadCharges();
-    }, []);
+    }, [isPaidList]);
 
     const userOptions = useMemo(() => {
         return Array.from(new Set(charges.map((charge) => normalizeLabel(charge.lastUser)).filter(Boolean))).sort();
@@ -373,6 +379,8 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                     charge.status,
                     charge.lastUser,
                     charge.clientGroup,
+                    charge.excludedBy,
+                    charge.exclusionReason,
                 ].some((value) => String(value || '').toLowerCase().includes(search));
             })
             .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
@@ -463,6 +471,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         return charges.find((charge) => (
             String(charge.clientCode || '').trim() === normalizedCode
             && charge.id !== ignoredId
+            && !charge.excluded
             && !isPaidOrClosedStatus(charge.status)
         ));
     };
@@ -573,6 +582,40 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         }
     };
 
+    const openDeleteDialog = (charge) => {
+        setDeleteTarget(charge);
+        setDeleteReason('');
+        setError('');
+        setDeleteOpen(true);
+    };
+
+    const closeDeleteDialog = () => {
+        setDeleteOpen(false);
+        setDeleteTarget(null);
+        setDeleteReason('');
+    };
+
+    const handleLogicalDelete = async () => {
+        if (!deleteReason.trim()) {
+            setError('Informe o motivo da exclusao.');
+            return;
+        }
+        setSaving(true);
+        setError('');
+        try {
+            const response = await UseApi(`cobrancas/${deleteTarget.id}/excluir`, 'PATCH', {
+                motivo: deleteReason.trim(),
+            });
+            const normalized = normalizeCharge(response);
+            setCharges((current) => current.map((charge) => (charge.id === normalized.id ? normalized : charge)));
+            closeDeleteDialog();
+        } catch (requestError) {
+            setError(requestError.message || 'Erro ao excluir cobranca.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const canEditSelected = isRegister && (!selected || selected.editable);
     const canTrackSelected = isTracking && Boolean(selected?.editable);
     const canSaveSelected = canEditSelected || canTrackSelected;
@@ -586,12 +629,14 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         cadastro: 'Cobrancas',
         dashboard: 'Dashboard de cobrancas',
         acompanhamento: 'Acompanhamento de cobrancas',
+        pagas: 'Cobrancas pagas',
     }[viewMode];
 
     const pageSubtitle = {
         cadastro: 'Cadastro, acompanhamento e fechamento das acoes de cobranca.',
         dashboard: 'Resumo geral da carteira de cobrancas, sem alteracao de registros.',
         acompanhamento: 'Fila operacional para acompanhar status, priorizando cobrancas em aberto.',
+        pagas: 'Consulta de cobrancas pagas com exclusao logica auditada.',
     }[viewMode];
 
     return (
@@ -599,12 +644,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
             id="dashboard-cobrancas-export"
             sx={{
                 py: 2,
-                ...(isDashboard ? {
-                    bgcolor: '#070b18',
-                    p: { xs: 1, md: 1.5 },
-                    borderRadius: 1,
-                    border: '1px solid rgba(23, 226, 232, 0.22)',
-                } : {}),
+                ...(isDashboard ? dashboardShellSx : {}),
             }}
         >
             <Paper
@@ -613,12 +653,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                     p: isDashboard ? 1.8 : 2.5,
                     mb: 2,
                     borderRadius: isDashboard ? 1 : 2,
-                    ...(isDashboard ? {
-                        bgcolor: '#1677bd',
-                        color: '#fff',
-                        border: '1px solid #17e2e8',
-                        borderBottom: '3px solid #f97316',
-                    } : {}),
+                    ...(isDashboard ? dashboardHeaderSx : {}),
                 }}
             >
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2}>
@@ -640,16 +675,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                     InputLabelProps={{ shrink: true }}
                                     sx={{
                                         minWidth: 210,
-                                        '& .MuiOutlinedInput-root': {
-                                            bgcolor: '#111a2e',
-                                            color: '#f8fbff',
-                                            '& fieldset': { borderColor: '#17e2e8' },
-                                            '&:hover fieldset': { borderColor: '#7befff' },
-                                            '&.Mui-focused fieldset': { borderColor: '#7befff' },
-                                        },
-                                        '& .MuiInputBase-input': { color: '#f8fbff', colorScheme: 'dark', fontWeight: 800 },
-                                        '& .MuiInputLabel-root': { color: '#b8f7ff', fontWeight: 700 },
-                                        '& .MuiInputLabel-root.Mui-focused': { color: '#7befff' },
+                                        ...dashboardInputSx,
                                     }}
                                 />
                                 <ExportDashboardPdfButton
@@ -690,16 +716,16 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                         sx={{
                             p: 2,
                             borderRadius: isDashboard ? 1.5 : 2,
-                            ...(isDashboard ? { ...dashboardPanelSx, borderLeft: '5px solid #17e2e8' } : {}),
+                            ...(isDashboard ? dashboardMetricSx : {}),
                         }}
                         key={label}
                     >
                         <Stack direction="row" alignItems="center" spacing={1.2}>
                             <TimelineRoundedIcon color="primary" />
                             <Box>
-                                <Typography color={isDashboard ? '#7befff' : 'text.secondary'} variant="body2" fontWeight={isDashboard ? 800 : 400}>{label}</Typography>
+                                <Typography sx={isDashboard ? dashboardSubtleTextSx : undefined} color={isDashboard ? undefined : 'text.secondary'} variant="body2" fontWeight={isDashboard ? 800 : 400}>{label}</Typography>
                                 <Typography variant="h5" fontWeight={800}>{value}</Typography>
-                                <Typography color={isDashboard ? '#c9d7e8' : 'text.secondary'} variant="caption">{detail}</Typography>
+                                <Typography sx={isDashboard ? dashboardMutedTextSx : undefined} color={isDashboard ? undefined : 'text.secondary'} variant="caption">{detail}</Typography>
                             </Box>
                         </Stack>
                     </Paper>
@@ -717,7 +743,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 >
                     <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
                         <Typography variant="h6" fontWeight={800}>Status por usuario</Typography>
-                        <Typography color="#7befff" variant="body2" sx={{ mb: 1 }}>
+                        <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">
                             {userFilter === 'Todos'
                                 ? 'Distribuicao de status da fila filtrada. Selecione um usuario para detalhar.'
                                 : `Distribuicao de status de ${userFilter}.`}
@@ -747,13 +773,13 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                             </Box>
                         ) : (
                             <Stack alignItems="center" justifyContent="center" minHeight={220}>
-                                <Typography color="#c9d7e8">Sem dados para exibir.</Typography>
+                                <Typography sx={dashboardMutedTextSx}>Sem dados para exibir.</Typography>
                             </Stack>
                         )}
                     </Paper>
                     <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
                         <Typography variant="h6" fontWeight={800}>Status por usuario</Typography>
-                        <Typography color="#7befff" variant="body2" sx={{ mb: 1 }}>
+                        <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">
                             Compare a quantidade de cobrancas por status em cada responsavel.
                         </Typography>
                         {chartData.userLabels.length && chartData.statusByUserSeries.length ? (
@@ -778,13 +804,13 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                             </Box>
                         ) : (
                             <Stack alignItems="center" justifyContent="center" minHeight={220}>
-                                <Typography color="#c9d7e8">Sem dados para exibir.</Typography>
+                                <Typography sx={dashboardMutedTextSx}>Sem dados para exibir.</Typography>
                             </Stack>
                         )}
                     </Paper>
                     <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
                         <Typography variant="h6" fontWeight={800}>Valor por usuario</Typography>
-                        <Typography color="#7befff" variant="body2" sx={{ mb: 1 }}>
+                        <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">
                             Participacao em valor por ultimo responsavel.
                         </Typography>
                         {chartData.userValuePie.length ? (
@@ -813,13 +839,13 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                             </Box>
                         ) : (
                             <Stack alignItems="center" justifyContent="center" minHeight={220}>
-                                <Typography color="#c9d7e8">Sem dados para exibir.</Typography>
+                                <Typography sx={dashboardMutedTextSx}>Sem dados para exibir.</Typography>
                             </Stack>
                         )}
                     </Paper>
                     <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
                         <Typography variant="h6" fontWeight={800}>Valor por grupo</Typography>
-                        <Typography color="#7befff" variant="body2" sx={{ mb: 1 }}>
+                        <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">
                             Participacao em valor por grupo do cliente.
                         </Typography>
                         {chartData.groupValuePie.length ? (
@@ -848,7 +874,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                             </Box>
                         ) : (
                             <Stack alignItems="center" justifyContent="center" minHeight={220}>
-                                <Typography color="#c9d7e8">Sem dados para exibir.</Typography>
+                                <Typography sx={dashboardMutedTextSx}>Sem dados para exibir.</Typography>
                             </Stack>
                         )}
                     </Paper>
@@ -859,7 +885,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2} mb={2}>
                     <Box>
                         <Typography variant="h6" fontWeight={800}>
-                            {isDashboard ? 'Resumo da fila' : 'Fila de cobranca'}
+                            {isDashboard ? 'Resumo da fila' : isPaidList ? 'Pagas registradas' : 'Fila de cobranca'}
                         </Typography>
                         <Typography color="text.secondary" variant="body2">{filteredCharges.length} registros encontrados</Typography>
                     </Box>
@@ -946,7 +972,8 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                     <TableCell>Valor</TableCell>
                                     <TableCell>Status</TableCell>
                                     <TableCell>Usuario</TableCell>
-                                    <TableCell align="right">Detalhes</TableCell>
+                                    {isPaidList && <TableCell>Exclusao</TableCell>}
+                                    <TableCell align="right">{isPaidList ? 'Acoes' : 'Detalhes'}</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
@@ -966,8 +993,8 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                         <TableCell>
                                             <Chip
                                                 size="small"
-                                                color={isPromiseStatus(charge.status) && charge.promiseDate && charge.promiseDate <= todayIso() ? 'error' : isFinalStatus(charge.status) ? 'success' : 'warning'}
-                                                label={charge.status}
+                                                color={charge.excluded ? 'error' : isPromiseStatus(charge.status) && charge.promiseDate && charge.promiseDate <= todayIso() ? 'error' : isFinalStatus(charge.status) ? 'success' : 'warning'}
+                                                label={charge.excluded ? 'Excluida' : charge.status}
                                             />
                                             {isPromiseStatus(charge.status) && charge.promiseDate && (
                                                 <Typography display="block" color="text.secondary" variant="caption">
@@ -976,16 +1003,40 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                             )}
                                         </TableCell>
                                         <TableCell>{charge.lastUser || 'sem usuario'}</TableCell>
+                                        {isPaidList && (
+                                            <TableCell>
+                                                {charge.excluded ? (
+                                                    <>
+                                                        <Typography fontWeight={700} fontSize="inherit">
+                                                            {charge.excludedBy || 'sem usuario'}
+                                                        </Typography>
+                                                        <Typography color="text.secondary" variant="caption" display="block">
+                                                            {charge.excludedAt ? new Date(charge.excludedAt).toLocaleString('pt-BR') : '-'}
+                                                        </Typography>
+                                                        <Typography color="text.secondary" variant="caption" display="block">
+                                                            {charge.exclusionReason || 'Motivo nao informado'}
+                                                        </Typography>
+                                                    </>
+                                                ) : (
+                                                    <Typography color="text.secondary" variant="caption">Nao excluida</Typography>
+                                                )}
+                                            </TableCell>
+                                        )}
                                         <TableCell align="right">
                                             <IconButton size="small" onClick={() => openCharge(charge)}>
                                                 {isDashboard || !charge.editable ? <InfoOutlinedIcon fontSize="small" /> : <EditRoundedIcon fontSize="small" />}
                                             </IconButton>
+                                            {isPaidList && !charge.excluded && (
+                                                <IconButton size="small" color="error" onClick={() => openDeleteDialog(charge)}>
+                                                    <DeleteRoundedIcon fontSize="small" />
+                                                </IconButton>
+                                            )}
                                         </TableCell>
                                     </TableRow>
                                 ))}
                                 {!filteredCharges.length && (
                                     <TableRow>
-                                        <TableCell colSpan={9} align="center">Nenhuma cobranca cadastrada.</TableCell>
+                                        <TableCell colSpan={isPaidList ? 10 : 9} align="center">Nenhuma cobranca cadastrada.</TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>
@@ -1234,6 +1285,45 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                             {saving ? 'Salvando...' : 'Salvar cobranca'}
                         </Button>
                     )}
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={deleteOpen} onClose={closeDeleteDialog} maxWidth="sm" fullWidth>
+                <DialogTitle>Excluir cobranca paga</DialogTitle>
+                <DialogContent>
+                    {error && (
+                        <Alert severity="error" sx={{ mb: 2 }}>
+                            {error}
+                        </Alert>
+                    )}
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Essa acao nao apaga o registro do banco. A cobranca sera marcada como excluida e o motivo ficara salvo no historico.
+                    </Typography>
+                    {deleteTarget && (
+                        <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 1.5, mb: 2 }}>
+                            <Typography fontWeight={800}>{deleteTarget.protocol}</Typography>
+                            <Typography variant="body2">{deleteTarget.client || 'Cliente nao informado'}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                Codigo {deleteTarget.clientCode || '-'} - Valor {formatCurrency(deleteTarget.value)}
+                            </Typography>
+                        </Paper>
+                    )}
+                    <TextField
+                        fullWidth
+                        required
+                        multiline
+                        minRows={4}
+                        label="Motivo da exclusao"
+                        value={deleteReason}
+                        onChange={(event) => setDeleteReason(event.target.value)}
+                        helperText="Obrigatorio. Sera salvo com usuario, data e hora."
+                    />
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={closeDeleteDialog}>Cancelar</Button>
+                    <Button color="error" variant="contained" onClick={handleLogicalDelete} disabled={saving || !deleteReason.trim()}>
+                        {saving ? 'Excluindo...' : 'Excluir cobranca'}
+                    </Button>
                 </DialogActions>
             </Dialog>
         </Box>

@@ -5,6 +5,7 @@ import br.com.w4solution.controle_instalacao.domain.cobranca.CobrancaHistorico;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaAcompanhamentoDTO;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaCadastroDTO;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaDTO;
+import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaExclusaoDTO;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaHistoricoDTO;
 import br.com.w4solution.controle_instalacao.dto.rbx.ClienteFiltradoDTO;
 import br.com.w4solution.controle_instalacao.repository.cobranca.CobrancaHistoricoRepository;
@@ -33,8 +34,19 @@ public class CobrancaService {
 
     public List<CobrancaDTO> listar() {
         return repository.findAll().stream()
+                .filter(cobranca -> !Boolean.TRUE.equals(cobranca.getExcluida()))
                 .sorted(Comparator.comparing(Cobranca::getData, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(Cobranca::getCriadoEm, Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(this::toDto)
+                .toList();
+    }
+
+    public List<CobrancaDTO> listarPagas() {
+        return repository.findAll().stream()
+                .filter(cobranca -> "PAGO".equals(String.valueOf(cobranca.getStatus()).trim().toUpperCase()))
+                .sorted(Comparator.comparing(Cobranca::getFechadoEm, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Cobranca::getAtualizadoEm, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(Cobranca::getData, Comparator.nullsLast(Comparator.reverseOrder())))
                 .map(this::toDto)
                 .toList();
     }
@@ -58,6 +70,7 @@ public class CobrancaService {
     public CobrancaDTO atualizar(Long id, CobrancaCadastroDTO dto, String usuario) {
         Cobranca cobranca = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Cobranca nao encontrada."));
+        validarNaoExcluida(cobranca);
         if (!isEditavel(cobranca.getStatus())) {
             throw new IllegalStateException("Cobranca paga, fechada ou cancelada nao pode ser editada.");
         }
@@ -76,6 +89,7 @@ public class CobrancaService {
     public CobrancaDTO acompanhar(Long id, CobrancaAcompanhamentoDTO dto, String usuario) {
         Cobranca cobranca = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Cobranca nao encontrada."));
+        validarNaoExcluida(cobranca);
         if (!isEditavel(cobranca.getStatus())) {
             throw new IllegalStateException("Cobranca paga, fechada ou cancelada nao pode ser alterada no acompanhamento.");
         }
@@ -102,6 +116,40 @@ public class CobrancaService {
         Cobranca salva = repository.save(cobranca);
 
         salvarHistorico(salva, statusAnterior, statusNovo, valorAnterior, salva.getValor(), dto.observacao(), usuario);
+
+        return toDto(salva);
+    }
+
+    public CobrancaDTO excluir(Long id, CobrancaExclusaoDTO dto, String usuario) {
+        Cobranca cobranca = repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Cobranca nao encontrada."));
+        validarNaoExcluida(cobranca);
+        if (!"PAGO".equals(String.valueOf(cobranca.getStatus()).trim().toUpperCase())) {
+            throw new IllegalStateException("Somente cobrancas pagas podem ser excluidas.");
+        }
+        if (dto.motivo() == null || dto.motivo().isBlank()) {
+            throw new IllegalArgumentException("Informe o motivo da exclusao.");
+        }
+
+        String usuarioAtual = fallback(usuario, "sistema");
+        LocalDateTime agora = LocalDateTime.now();
+        cobranca.setExcluida(true);
+        cobranca.setExcluidoEm(agora);
+        cobranca.setExcluidoPor(usuarioAtual);
+        cobranca.setMotivoExclusao(dto.motivo().trim());
+        cobranca.setAtualizadoEm(agora);
+        cobranca.setAtualizadoPor(usuarioAtual);
+        Cobranca salva = repository.save(cobranca);
+
+        salvarHistorico(
+                salva,
+                cobranca.getStatus(),
+                "Excluida",
+                cobranca.getValor(),
+                cobranca.getValor(),
+                "Exclusao logica: " + dto.motivo().trim(),
+                usuarioAtual
+        );
 
         return toDto(salva);
     }
@@ -207,6 +255,7 @@ public class CobrancaService {
         }
 
         repository.findAllByCodigoCliente(codigoCliente).stream()
+                .filter(cobranca -> !Boolean.TRUE.equals(cobranca.getExcluida()))
                 .filter(cobranca -> idAtual == null || !cobranca.getId().equals(idAtual))
                 .filter(cobranca -> !isStatusPagoOuFechado(cobranca.getStatus()))
                 .findFirst()
@@ -218,6 +267,12 @@ public class CobrancaService {
     private boolean isStatusPagoOuFechado(String status) {
         String normalizado = String.valueOf(status).trim().toUpperCase();
         return normalizado.equals("PAGO") || normalizado.equals("FECHADO");
+    }
+
+    private void validarNaoExcluida(Cobranca cobranca) {
+        if (Boolean.TRUE.equals(cobranca.getExcluida())) {
+            throw new IllegalStateException("Cobranca excluida nao pode ser alterada.");
+        }
     }
 
     private boolean isPromessa(String status) {

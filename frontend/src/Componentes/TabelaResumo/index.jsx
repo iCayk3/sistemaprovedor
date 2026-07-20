@@ -1,6 +1,7 @@
 import { Box, LinearProgress, Paper, Typography } from '@mui/material';
+import { dashboardMutedTextSx, dashboardPanelSx } from '../../Utils/DashboardTheme';
 
-const TabelaResumo = ({ rows }) => {
+const TabelaResumo = ({ rows, dark = false }) => {
   const safeRows = Array.isArray(rows) ? rows : [];
   const maxValue = Math.max(...safeRows.map((item) => Number(item.value) || 0), 0);
 
@@ -21,22 +22,31 @@ const TabelaResumo = ({ rows }) => {
         const percent = maxValue ? (value / maxValue) * 100 : 0;
 
         return (
-          <Paper key={`${dados.label}-${index}`} variant="outlined" sx={{ p: 1.5, borderRadius: 2, minWidth: 0 }}>
+          <Paper
+            key={`${dados.label}-${index}`}
+            variant="outlined"
+            sx={{
+              p: 1.5,
+              borderRadius: 1.5,
+              minWidth: 0,
+              ...(dark ? dashboardPanelSx : {}),
+            }}
+          >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 0.75 }}>
               <Typography variant="body2" fontWeight={700}>{dados.label}</Typography>
               <Typography variant="body2" fontWeight={800}>{value.toLocaleString('pt-BR')}</Typography>
             </Box>
             {maxValue > 0 ? (
-              <LinearProgress variant="determinate" value={percent} sx={{ height: 7, borderRadius: 999 }} />
+              <LinearProgress variant="determinate" value={percent} sx={{ height: 7, borderRadius: 999, bgcolor: dark ? '#dceaf0' : undefined, '& .MuiLinearProgress-bar': { bgcolor: dark ? '#0f4c81' : undefined }, '.dark &': { bgcolor: dark ? 'rgba(255,255,255,0.15)' : undefined, '& .MuiLinearProgress-bar': { bgcolor: dark ? '#17e2e8' : undefined } } }} />
             ) : (
-              <Box sx={{ height: 7, borderRadius: 999, bgcolor: 'action.hover' }} />
+              <Box sx={{ height: 7, borderRadius: 999, bgcolor: dark ? '#dceaf0' : 'action.hover', '.dark &': { bgcolor: dark ? 'rgba(255,255,255,0.15)' : 'action.hover' } }} />
             )}
           </Paper>
         );
       })}
       {!safeRows.length && (
         <Box sx={{ py: 3, textAlign: 'center' }}>
-          <Typography color="text.secondary">Nenhum dado para exibir.</Typography>
+          <Typography sx={dark ? dashboardMutedTextSx : undefined} color={dark ? undefined : 'text.secondary'}>Nenhum dado para exibir.</Typography>
         </Box>
       )}
     </Box>

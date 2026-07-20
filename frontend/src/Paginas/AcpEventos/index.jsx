@@ -35,22 +35,18 @@ import { useEffect, useMemo, useState } from 'react';
 import ChartValueList from '../../Componentes/ChartValueList';
 import ExportDashboardPdfButton from '../../Componentes/ExportDashboardPdfButton';
 import Api from '../../Services/Api';
+import {
+    dashboardChartSx,
+    dashboardHeaderSx,
+    dashboardMetricSx,
+    dashboardMutedTextSx,
+    dashboardPalette,
+    dashboardPanelSx,
+    dashboardShellSx,
+    dashboardSubtleTextSx,
+} from '../../Utils/DashboardTheme';
 
 const UseApi = Api();
-const chartPalette = ['#17e2e8', '#38bdf8', '#22c55e', '#f97316', '#a3e635', '#facc15', '#fb7185', '#a78bfa', '#8aa0ad'];
-const dashboardPanelSx = {
-    bgcolor: '#121329',
-    color: '#f8fbff',
-    border: '1px solid #0b7fbd',
-    borderRadius: 1.5,
-    boxShadow: '0 0 0 1px rgba(23, 226, 232, 0.25), 0 0 14px rgba(0, 145, 220, 0.32)',
-};
-const dashboardChartSx = {
-    '& .MuiChartsAxis-line, & .MuiChartsAxis-tick': { stroke: '#dce8f5 !important' },
-    '& .MuiChartsAxis-tickLabel, & .MuiChartsAxis-label': { fill: '#f8fbff !important' },
-    '& .MuiChartsLegend-label': { fill: '#f8fbff !important' },
-    '& .MuiChartsGrid-line': { stroke: 'rgba(255,255,255,0.12)' },
-};
 const optionsStorageKey = 'sistemaprovedor-noc-options-v1';
 const defaultOptions = {
     sources: ['Operadoras e transporte', 'Rompimentos e sinistros', 'Links dedicados'],
@@ -173,7 +169,7 @@ function chartItemsFromCounts(counts) {
             id: label,
             label,
             value,
-            color: chartPalette[index % chartPalette.length],
+            color: dashboardPalette[index % dashboardPalette.length],
         }));
 }
 
@@ -473,12 +469,7 @@ const AcpEventos = ({ readOnly = false }) => {
             id="dashboard-acp-eventos-export"
             sx={{
                 py: 2,
-                ...(tab === 'eventos' ? {
-                    bgcolor: '#070b18',
-                    p: { xs: 1, md: 1.5 },
-                    borderRadius: 1,
-                    border: '1px solid rgba(23, 226, 232, 0.22)',
-                } : {}),
+                ...(tab === 'eventos' ? dashboardShellSx : {}),
             }}
         >
             <Paper
@@ -487,12 +478,7 @@ const AcpEventos = ({ readOnly = false }) => {
                     p: tab === 'eventos' ? 1.8 : 2.5,
                     mb: 2,
                     borderRadius: tab === 'eventos' ? 1 : 2,
-                    ...(tab === 'eventos' ? {
-                        bgcolor: '#1677bd',
-                        color: '#fff',
-                        border: '1px solid #17e2e8',
-                        borderBottom: '3px solid #f97316',
-                    } : { bgcolor: 'background.paper' }),
+                    ...(tab === 'eventos' ? dashboardHeaderSx : { bgcolor: 'background.paper' }),
                 }}
             >
             <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2}>
@@ -535,16 +521,16 @@ const AcpEventos = ({ readOnly = false }) => {
                         variant="outlined"
                         sx={{
                             p: 2,
-                            ...(tab === 'eventos' ? { ...dashboardPanelSx, borderLeft: '5px solid #17e2e8' } : { borderRadius: 2 }),
+                            ...(tab === 'eventos' ? dashboardMetricSx : { borderRadius: 2 }),
                         }}
                         key={label}
                     >
                         <Stack direction="row" alignItems="center" spacing={1.2}>
                             <TimelineRoundedIcon color="primary" />
                             <Box>
-                                <Typography color={tab === 'eventos' ? '#7befff' : 'text.secondary'} variant="body2" fontWeight={tab === 'eventos' ? 800 : 400}>{label}</Typography>
+                                <Typography sx={tab === 'eventos' ? dashboardSubtleTextSx : undefined} color={tab === 'eventos' ? undefined : 'text.secondary'} variant="body2" fontWeight={tab === 'eventos' ? 800 : 400}>{label}</Typography>
                                 <Typography variant="h5" fontWeight={800}>{value}</Typography>
-                                <Typography color={tab === 'eventos' ? '#c9d7e8' : 'text.secondary'} variant="caption">{detail}</Typography>
+                                <Typography sx={tab === 'eventos' ? dashboardMutedTextSx : undefined} color={tab === 'eventos' ? undefined : 'text.secondary'} variant="caption">{detail}</Typography>
                             </Box>
                         </Stack>
                     </Paper>
@@ -555,7 +541,7 @@ const AcpEventos = ({ readOnly = false }) => {
                 <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' } }}>
                     <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
                         <Typography variant="h6" fontWeight={800}>Eventos por status</Typography>
-                        <Typography color="#7befff" variant="body2" sx={{ mb: 1 }}>Distribuicao da fila filtrada.</Typography>
+                        <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">Distribuicao da fila filtrada.</Typography>
                         {dashboardData.statusPie.length ? (
                             <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 260px' }, alignItems: 'center' }}>
                                 <PieChart
@@ -568,14 +554,14 @@ const AcpEventos = ({ readOnly = false }) => {
                             </Box>
                         ) : (
                             <Stack alignItems="center" justifyContent="center" minHeight={220}>
-                                <Typography color="#c9d7e8">Sem dados para exibir.</Typography>
+                                <Typography sx={dashboardMutedTextSx}>Sem dados para exibir.</Typography>
                             </Stack>
                         )}
                     </Paper>
 
                     <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
                         <Typography variant="h6" fontWeight={800}>SLA da fila</Typography>
-                        <Typography color="#7befff" variant="body2" sx={{ mb: 1 }}>Eventos dentro da meta contra eventos vencidos.</Typography>
+                        <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">Eventos dentro da meta contra eventos vencidos.</Typography>
                         {dashboardData.slaPie.some((item) => item.value > 0) ? (
                             <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 260px' }, alignItems: 'center' }}>
                                 <PieChart
@@ -588,7 +574,7 @@ const AcpEventos = ({ readOnly = false }) => {
                             </Box>
                         ) : (
                             <Stack alignItems="center" justifyContent="center" minHeight={220}>
-                                <Typography color="#c9d7e8">Sem dados para exibir.</Typography>
+                                <Typography sx={dashboardMutedTextSx}>Sem dados para exibir.</Typography>
                             </Stack>
                         )}
                     </Paper>
@@ -597,13 +583,13 @@ const AcpEventos = ({ readOnly = false }) => {
                 <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' } }}>
                     <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
                         <Typography variant="h6" fontWeight={800}>Eventos por tipo</Typography>
-                        <Typography color="#7befff" variant="body2" sx={{ mb: 1 }}>Tipos que mais aparecem na fila filtrada.</Typography>
+                        <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">Tipos que mais aparecem na fila filtrada.</Typography>
                         {dashboardData.typeBars.length ? (
                             <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 240px' }, alignItems: 'center' }}>
                                 <BarChart
                                     height={280}
                                     xAxis={[{ scaleType: 'band', data: dashboardData.typeBars.map((item) => item.label) }]}
-                                    series={[{ data: dashboardData.typeBars.map((item) => item.value), label: 'Eventos', color: '#17e2e8' }]}
+                                    series={[{ data: dashboardData.typeBars.map((item) => item.value), label: 'Eventos', color: '#0f4c81' }]}
                                     margin={{ left: 35, right: 10, top: 25, bottom: 80 }}
                                     sx={dashboardChartSx}
                                 />
@@ -611,20 +597,20 @@ const AcpEventos = ({ readOnly = false }) => {
                             </Box>
                         ) : (
                             <Stack alignItems="center" justifyContent="center" minHeight={220}>
-                                <Typography color="#c9d7e8">Sem dados para exibir.</Typography>
+                                <Typography sx={dashboardMutedTextSx}>Sem dados para exibir.</Typography>
                             </Stack>
                         )}
                     </Paper>
 
                     <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
                         <Typography variant="h6" fontWeight={800}>Eventos por origem</Typography>
-                        <Typography color="#7befff" variant="body2" sx={{ mb: 1 }}>Origem do acionamento dos eventos.</Typography>
+                        <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">Origem do acionamento dos eventos.</Typography>
                         {dashboardData.sourceBars.length ? (
                             <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 240px' }, alignItems: 'center' }}>
                                 <BarChart
                                     height={280}
                                     xAxis={[{ scaleType: 'band', data: dashboardData.sourceBars.map((item) => item.label) }]}
-                                    series={[{ data: dashboardData.sourceBars.map((item) => item.value), label: 'Eventos', color: '#17e2e8' }]}
+                                    series={[{ data: dashboardData.sourceBars.map((item) => item.value), label: 'Eventos', color: '#0f4c81' }]}
                                     margin={{ left: 35, right: 10, top: 25, bottom: 80 }}
                                     sx={dashboardChartSx}
                                 />
@@ -632,7 +618,7 @@ const AcpEventos = ({ readOnly = false }) => {
                             </Box>
                         ) : (
                             <Stack alignItems="center" justifyContent="center" minHeight={220}>
-                                <Typography color="#c9d7e8">Sem dados para exibir.</Typography>
+                                <Typography sx={dashboardMutedTextSx}>Sem dados para exibir.</Typography>
                             </Stack>
                         )}
                     </Paper>
@@ -640,7 +626,7 @@ const AcpEventos = ({ readOnly = false }) => {
 
                 <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
                     <Typography variant="h6" fontWeight={800}>Eventos criticos em aberto</Typography>
-                    <Typography color="#7befff" variant="body2" sx={{ mb: 1 }}>Eventos vencidos por SLA, ordenados pela maior duracao.</Typography>
+                    <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">Eventos vencidos por SLA, ordenados pela maior duracao.</Typography>
                     <Stack spacing={1}>
                         {dashboardData.criticalEvents.length ? dashboardData.criticalEvents.map((event) => (
                             <Box
@@ -657,11 +643,11 @@ const AcpEventos = ({ readOnly = false }) => {
                             >
                                 <Typography fontWeight={800}>{event.protocol}</Typography>
                                 <Typography sx={{ overflowWrap: 'anywhere' }}>{event.eventType} - {event.client || event.source || 'Nao informado'}</Typography>
-                                <Typography color="#c9d7e8">{formatHours(event.durationHours)} / SLA {formatHours(event.slaHours)}</Typography>
+                                <Typography sx={dashboardMutedTextSx}>{formatHours(event.durationHours)} / SLA {formatHours(event.slaHours)}</Typography>
                                 <Chip size="small" color="error" label={event.problemStatus} />
                             </Box>
                         )) : (
-                            <Typography color="#c9d7e8">Nenhum evento critico em aberto.</Typography>
+                            <Typography sx={dashboardMutedTextSx}>Nenhum evento critico em aberto.</Typography>
                         )}
                     </Stack>
                 </Paper>

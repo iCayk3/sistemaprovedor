@@ -3,6 +3,7 @@ package br.com.w4solution.controle_instalacao.controller;
 import br.com.w4solution.controle_instalacao.domain.usuarios.Usuario;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaAcompanhamentoDTO;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaCadastroDTO;
+import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaExclusaoDTO;
 import br.com.w4solution.controle_instalacao.services.cobranca.CobrancaService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -34,6 +35,12 @@ public class CobrancaController {
         return ResponseEntity.ok(service.listar());
     }
 
+    @GetMapping("/pagas")
+    @PreAuthorize(CHARGING_ACCESS)
+    public ResponseEntity<?> listarPagas() {
+        return ResponseEntity.ok(service.listarPagas());
+    }
+
     @PostMapping
     @PreAuthorize(CHARGING_ACCESS)
     public ResponseEntity<?> cadastrar(@RequestBody CobrancaCadastroDTO dto, @AuthenticationPrincipal Usuario usuario) {
@@ -58,6 +65,16 @@ public class CobrancaController {
             @AuthenticationPrincipal Usuario usuario
     ) {
         return ResponseEntity.ok(service.acompanhar(id, dto, nomeUsuario(usuario)));
+    }
+
+    @PatchMapping("/{id}/excluir")
+    @PreAuthorize(CHARGING_ACCESS)
+    public ResponseEntity<?> excluir(
+            @PathVariable Long id,
+            @RequestBody CobrancaExclusaoDTO dto,
+            @AuthenticationPrincipal Usuario usuario
+    ) {
+        return ResponseEntity.ok(service.excluir(id, dto, nomeUsuario(usuario)));
     }
 
     @GetMapping("/rbx/clientes/{codigo}")

@@ -27,6 +27,10 @@ public record CobrancaDTO(
         String atualizadoPor,
         String ultimoUsuario,
         Boolean editavel,
+        Boolean excluida,
+        LocalDateTime excluidoEm,
+        String excluidoPor,
+        String motivoExclusao,
         List<CobrancaHistoricoDTO> historico
 ) {
     private static final Map<String, String> GRUPOS_CLIENTE = Map.ofEntries(
@@ -72,6 +76,10 @@ public record CobrancaDTO(
                 cobranca.getAtualizadoPor(),
                 ultimoUsuario(cobranca, historico),
                 isEditavel(cobranca.getStatus()),
+                Boolean.TRUE.equals(cobranca.getExcluida()),
+                cobranca.getExcluidoEm(),
+                cobranca.getExcluidoPor(),
+                cobranca.getMotivoExclusao(),
                 historico
         );
     }

@@ -43,6 +43,7 @@ import DashboardClientes from '../Paginas/DashboardClientes';
 import AcpEventos from '../Paginas/AcpEventos';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import Cobrancas from '../Paginas/Cobrancas';
+import { dashboardHeaderInputSx, dashboardHeaderSx } from '../Utils/DashboardTheme';
 
 const theme = createTheme({
     colorSchemes: { light: true, dark: true },
@@ -136,6 +137,11 @@ const Menu = () => {
             segment: 'acompanhamento',
             title: 'Acompanhamento',
             icon: <RequestQuoteOutlinedIcon />,
+        },
+        {
+            segment: 'pagas',
+            title: 'Cobrancas pagas',
+            icon: <SavingsOutlinedIcon />,
         },
         {
             segment: 'bloqueados',
@@ -362,9 +368,9 @@ const Menu = () => {
 
         return (
             <Stack spacing={2}>
-                <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                <Paper variant="outlined" sx={dashboardHeaderSx}>
                     <Typography variant="h5" fontWeight={800}>Dashboard principal</Typography>
-                    <Typography color="text.secondary" sx={{ mb: 2 }}>
+                    <Typography color="#e8f8ff" sx={{ mb: 2 }}>
                         Selecione a visao que deseja acompanhar.
                     </Typography>
                     <TextField
@@ -373,7 +379,10 @@ const Menu = () => {
                         label="Dashboard"
                         value={active.value}
                         onChange={(event) => setSelected(event.target.value)}
-                        sx={{ minWidth: 280 }}
+                        sx={{
+                            minWidth: 280,
+                            ...dashboardHeaderInputSx,
+                        }}
                     >
                         {options.map((item) => (
                             <MenuItem key={item.value} value={item.value}>{item.label}</MenuItem>
@@ -427,6 +436,7 @@ const Menu = () => {
                         <Route path="/financeiro/cobranca/registrar" element={hasRole('charging') ? <Cobrancas mode="cadastro" /> : semPermissao} />
                         <Route path="/financeiro/cobranca/dashboard" element={hasRole('charging') ? <Cobrancas mode="dashboard" /> : semPermissao} />
                         <Route path="/financeiro/cobranca/acompanhamento" element={hasRole('charging') ? <Cobrancas mode="acompanhamento" /> : semPermissao} />
+                        <Route path="/financeiro/cobranca/pagas" element={hasRole('charging') ? <Cobrancas mode="pagas" /> : semPermissao} />
                         <Route path="/financeiro/cobranca/bloqueados" element={hasRole('charging') ? <Inadiplentes /> : semPermissao} />
                         <Route path="/financeiro/cobranca/suspenso" element={hasRole('charging') ? <Suspensos /> : semPermissao} />
                         <Route path="/financeiro/cobranca/configuracoes" element={hasRole('charging') ? <SettingsAtividades initialSegment="COBRANCA" allowedSegments={['COBRANCA']} /> : semPermissao} />

@@ -3,10 +3,11 @@ import { Button, CircularProgress } from '@mui/material';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useState } from 'react';
+import { dashboardHeaderButtonSx } from '../../Utils/DashboardTheme';
 
 const defaultLogoPath = '/imagens/logo.png';
 const brandName = 'SOL Provedor';
-const reportColor = '#15758a';
+const reportColor = '#0f4c81';
 
 const reportCss = `
     html, body {
@@ -366,6 +367,7 @@ const ExportDashboardPdfButton = ({
             startIcon={loading ? <CircularProgress size={16} /> : <PictureAsPdfRoundedIcon />}
             onClick={handleExport}
             disabled={disabled || loading}
+            sx={dashboardHeaderButtonSx}
         >
             {loading ? 'Gerando PDF' : label}
         </Button>

@@ -5,6 +5,7 @@ import FieldAutoComplet from '../../Componentes/FieldAutoComplet';
 import { useEffect, useState } from 'react';
 import Api from '../../Services/Api';
 import ExportDashboardPdfButton from '../../Componentes/ExportDashboardPdfButton';
+import { dashboardHeaderSx, dashboardInputSx, dashboardPanelSx, dashboardShellSx, dashboardSubtleTextSx } from '../../Utils/DashboardTheme';
 
 const DashboardPrincipal = () => {
     const [procedimento, setProcedimento] = useState(null);
@@ -61,12 +62,12 @@ const DashboardPrincipal = () => {
     }, [procedimentoService]);
 
     return (
-        <Box id="dashboard-registros-tecnicos-export" sx={{ display: 'grid', gap: 2 }}>
-            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+        <Box id="dashboard-registros-tecnicos-export" sx={{ display: 'grid', gap: 2, ...dashboardShellSx }}>
+            <Paper variant="outlined" sx={dashboardHeaderSx}>
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2} alignItems={{ xs: 'stretch', md: 'center' }}>
                     <Box>
                         <Typography variant="h5" fontWeight={800}>Registros tecnicos</Typography>
-                        <Typography color="text.secondary">
+                        <Typography color="#e8f8ff">
                             Evolucao mensal dos servicos e distribuicao por equipe tecnica.
                         </Typography>
                     </Box>
@@ -79,11 +80,11 @@ const DashboardPrincipal = () => {
             </Paper>
 
             <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: '1fr' }}>
-                <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, minWidth: 0 }}>
+                <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2.5, minWidth: 0 }}>
                     <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} gap={2} mb={2}>
                         <Box>
                             <Typography variant="h6" fontWeight={800}>Servicos por mes</Typography>
-                            <Typography color="text.secondary" variant="body2">Volume historico por procedimento.</Typography>
+                            <Typography sx={dashboardSubtleTextSx} variant="body2">Volume historico por procedimento.</Typography>
                         </Box>
                         <Box sx={{ width: { xs: '100%', md: 280 } }}>
                             <FieldAutoComplet
@@ -93,17 +94,18 @@ const DashboardPrincipal = () => {
                                 onInputValueChange={setInputProcedimento}
                                 valor={procedimento}
                                 inputValue={inputProcedimento}
+                                sx={dashboardInputSx}
                             />
                         </Box>
                     </Stack>
-                    <BasicLineChart xLabels={label} data={data} />
+                    <BasicLineChart xLabels={label} data={data} dark />
                 </Paper>
 
-                <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, minWidth: 0 }}>
+                <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2.5, minWidth: 0 }}>
                     <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} gap={2} mb={2}>
                         <Box>
                             <Typography variant="h6" fontWeight={800}>Servicos por equipe</Typography>
-                            <Typography color="text.secondary" variant="body2">Total mensal filtrado por procedimento.</Typography>
+                            <Typography sx={dashboardSubtleTextSx} variant="body2">Total mensal filtrado por procedimento.</Typography>
                         </Box>
                         <Box sx={{ width: { xs: '100%', md: 280 } }}>
                             <FieldAutoComplet
@@ -113,10 +115,11 @@ const DashboardPrincipal = () => {
                                 onInputValueChange={setInputProcedimentoService}
                                 valor={procedimentoService}
                                 inputValue={inputProcedimentoService}
+                                sx={dashboardInputSx}
                             />
                         </Box>
                     </Stack>
-                    <MixedBarChart xLabels={labelEquipe} uData={dataEquipe} />
+                    <MixedBarChart xLabels={labelEquipe} uData={dataEquipe} dark />
                 </Paper>
             </Box>
         </Box>

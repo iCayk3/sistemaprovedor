@@ -25,6 +25,14 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Api from '../../Services/Api';
 import ExportDashboardPdfButton from '../../Componentes/ExportDashboardPdfButton';
+import {
+    dashboardHeaderSx,
+    dashboardMetricSx,
+    dashboardMutedTextSx,
+    dashboardPanelSx,
+    dashboardShellSx,
+    dashboardSubtleTextSx,
+} from '../../Utils/DashboardTheme';
 
 const UseApi = Api();
 const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -72,13 +80,13 @@ const monthOptions = createMonthOptions();
 
 function KpiCard({ title, value, detail, icon, color }) {
     return (
-        <Paper variant="outlined" sx={{ p: 2, height: '100%', borderRadius: 2 }}>
+        <Paper variant="outlined" sx={{ ...dashboardMetricSx, height: '100%' }}>
             <Stack direction="row" alignItems="center" spacing={1.5}>
-                <Box sx={{ color, display: 'flex' }}>{icon}</Box>
+                <Box sx={{ color: color || '#0f4c81', display: 'flex', '.dark &': { color: color || '#17e2e8' } }}>{icon}</Box>
                 <Box>
-                    <Typography color="text.secondary" variant="body2">{title}</Typography>
+                    <Typography sx={dashboardSubtleTextSx} variant="body2" fontWeight={800}>{title}</Typography>
                     <Typography variant="h5" fontWeight={800}>{value}</Typography>
-                    <Typography color="text.secondary" variant="caption">{detail}</Typography>
+                    <Typography sx={dashboardMutedTextSx} variant="caption">{detail}</Typography>
                 </Box>
             </Stack>
         </Paper>
@@ -87,11 +95,11 @@ function KpiCard({ title, value, detail, icon, color }) {
 
 function Panel({ title, subtitle, action, children }) {
     return (
-        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, height: '100%' }}>
+        <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2, height: '100%' }}>
             <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2} mb={2}>
                 <Box>
                     <Typography variant="h6" fontWeight={800}>{title}</Typography>
-                    {subtitle && <Typography variant="body2" color="text.secondary">{subtitle}</Typography>}
+                    {subtitle && <Typography variant="body2" sx={dashboardSubtleTextSx}>{subtitle}</Typography>}
                 </Box>
                 {action}
             </Stack>
@@ -151,6 +159,7 @@ function FinancePanel({ financial, selectedMonth, onMonthChange, onRefresh }) {
                         size="small"
                         variant={selectedMonth === month.key ? 'contained' : 'outlined'}
                         onClick={() => onMonthChange(month)}
+                        sx={selectedMonth === month.key ? undefined : { color: '#0f4c81', borderColor: '#0f4c81', '.dark &': { color: '#7befff', borderColor: '#17e2e8' } }}
                     >
                         {month.label}
                     </Button>
@@ -158,7 +167,7 @@ function FinancePanel({ financial, selectedMonth, onMonthChange, onRefresh }) {
             </Stack>
             <Grid container spacing={1.5} mb={2}>
                 <Grid item xs={12} md={4}>
-                    <Chip icon={<CalendarMonthRoundedIcon />} label={`Faturado: ${money.format(billing.billed || 0)}`} sx={{ width: '100%', justifyContent: 'flex-start' }} />
+                    <Chip icon={<CalendarMonthRoundedIcon />} label={`Faturado: ${money.format(billing.billed || 0)}`} variant="outlined" sx={{ width: '100%', justifyContent: 'flex-start', color: '#0f2630', borderColor: '#0f4c81', '.dark &': { color: '#f8fbff', borderColor: '#17e2e8' } }} />
                 </Grid>
                 <Grid item xs={12} md={4}>
                     <Chip color="success" label={`Recebido: ${money.format(billing.received || 0)}`} sx={{ width: '100%', justifyContent: 'flex-start' }} />
@@ -198,7 +207,7 @@ function FinancePanel({ financial, selectedMonth, onMonthChange, onRefresh }) {
                         </Table>
                     </TableContainer>
                     <Divider sx={{ my: 2 }} />
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={dashboardMutedTextSx}>
                         Total baixado: <strong>{money.format(totals.received || 0)}</strong> · Documentos pagos: <strong>{(totals.paidDocuments || 0).toLocaleString('pt-BR')}</strong>
                     </Typography>
                 </>
@@ -230,9 +239,9 @@ function AttendancePanel({ attendance }) {
                             ['Abertos hoje', totals.createdToday || 0],
                             ['Fechados hoje', totals.closedToday || 0],
                         ].map(([label, value]) => (
-                            <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }} key={label}>
+                            <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 1.5, borderRadius: 1.5 }} key={label}>
                                 <Typography variant="h5" fontWeight={800}>{value}</Typography>
-                                <Typography variant="caption" color="text.secondary">{label}</Typography>
+                                <Typography variant="caption" sx={dashboardMutedTextSx}>{label}</Typography>
                             </Paper>
                         ))}
                     </Box>
@@ -326,12 +335,12 @@ const DashboardClientes = () => {
     const isLoading = useMemo(() => clients.loading || financial.loading || attendance.loading, [attendance.loading, clients.loading, financial.loading]);
 
     return (
-        <Box id="dashboard-clientes-export" sx={{ py: 2 }}>
-            <Paper variant="outlined" sx={{ p: 2.5, mb: 2, borderRadius: 2 }}>
+        <Box id="dashboard-clientes-export" sx={{ py: 2, ...dashboardShellSx }}>
+            <Paper variant="outlined" sx={dashboardHeaderSx}>
             <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2}>
                 <Box>
                     <Typography variant="h5" fontWeight={800}>Dashboard de clientes</Typography>
-                    <Typography color="text.secondary">Indicadores do RouterBox processados pelo backend Spring Boot.</Typography>
+                    <Typography color="#e8f8ff">Indicadores do RouterBox processados pelo backend Spring Boot.</Typography>
                 </Box>
                 <Stack direction={{ xs: 'column', sm: 'row' }} gap={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
                     <ExportDashboardPdfButton

@@ -2,13 +2,14 @@ import * as React from 'react';
 import { BarChart } from '@mui/x-charts/BarChart';
 import { Box, Typography } from '@mui/material';
 import ChartValueList from '../ChartValueList';
+import { dashboardChartSx, dashboardMutedTextSx } from '../../Utils/DashboardTheme';
 
-export default function MixedBarChart({ xLabels, uData }) {
+export default function MixedBarChart({ xLabels, uData, dark = false }) {
   const hasData = Array.isArray(uData) && uData.some((value) => Number(value) > 0);
   const summaryItems = (xLabels || []).map((label, index) => ({
     label,
     value: Number(uData?.[index] || 0),
-    color: '#4454f6',
+    color: dark ? '#0f4c81' : '#4454f6',
   }));
 
   return (
@@ -25,15 +26,16 @@ export default function MixedBarChart({ xLabels, uData }) {
           <Box sx={{ minWidth: 0 }}>
             <BarChart
               height={320}
-              series={[{ data: uData, stack: 'stack2', label: 'Total' }]}
+              series={[{ data: uData, stack: 'stack2', label: 'Total', color: dark ? '#0f4c81' : '#4454f6' }]}
               xAxis={[{ data: xLabels, scaleType: 'band' }]}
+              sx={dark ? dashboardChartSx : undefined}
             />
           </Box>
           <ChartValueList items={summaryItems} showPercent={false} />
         </Box>
       ) : (
         <Box sx={{ height: 320, display: 'grid', placeItems: 'center' }}>
-          <Typography color="text.secondary">Nenhum dado para exibir neste periodo.</Typography>
+          <Typography sx={dark ? dashboardMutedTextSx : undefined} color={dark ? undefined : 'text.secondary'}>Nenhum dado para exibir neste periodo.</Typography>
         </Box>
       )}
     </Box>

@@ -18,6 +18,16 @@ import TabelaResumo from '../../Componentes/TabelaResumo';
 import Api from '../../Services/Api';
 import ExportDashboardPdfButton from '../../Componentes/ExportDashboardPdfButton';
 import ChartValueList from '../../Componentes/ChartValueList';
+import {
+    dashboardHeaderSx,
+    dashboardHeaderInputSx,
+    dashboardInputSx,
+    dashboardMetricSx,
+    dashboardMutedTextSx,
+    dashboardPanelSx,
+    dashboardShellSx,
+    dashboardSubtleTextSx,
+} from '../../Utils/DashboardTheme';
 
 const today = new Date();
 const UseApi = Api();
@@ -34,19 +44,17 @@ const chartSetting = {
     margin: { top: 42, right: 24, bottom: 56, left: 54 },
 };
 
-const chartColors = ['#17e2e8', '#38bdf8', '#22c55e', '#f97316', '#a3e635', '#facc15', '#fb7185', '#a78bfa'];
-const reportPanelSx = {
-    bgcolor: '#121329',
-    color: '#f8fbff',
-    border: '1px solid #0b7fbd',
-    borderRadius: 1.5,
-    boxShadow: '0 0 0 1px rgba(23, 226, 232, 0.25), 0 0 14px rgba(0, 145, 220, 0.32)',
-};
+const chartColors = ['#0f4c81', '#2f80c0', '#2D9C75', '#f97316', '#8a9f20', '#c89b08', '#d85b72', '#8064c8'];
+const reportPanelSx = dashboardPanelSx;
 const reportChartSx = {
-    '& .MuiChartsAxis-line, & .MuiChartsAxis-tick': { stroke: '#dce8f5 !important' },
-    '& .MuiChartsAxis-tickLabel, & .MuiChartsAxis-label': { fill: '#f8fbff !important' },
-    '& .MuiChartsLegend-label': { fill: '#f8fbff !important' },
-    '& .MuiChartsGrid-line': { stroke: 'rgba(255,255,255,0.12)' },
+    '& .MuiChartsAxis-line, & .MuiChartsAxis-tick': { stroke: '#31545f !important' },
+    '& .MuiChartsAxis-tickLabel, & .MuiChartsAxis-label': { fill: '#0f2630 !important' },
+    '& .MuiChartsLegend-label': { fill: '#0f2630 !important' },
+    '& .MuiChartsGrid-line': { stroke: 'rgba(15,38,48,0.12)' },
+    '.dark & .MuiChartsAxis-line, .dark & .MuiChartsAxis-tick': { stroke: '#dce8f5 !important' },
+    '.dark & .MuiChartsAxis-tickLabel, .dark & .MuiChartsAxis-label': { fill: '#f8fbff !important' },
+    '.dark & .MuiChartsLegend-label': { fill: '#f8fbff !important' },
+    '.dark & .MuiChartsGrid-line': { stroke: 'rgba(255,255,255,0.12)' },
 };
 
 function formatMoney(value) {
@@ -104,9 +112,9 @@ const ChartCard = ({ title, subtitle, children, dark = false, sx, className }) =
             ...sx,
         }}
     >
-        <Typography variant="h6" fontWeight={800} sx={{ color: dark ? '#f8fbff' : 'inherit' }}>{title}</Typography>
+            <Typography variant="h6" fontWeight={800}>{title}</Typography>
         {subtitle && (
-            <Typography color={dark ? '#7befff' : 'text.secondary'} variant="body2" mb={2}>
+            <Typography sx={dark ? dashboardSubtleTextSx : undefined} color={dark ? undefined : 'text.secondary'} variant="body2" mb={2}>
                 {subtitle}
             </Typography>
         )}
@@ -334,40 +342,30 @@ const DashBoardsComercial = ({
         color: chartColors[index % chartColors.length],
     }));
     const isLeadDashboard = segmento === 'LEAD';
+    const isExecutiveDashboard = true;
 
     return (
         <Box
             id="dashboard-comercial-export"
             sx={{
                 display: 'grid',
-                gap: isLeadDashboard ? 1.5 : 2,
-                ...(isLeadDashboard ? {
-                    bgcolor: '#070b18',
-                    p: { xs: 1, md: 1.5 },
-                    borderRadius: 1,
-                    border: '1px solid rgba(23, 226, 232, 0.22)',
-                } : {}),
+                gap: 1.5,
+                ...(isExecutiveDashboard ? dashboardShellSx : {}),
             }}
         >
             <Paper
                 className={isLeadDashboard ? 'commercial-dashboard-title' : undefined}
                 variant="outlined"
                 sx={{
-                    p: isLeadDashboard ? 1.5 : 2.5,
-                    borderRadius: isLeadDashboard ? 1 : 2,
-                    ...(isLeadDashboard ? {
-                        bgcolor: '#1677bd',
-                        color: '#fff',
-                        border: '1px solid #17e2e8',
-                        borderBottom: '3px solid #f97316',
-                        textAlign: 'center',
-                    } : {}),
+                    p: 1.5,
+                    borderRadius: 1,
+                    ...(isExecutiveDashboard ? { ...dashboardHeaderSx, textAlign: 'center' } : {}),
                 }}
             >
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2} alignItems={{ xs: 'stretch', md: 'center' }}>
                     <Box>
                         <Typography variant={isLeadDashboard ? 'h4' : 'h5'} fontWeight={800}>Dashboard comercial</Typography>
-                        <Typography color={isLeadDashboard ? '#e8f8ff' : 'text.secondary'}>
+                        <Typography color="#e8f8ff">
                             {isLeadDashboard ? 'Acompanhamento executivo de vendas convertidas' : `${segmentOptions[segmento]} por usuario com visao diaria ou mensal.`}
                         </Typography>
                     </Box>
@@ -391,34 +389,7 @@ const DashBoardsComercial = ({
                                     value={dataMensal.slice(0, 7)}
                                     onChange={(event) => setDataMensal(`${event.target.value}-01`)}
                                     InputLabelProps={{ shrink: true }}
-                                    sx={{
-                                        '& .MuiOutlinedInput-root': {
-                                            bgcolor: '#111a2e',
-                                            color: '#f8fbff',
-                                            borderRadius: 1,
-                                            '& fieldset': {
-                                                borderColor: '#17e2e8',
-                                            },
-                                            '&:hover fieldset': {
-                                                borderColor: '#7befff',
-                                            },
-                                            '&.Mui-focused fieldset': {
-                                                borderColor: '#7befff',
-                                            },
-                                        },
-                                        '& .MuiInputBase-input': {
-                                            color: '#f8fbff',
-                                            fontWeight: 800,
-                                            colorScheme: 'dark',
-                                        },
-                                        '& .MuiInputLabel-root': {
-                                            color: '#b8f7ff',
-                                            fontWeight: 700,
-                                        },
-                                        '& .MuiInputLabel-root.Mui-focused': {
-                                            color: '#7befff',
-                                        },
-                                    }}
+                                    sx={dashboardHeaderInputSx}
                                 />
                             </Box>
                         )}
@@ -429,7 +400,7 @@ const DashBoardsComercial = ({
                                 label="Dashboard"
                                 value={segmento}
                                 onChange={(event) => setSegmento(event.target.value)}
-                                sx={{ minWidth: { xs: '100%', md: 260 } }}
+                                sx={{ minWidth: { xs: '100%', md: 260 }, ...dashboardHeaderInputSx }}
                             >
                                 {visibleSegments.map((key) => (
                                     <MenuItem key={key} value={key}>{segmentOptions[key]}</MenuItem>
@@ -457,15 +428,14 @@ const DashBoardsComercial = ({
                             key={label}
                             variant="outlined"
                             sx={{
-                                ...reportPanelSx,
+                                ...dashboardMetricSx,
                                 p: 1.5,
                                 minHeight: 96,
-                                borderLeft: '5px solid #17e2e8',
                             }}
                         >
-                            <Typography color="#7befff" variant="body2" fontWeight={700}>{label}</Typography>
+                            <Typography sx={dashboardSubtleTextSx} variant="body2" fontWeight={700}>{label}</Typography>
                             <Typography variant="h5" fontWeight={900}>{value}</Typography>
-                            <Typography color="#c9d7e8" variant="caption">{detail}</Typography>
+                            <Typography sx={dashboardMutedTextSx} variant="caption">{detail}</Typography>
                         </Paper>
                     ))}
                 </Box>
@@ -485,7 +455,7 @@ const DashBoardsComercial = ({
                                     <LineChart
                                         dataset={monthlySales}
                                         xAxis={[{ dataKey: 'mes', scaleType: 'point' }]}
-                                        series={[{ dataKey: 'vendas', label: 'Vendas', area: true, color: '#17e2e8' }]}
+                                        series={[{ dataKey: 'vendas', label: 'Vendas', area: true, color: '#0f4c81' }]}
                                         height={340}
                                         margin={{ top: 35, right: 24, bottom: 56, left: 54 }}
                                         sx={reportChartSx}
@@ -548,7 +518,7 @@ const DashBoardsComercial = ({
                                     <BarChart
                                         dataset={leadCountDataset}
                                         xAxis={[{ dataKey: 'usuario', scaleType: 'band' }]}
-                                        series={[{ dataKey: 'vendas', label: 'Vendas', color: '#17e2e8' }]}
+                                        series={[{ dataKey: 'vendas', label: 'Vendas', color: '#0f4c81' }]}
                                         height={320}
                                         margin={{ top: 35, right: 20, bottom: 70, left: 54 }}
                                         sx={reportChartSx}
@@ -578,7 +548,7 @@ const DashBoardsComercial = ({
                                         series={[{
                                             dataKey: 'valor',
                                             label: 'Valor',
-                                            color: '#17e2e8',
+                                            color: '#0f4c81',
                                             valueFormatter: formatMoney,
                                         }]}
                                         layout="horizontal"
@@ -608,7 +578,7 @@ const DashBoardsComercial = ({
                                     <BarChart
                                         dataset={commercialReport.planos}
                                         xAxis={[{ dataKey: 'label', scaleType: 'band' }]}
-                                        series={[{ dataKey: 'quantidade', label: 'Vendas', color: '#17e2e8' }]}
+                                        series={[{ dataKey: 'quantidade', label: 'Vendas', color: '#0f4c81' }]}
                                         height={320}
                                         margin={{ top: 35, right: 24, bottom: 70, left: 54 }}
                                         sx={reportChartSx}
@@ -691,11 +661,11 @@ const DashBoardsComercial = ({
             )}
 
             {segmento !== 'LEAD' && <Box sx={{ display: 'grid', gap: 2 }}>
-                <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, minWidth: 0 }}>
+                <Paper variant="outlined" sx={{ ...reportPanelSx, p: 2.5, minWidth: 0 }}>
                     <Stack direction={{ xs: 'column', lg: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', lg: 'center' }} gap={2} mb={2}>
                         <Box>
                             <Typography variant="h6" fontWeight={800}>{chartTitle}</Typography>
-                            <Typography color="text.secondary" variant="body2">{chartSubtitle}</Typography>
+                            <Typography sx={dashboardSubtleTextSx} variant="body2">{chartSubtitle}</Typography>
                         </Box>
                         <Stack direction={{ xs: 'column', sm: 'row' }} gap={1.5} alignItems={{ xs: 'stretch', sm: 'center' }}>
                             <ToggleButtonGroup
@@ -736,29 +706,30 @@ const DashBoardsComercial = ({
                             }}
                         >
                             <Box sx={{ minWidth: 0 }}>
-                                <BarChart
-                                    dataset={datasetConvertido}
-                                    xAxis={[{ dataKey: 'usuario', scaleType: 'band' }]}
-                                    series={series}
-                                    {...chartSetting}
-                                />
+                                    <BarChart
+                                        dataset={datasetConvertido}
+                                        xAxis={[{ dataKey: 'usuario', scaleType: 'band' }]}
+                                        series={series}
+                                        {...chartSetting}
+                                        sx={reportChartSx}
+                                    />
                             </Box>
                             <ChartValueList items={chartSummaryItems} showPercent={false} />
                         </Box>
                     ) : (
                         <Box sx={{ height: 340, display: 'grid', placeItems: 'center', textAlign: 'center' }}>
-                            <Typography color="text.secondary">
+                            <Typography sx={dashboardMutedTextSx}>
                                 Nenhum registro encontrado para o periodo selecionado.
                             </Typography>
                         </Box>
                     )}
                 </Paper>
 
-                <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+                <Paper variant="outlined" sx={{ ...reportPanelSx, p: 2.5 }}>
                     <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} gap={2} mb={2}>
                         <Box>
                             <Typography variant="h6" fontWeight={800}>Resumo mensal</Typography>
-                            <Typography color="text.secondary" variant="body2">
+                            <Typography sx={dashboardSubtleTextSx} variant="body2">
                                 Total do mes: <strong>{totalMensal.toLocaleString('pt-BR')}</strong>
                             </Typography>
                         </Box>
@@ -772,7 +743,7 @@ const DashBoardsComercial = ({
                             />
                         </Box>
                     </Stack>
-                    <TabelaResumo rows={resumoMensal} />
+                    <TabelaResumo rows={resumoMensal} dark />
                 </Paper>
             </Box>}
         </Box>

@@ -6,6 +6,7 @@ import Api from "../../Services/Api";
 import dayjs from "dayjs";
 import { Box, Paper, Stack, Typography } from "@mui/material";
 import ExportDashboardPdfButton from "../../Componentes/ExportDashboardPdfButton";
+import { dashboardHeaderSx, dashboardInputSx, dashboardPanelSx, dashboardShellSx } from "../../Utils/DashboardTheme";
 
 const today = new Date();
 const UseApi = Api();
@@ -31,12 +32,12 @@ const Financeiro = () => {
     }, [dataConsulta]);
 
     return (
-        <Box id="dashboard-financeiro-export" sx={{ display: 'grid', gap: 2 }}>
-            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+        <Box id="dashboard-financeiro-export" sx={{ display: 'grid', gap: 2, ...dashboardShellSx }}>
+            <Paper variant="outlined" sx={dashboardHeaderSx}>
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} gap={2}>
                     <Box>
                         <Typography variant="h5" fontWeight={800}>Financeiro</Typography>
-                        <Typography color="text.secondary">Boletos baixados e boletos em aberto por cidade.</Typography>
+                        <Typography color="#e8f8ff">Boletos baixados e boletos em aberto por cidade.</Typography>
                     </Box>
                     <Stack direction={{ xs: 'column', sm: 'row' }} gap={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
                         <ExportDashboardPdfButton
@@ -49,6 +50,7 @@ const Financeiro = () => {
                                 valor={dayjs(dataConsulta)}
                                 aoAlterado={(value) => setDataConsulta(value.toISOString().slice(0, 10))}
                                 label="Data"
+                                textFieldSx={dashboardInputSx}
                             />
                         </Box>
                     </Stack>
@@ -56,14 +58,14 @@ const Financeiro = () => {
             </Paper>
 
             <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', xl: '1fr 1fr' } }}>
-                <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, minWidth: 0 }}>
-                    <BasicCard data={dataConsulta} valor={(boletosBaixados.valor || 0) / 2} titulo="Total em valor de boletos liquidados dia" />
+                <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2.5, minWidth: 0 }}>
+                    <BasicCard dark data={dataConsulta} valor={(boletosBaixados.valor || 0) / 2} titulo="Total em valor de boletos liquidados dia" />
                     <Box sx={{ mt: 2 }}>
                         <DashPizza uri={`rbx/boletosbaixadoscidade?data=${dataConsulta}`} metodo="POST" financeiro />
                     </Box>
                 </Paper>
-                <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, minWidth: 0 }}>
-                    <BasicCard valor={boletosAbertos.Valor || 0} titulo="Total de boletos abertos" boletoAberto />
+                <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2.5, minWidth: 0 }}>
+                    <BasicCard dark valor={boletosAbertos.Valor || 0} titulo="Total de boletos abertos" boletoAberto />
                     <Box sx={{ mt: 2 }}>
                         <DashPizza uri="rbx/boletosabertos/cidade" metodo="POST" financeiro />
                     </Box>

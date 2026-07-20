@@ -46,4 +46,10 @@ public class Cobranca {
     private LocalDateTime fechadoEm;
     private String criadoPor;
     private String atualizadoPor;
+    private Boolean excluida = false;
+    private LocalDateTime excluidoEm;
+    private String excluidoPor;
+
+    @Column(length = 2000)
+    private String motivoExclusao;
 }

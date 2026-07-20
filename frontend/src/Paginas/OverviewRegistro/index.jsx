@@ -6,6 +6,7 @@ import DashPizza from "../../Componentes/DashPizza";
 import TabelaExibicao from "../../Componentes/TabelaExibicao";
 import Filtros from "../../Componentes/Filtros";
 import ExportDashboardPdfButton from "../../Componentes/ExportDashboardPdfButton";
+import { dashboardHeaderSx, dashboardPanelSx, dashboardShellSx } from "../../Utils/DashboardTheme";
 
 const today = new Date();
 
@@ -75,12 +76,12 @@ const OverviewRegistro = () => {
     }, [dataConsulta]);
 
     return (
-        <Box id="overview-registros-export" sx={{ display: 'grid', gap: 2 }}>
-            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+        <Box id="overview-registros-export" sx={{ display: 'grid', gap: 2, ...dashboardShellSx }}>
+            <Paper variant="outlined" sx={dashboardHeaderSx}>
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2} alignItems={{ xs: 'stretch', md: 'center' }}>
                     <Box>
                         <Typography variant="h5" fontWeight={800}>Overview de registros</Typography>
-                        <Typography color="text.secondary">Consulta operacional com filtros, resumo mensal e distribuicao por tecnico.</Typography>
+                        <Typography color="#e8f8ff">Consulta operacional com filtros, resumo mensal e distribuicao por tecnico.</Typography>
                     </Box>
                     <ExportDashboardPdfButton
                         targetId="overview-registros-export"
@@ -90,7 +91,7 @@ const OverviewRegistro = () => {
                 </Stack>
             </Paper>
 
-            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, minWidth: 0 }}>
+            <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2.5, minWidth: 0 }}>
                 <Filtros
                     aoAlteradoTecnico={setTecnico}
                     aoAlteradoTecnicoLabel={setTecnicoLabel}
@@ -102,9 +103,9 @@ const OverviewRegistro = () => {
                 </Box>
             </Paper>
 
-            <ResumoMensal dataApiCto={data} aoSelectData={(e) => selectData(e)} />
+            <ResumoMensal dataApiCto={data} aoSelectData={(e) => selectData(e)} dark />
 
-            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+            <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2.5 }}>
                 <Typography variant="h6" fontWeight={800} mb={2}>Distribuicao por equipe</Typography>
                 <DashPizza uri={`registros/servicos/tecnicos/mensal/resumo?filtro=${dataConsulta}`} />
             </Paper>
