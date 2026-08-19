@@ -1152,7 +1152,11 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 </Box>
             )}
 
-            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+            <Paper
+                className={isDashboard ? 'pdf-export-ignore' : undefined}
+                variant="outlined"
+                sx={{ p: 2, borderRadius: 2 }}
+            >
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2} mb={2}>
                     <Box>
                         <Typography variant="h6" fontWeight={800}>
