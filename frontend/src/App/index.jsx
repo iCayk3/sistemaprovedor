@@ -27,7 +27,7 @@ import EquipesTecnicas from '../Paginas/EquipesTecnicas';
 import SettingsRegistros from '../Paginas/SettingsRegistros';
 import Groups2Icon from '@mui/icons-material/Groups2';
 import PropTypes from 'prop-types';
-import { Box, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Badge, Box, MenuItem, Paper, Snackbar, Stack, TextField, Typography } from '@mui/material';
 import AtividadesComercial from '../Paginas/AtividadesComercial';
 import DashBoardsComercial from '../Paginas/DashBoardsComercial';
 import AccountMenu from '../Componentes/AccountMenu';
@@ -44,6 +44,12 @@ import AcpEventos from '../Paginas/AcpEventos';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import Cobrancas from '../Paginas/Cobrancas';
 import { dashboardHeaderInputSx, dashboardHeaderSx } from '../Utils/DashboardTheme';
+import AssistenteIa from '../Componentes/AssistenteIa';
+import ChatInterno from '../Paginas/ChatInterno';
+import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined';
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
+import WhatsAppChat from '../Paginas/WhatsAppChat';
+import ConfiguracaoWhatsApp from '../Paginas/ConfiguracaoWhatsApp';
 
 const theme = createTheme({
     colorSchemes: { light: true, dark: true },
@@ -102,6 +108,11 @@ const roleGroups = {
 
 const Menu = () => {
     const [user, setUser] = React.useState({});
+    const [chatNaoLidas, setChatNaoLidas] = React.useState(0);
+    const [avisoChat, setAvisoChat] = React.useState(false);
+    const [cobrancasSemAtualizacao, setCobrancasSemAtualizacao] = React.useState(0);
+    const [avisoCobrancas, setAvisoCobrancas] = React.useState(false);
+    const naoLidasAnteriores = React.useRef(0);
     const semPermissao = <div>Sem permissao</div>;
 
     const hasRole = React.useCallback(
@@ -109,6 +120,7 @@ const Menu = () => {
         [user.role],
     );
     const isChargingOnly = user.role === 'COBRANCA';
+    const temAcessoIaChat = Boolean(user.recursosIaChatHabilitados);
 
     React.useEffect(() => {
         const fetchData = async () => {
@@ -121,6 +133,58 @@ const Menu = () => {
         };
         fetchData();
     }, []);
+
+    const atualizarNotificacoesChat = React.useCallback(async (totalInformado) => {
+        try {
+            const total = typeof totalInformado === 'number'
+                ? totalInformado
+                : (await Promise.all([
+                    UseApi('chat/notificacoes'),
+                    UseApi('integracoes/whatsapp/notificacoes'),
+                ])).reduce((soma, item) => soma + (item.totalNaoLidas || 0), 0);
+            if (total > naoLidasAnteriores.current) setAvisoChat(true);
+            naoLidasAnteriores.current = total;
+            setChatNaoLidas(total);
+        } catch {
+            // A notificacao nao deve interromper o restante do sistema.
+        }
+    }, []);
+
+    React.useEffect(() => {
+        if (!temAcessoIaChat) {
+            setChatNaoLidas(0);
+            naoLidasAnteriores.current = 0;
+            return undefined;
+        }
+        atualizarNotificacoesChat();
+        const intervalo = setInterval(atualizarNotificacoesChat, 10000);
+        return () => clearInterval(intervalo);
+    }, [atualizarNotificacoesChat, temAcessoIaChat]);
+
+    React.useEffect(() => {
+        if (!hasRole('charging')) {
+            setCobrancasSemAtualizacao(0);
+            return undefined;
+        }
+        const atualizarLembretes = async () => {
+            try {
+                const response = await UseApi('cobrancas/lembretes');
+                const quantidade = Number(response?.quantidade || 0);
+                setCobrancasSemAtualizacao(quantidade);
+                const hoje = new Date().toISOString().slice(0, 10);
+                const chave = `lembrete-cobrancas-${user.usuario || 'usuario'}`;
+                if (quantidade > 0 && localStorage.getItem(chave) !== hoje) {
+                    setAvisoCobrancas(true);
+                    localStorage.setItem(chave, hoje);
+                }
+            } catch {
+                // O lembrete nao deve interromper o restante do sistema.
+            }
+        };
+        atualizarLembretes();
+        const intervalo = setInterval(atualizarLembretes, 60000);
+        return () => clearInterval(intervalo);
+    }, [hasRole, user.usuario]);
 
     const cobrancaChildren = [
         {
@@ -135,8 +199,14 @@ const Menu = () => {
         },
         {
             segment: 'acompanhamento',
-            title: 'Acompanhamento',
-            icon: <RequestQuoteOutlinedIcon />,
+            title: cobrancasSemAtualizacao > 0
+                ? `Acompanhamento (${cobrancasSemAtualizacao})`
+                : 'Acompanhamento',
+            icon: (
+                <Badge color="error" badgeContent={cobrancasSemAtualizacao} max={99}>
+                    <RequestQuoteOutlinedIcon />
+                </Badge>
+            ),
         },
         {
             segment: 'pagas',
@@ -176,6 +246,20 @@ const Menu = () => {
             segment: 'dashboard',
             title: 'Dashboard principal',
             icon: <DashboardIcon />,
+        } : null,
+        temAcessoIaChat ? {
+            segment: 'chat',
+            title: chatNaoLidas > 0 ? `Chat interno (${chatNaoLidas})` : 'Chat interno',
+            icon: (
+                <Badge color="error" badgeContent={chatNaoLidas} max={99}>
+                    <ChatOutlinedIcon />
+                </Badge>
+            ),
+        } : null,
+        temAcessoIaChat ? {
+            segment: 'whatsapp',
+            title: 'WhatsApp',
+            icon: <WhatsAppIcon />,
         } : null,
         hasRole('financial')
             ? {
@@ -349,6 +433,11 @@ const Menu = () => {
                         title: 'Redefinicoes pendentes',
                         icon: <DescriptionIcon />,
                     },
+                    {
+                        segment: 'whatsapp',
+                        title: 'Configurar WhatsApp',
+                        icon: <WhatsAppIcon />,
+                    },
                 ],
             } : null,
     ].filter(Boolean);
@@ -413,6 +502,14 @@ const Menu = () => {
                     <Routes>
                         <Route path="/" element={<Navigate to={isChargingOnly ? "/financeiro/cobranca/dashboard" : "/dashboard"} replace />} />
                         <Route path="dashboard" element={<DashboardView />} />
+                        <Route path="chat" element={temAcessoIaChat
+                            ? <ChatInterno onUnreadChange={atualizarNotificacoesChat} />
+                            : semPermissao}
+                        />
+                        <Route path="whatsapp" element={temAcessoIaChat
+                            ? <WhatsAppChat onUnreadChange={atualizarNotificacoesChat} />
+                            : semPermissao}
+                        />
                         <Route path="dashboard-clientes" element={hasRole('financial') ? <DashboardClientes /> : semPermissao} />
                         <Route path="registro/registrar" element={hasRole('technical') ? <Inicio /> : semPermissao} />
                         <Route path="registro/dashboard-registro" element={hasRole('technical') ? <OverviewRegistro /> : semPermissao} />
@@ -439,14 +536,35 @@ const Menu = () => {
                         <Route path="/financeiro/cobranca/pagas" element={hasRole('charging') ? <Cobrancas mode="pagas" /> : semPermissao} />
                         <Route path="/financeiro/cobranca/bloqueados" element={hasRole('charging') ? <Inadiplentes /> : semPermissao} />
                         <Route path="/financeiro/cobranca/suspenso" element={hasRole('charging') ? <Suspensos /> : semPermissao} />
-                        <Route path="/financeiro/cobranca/configuracoes" element={hasRole('charging') ? <SettingsAtividades initialSegment="COBRANCA" allowedSegments={['COBRANCA']} /> : semPermissao} />
+                        <Route path="/financeiro/cobranca/configuracoes" element={hasRole('charging') ? <SettingsAtividades initialSegment="COBRANCA_ACAO" allowedSegments={['COBRANCA_ACAO', 'COBRANCA_STATUS']} /> : semPermissao} />
                         <Route path="/settinguser/ativar" element={hasRole('admin') ? <UsuariosNAtivos /> : semPermissao} />
                         <Route path="/settinguser/management" element={hasRole('admin') ? <ManagementUser /> : semPermissao} />
                         <Route path="/settinguser/pendentpass" element={hasRole('admin') ? <PendentPass /> : semPermissao} />
+                        <Route path="/settinguser/whatsapp" element={hasRole('admin') ? <ConfiguracaoWhatsApp /> : semPermissao} />
                         <Route path="*" element={<div>Pagina nao encontrada</div>} />
                     </Routes>
                 </PageContainer>
             </DashboardLayout>
+            {temAcessoIaChat && <AssistenteIa />}
+            <Snackbar
+                open={avisoChat}
+                autoHideDuration={5000}
+                onClose={() => setAvisoChat(false)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            >
+                <Alert severity="info" variant="filled" onClose={() => setAvisoChat(false)}>
+                    Você recebeu uma nova mensagem no chat ou WhatsApp.
+                </Alert>
+            </Snackbar>
+            <Snackbar
+                open={avisoCobrancas}
+                onClose={() => setAvisoCobrancas(false)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+            >
+                <Alert severity="warning" variant="filled" onClose={() => setAvisoCobrancas(false)}>
+                    {cobrancasSemAtualizacao} cobrança(s) aberta(s) estão há 7 dias ou mais sem atualização.
+                </Alert>
+            </Snackbar>
         </ReactRouterAppProvider>
     );
 }

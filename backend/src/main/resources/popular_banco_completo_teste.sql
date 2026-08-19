@@ -308,6 +308,7 @@ INSERT INTO cobrancas (
     codigo_cliente,
     cliente,
     data,
+    data_vencimento,
     data_promessa,
     valor,
     status,
@@ -318,18 +319,19 @@ INSERT INTO cobrancas (
 )
 SELECT *
 FROM (VALUES
-    ('COB-2026-9001', 'Contato', 1001, 'Maria Silva', CURRENT_DATE, NULL, 189.90, 'Aberto', 'Cliente solicitou retorno no fim do dia.', NOW() - INTERVAL '4 hours', NULL, NULL),
-    ('COB-2026-9002', 'Promessa de pagamento', 1002, 'Helena Martins', CURRENT_DATE, CURRENT_DATE, 229.80, 'Promessa de pagamento', 'Promessa para pagamento hoje via PIX.', NOW() - INTERVAL '6 hours', NOW() - INTERVAL '1 hour', NULL),
-    ('COB-2026-9003', 'Segunda via enviada', 1003, 'Paulo Mendes', CURRENT_DATE - INTERVAL '1 day', NULL, 99.90, 'Em negociacao', 'Segunda via enviada por WhatsApp.', NOW() - INTERVAL '1 day', NOW() - INTERVAL '3 hours', NULL),
-    ('COB-2026-9004', 'Acordo', 1004, 'Comercio Forte', CURRENT_DATE - INTERVAL '2 days', NULL, 459.70, 'Fechado', 'Acordo fechado e registrado no RBX.', NOW() - INTERVAL '2 days', NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day'),
-    ('COB-2026-9005', 'Pago', 1005, 'Julia Ferreira', CURRENT_DATE - INTERVAL '3 days', NULL, 129.90, 'Pago', 'Pagamento confirmado.', NOW() - INTERVAL '3 days', NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days'),
-    ('COB-2026-9006', 'Sem retorno', 1006, 'Cliente Teste', CURRENT_DATE - INTERVAL '4 days', CURRENT_DATE - INTERVAL '1 day', 179.90, 'Promessa de pagamento', 'Promessa vencida para testar alerta.', NOW() - INTERVAL '4 days', NOW() - INTERVAL '2 days', NULL)
+    ('COB-2026-9001', 'Contato', 1001, 'Maria Silva', CURRENT_DATE, CURRENT_DATE + INTERVAL '10 days', NULL, 189.90, 'Aberto', 'Cliente solicitou retorno no fim do dia.', NOW() - INTERVAL '4 hours', NULL, NULL),
+    ('COB-2026-9002', 'Promessa de pagamento', 1002, 'Helena Martins', CURRENT_DATE, CURRENT_DATE + INTERVAL '5 days', CURRENT_DATE, 229.80, 'Promessa de pagamento', 'Promessa para pagamento hoje via PIX.', NOW() - INTERVAL '6 hours', NOW() - INTERVAL '1 hour', NULL),
+    ('COB-2026-9003', 'Segunda via enviada', 1003, 'Paulo Mendes', CURRENT_DATE - INTERVAL '1 day', CURRENT_DATE + INTERVAL '4 days', NULL, 99.90, 'Em negociacao', 'Segunda via enviada por WhatsApp.', NOW() - INTERVAL '1 day', NOW() - INTERVAL '3 hours', NULL),
+    ('COB-2026-9004', 'Acordo', 1004, 'Comercio Forte', CURRENT_DATE - INTERVAL '2 days', CURRENT_DATE + INTERVAL '3 days', NULL, 459.70, 'Fechado', 'Acordo fechado e registrado no RBX.', NOW() - INTERVAL '2 days', NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day'),
+    ('COB-2026-9005', 'Pago', 1005, 'Julia Ferreira', CURRENT_DATE - INTERVAL '3 days', CURRENT_DATE + INTERVAL '2 days', NULL, 129.90, 'Pago', 'Pagamento confirmado.', NOW() - INTERVAL '3 days', NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days'),
+    ('COB-2026-9006', 'Sem retorno', 1006, 'Cliente Teste', CURRENT_DATE - INTERVAL '4 days', CURRENT_DATE + INTERVAL '1 day', CURRENT_DATE - INTERVAL '1 day', 179.90, 'Promessa de pagamento', 'Promessa vencida para testar alerta.', NOW() - INTERVAL '4 days', NOW() - INTERVAL '2 days', NULL)
 ) AS seed(
     protocolo,
     acao,
     codigo_cliente,
     cliente,
     data,
+    data_vencimento,
     data_promessa,
     valor,
     status,

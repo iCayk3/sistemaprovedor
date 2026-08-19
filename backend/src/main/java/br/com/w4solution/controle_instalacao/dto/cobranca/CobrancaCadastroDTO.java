@@ -9,8 +9,10 @@ public record CobrancaCadastroDTO(
         String cliente,
         String grupoCliente,
         LocalDate data,
+        LocalDate dataVencimento,
         LocalDate dataPromessa,
         BigDecimal valor,
+        BigDecimal valorPago,
         String status,
         String observacao
 ) {

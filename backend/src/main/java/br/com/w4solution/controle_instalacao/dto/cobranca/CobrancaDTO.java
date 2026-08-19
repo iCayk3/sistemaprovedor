@@ -16,9 +16,12 @@ public record CobrancaDTO(
         String cliente,
         String grupoCliente,
         LocalDate data,
+        LocalDate dataVencimento,
         LocalDate dataPromessa,
         BigDecimal valor,
+        BigDecimal valorPago,
         String status,
+        String situacaoAtendimento,
         String observacao,
         LocalDateTime criadoEm,
         LocalDateTime atualizadoEm,
@@ -65,9 +68,14 @@ public record CobrancaDTO(
                 cobranca.getCliente(),
                 grupoCliente(cobranca.getGrupoCliente()),
                 cobranca.getData(),
+                cobranca.getDataVencimento(),
                 cobranca.getDataPromessa(),
                 cobranca.getValor(),
-                cobranca.getStatus(),
+                cobranca.getValorPago(),
+                statusExibicao(cobranca.getStatus()),
+                cobranca.getSituacaoAtendimento() == null
+                        ? situacaoAtendimento(cobranca.getStatus())
+                        : cobranca.getSituacaoAtendimento(),
                 cobranca.getObservacao(),
                 cobranca.getCriadoEm(),
                 cobranca.getAtualizadoEm(),
@@ -75,7 +83,7 @@ public record CobrancaDTO(
                 cobranca.getCriadoPor(),
                 cobranca.getAtualizadoPor(),
                 ultimoUsuario(cobranca, historico),
-                isEditavel(cobranca.getStatus()),
+                isEditavel(cobranca),
                 Boolean.TRUE.equals(cobranca.getExcluida()),
                 cobranca.getExcluidoEm(),
                 cobranca.getExcluidoPor(),
@@ -101,11 +109,34 @@ public record CobrancaDTO(
         return GRUPOS_CLIENTE.getOrDefault(grupo.trim(), grupo);
     }
 
-    private static boolean isEditavel(String status) {
+    private static boolean isEditavel(Cobranca cobranca) {
+        if ("Fechada".equalsIgnoreCase(cobranca.getSituacaoAtendimento())) {
+            return false;
+        }
+        String status = cobranca.getStatus();
         if (status == null) {
             return true;
         }
         String normalizado = status.trim().toUpperCase();
         return !normalizado.equals("PAGO") && !normalizado.equals("FECHADO") && !normalizado.equals("CANCELADO");
+    }
+
+    private static String situacaoAtendimento(String status) {
+        String normalizado = String.valueOf(status).trim().toUpperCase();
+        return normalizado.equals("PAGO") || normalizado.equals("CANCELADO") || normalizado.equals("FECHADO")
+                ? "Fechada"
+                : "Aberta";
+    }
+
+    private static String statusExibicao(String status) {
+        String normalizado = String.valueOf(status).trim().toUpperCase();
+        return switch (normalizado) {
+            case "PAGO" -> "Pago";
+            case "CANCELADO", "FECHADO" -> "Cancelado";
+            case "PROMESSA DE PAGAMENTO" -> "Promessa de pagamento";
+            case "SEM RETORNO" -> "Sem retorno";
+            case "COBRANCA EMITIDA", "COBRANÇA EMITIDA" -> "Cobrança emitida";
+            default -> status == null || status.isBlank() ? "Cobrança emitida" : status;
+        };
     }
 }

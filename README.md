@@ -29,6 +29,12 @@ JWT_SECRET=troque-por-uma-chave-jwt-forte
 LINK_RBX=https://seu-endpoint-rbx
 API_KEY=sua-chave-rbx
 API_FRONTEND=https://seudominio.com
+IA_PROVIDER=gemini
+OPENAI_API_KEY=sua-chave-openai
+OPENAI_MODEL=gpt-5.6-luna
+GEMINI_API_KEY=sua-chave-gemini
+GEMINI_MODEL=gemini-3.6-flash
+GEMINI_MAX_OUTPUT_TOKENS=4096
 
 VITE_API_URL=/api/
 VITE_GOOGLE_MAPS_API_KEY=
@@ -44,6 +50,11 @@ FRONTEND_PORT=80
 - O backend nao precisa publicar a porta `8080`; ele e acessado apenas pelo frontend dentro da rede Docker.
 - O volume `postgres_data` preserva os dados do banco entre recriacoes dos containers.
 - Nao use valores padrao de senha/segredo em producao.
+- `IA_PROVIDER` seleciona `openai` ou `gemini`; reinicie o backend depois de mudar.
+- `OPENAI_API_KEY` e `GEMINI_API_KEY` ficam somente no backend e nunca devem usar o prefixo `VITE_`.
+- `OPENAI_MODEL` e `GEMINI_MODEL` podem ser alterados sem recompilar.
+- `GEMINI_MAX_OUTPUT_TOKENS` controla o tamanho de cada parte; ao atingir o limite, o sistema tenta continuar uma vez.
+- Apenas a chave do provedor selecionado precisa estar configurada.
 
 ## Passo a passo
 

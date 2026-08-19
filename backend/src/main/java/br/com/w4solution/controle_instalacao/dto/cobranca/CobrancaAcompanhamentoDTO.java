@@ -6,6 +6,7 @@ import java.time.LocalDate;
 public record CobrancaAcompanhamentoDTO(
         String status,
         BigDecimal valor,
+        BigDecimal valorPago,
         LocalDate dataPromessa,
         String observacao
 ) {

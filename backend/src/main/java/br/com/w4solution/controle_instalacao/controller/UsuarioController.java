@@ -3,6 +3,7 @@ package br.com.w4solution.controle_instalacao.controller;
 import br.com.w4solution.controle_instalacao.domain.usuarios.Usuario;
 import br.com.w4solution.controle_instalacao.dto.usuarios.AlterarPermissao;
 import br.com.w4solution.controle_instalacao.dto.usuarios.AlterarStatusDTO;
+import br.com.w4solution.controle_instalacao.dto.usuarios.AlterarAcessoIaChatDTO;
 import br.com.w4solution.controle_instalacao.dto.usuarios.DadosAutenticao;
 import br.com.w4solution.controle_instalacao.dto.usuarios.DadosToken;
 import br.com.w4solution.controle_instalacao.dto.usuarios.RedefinirSenhaDTO;
@@ -15,6 +16,7 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -153,5 +155,13 @@ public class UsuarioController {
     public ResponseEntity<?> alterarPermissao(@RequestBody AlterarPermissao dados) {
         service.alterarPermissao(dados);
         return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/acesso-ia-chat")
+    @Transactional
+    @PreAuthorize(ADMIN_ONLY)
+    public ResponseEntity<Void> alterarAcessoIaChat(@Valid @RequestBody AlterarAcessoIaChatDTO dados) {
+        service.alterarAcessoIaChat(dados);
+        return ResponseEntity.noContent().build();
     }
 }

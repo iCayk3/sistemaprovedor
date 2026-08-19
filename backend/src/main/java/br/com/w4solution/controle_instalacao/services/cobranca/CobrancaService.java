@@ -2,14 +2,20 @@ package br.com.w4solution.controle_instalacao.services.cobranca;
 
 import br.com.w4solution.controle_instalacao.domain.cobranca.Cobranca;
 import br.com.w4solution.controle_instalacao.domain.cobranca.CobrancaHistorico;
+import br.com.w4solution.controle_instalacao.domain.cobranca.CobrancaConfiguracao;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaAcompanhamentoDTO;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaCadastroDTO;
+import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaClienteRbxDTO;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaDTO;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaExclusaoDTO;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaHistoricoDTO;
+import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaLembreteDTO;
+import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaConfiguracaoDTO;
 import br.com.w4solution.controle_instalacao.dto.rbx.ClienteFiltradoDTO;
 import br.com.w4solution.controle_instalacao.repository.cobranca.CobrancaHistoricoRepository;
 import br.com.w4solution.controle_instalacao.repository.cobranca.CobrancaRepository;
+import br.com.w4solution.controle_instalacao.repository.cobranca.CobrancaConfiguracaoRepository;
+import br.com.w4solution.controle_instalacao.repository.eventos.EventoRepository;
 import br.com.w4solution.controle_instalacao.services.rbx.ServiceRbx;
 import org.springframework.stereotype.Service;
 
@@ -22,14 +28,36 @@ import java.util.List;
 @Service
 public class CobrancaService {
 
+    private static final List<String> STATUS_PERMITIDOS = List.of(
+            "Cobrança emitida",
+            "Promessa de pagamento",
+            "Sem retorno",
+            "Pago",
+            "Cancelado"
+    );
+
     private final CobrancaRepository repository;
     private final CobrancaHistoricoRepository historicoRepository;
     private final ServiceRbx serviceRbx;
+    private final EventoRepository eventoRepository;
+    private final CobrancaConfiguracaoRepository configuracaoRepository;
 
-    public CobrancaService(CobrancaRepository repository, CobrancaHistoricoRepository historicoRepository, ServiceRbx serviceRbx) {
+    public CobrancaService(CobrancaRepository repository, CobrancaHistoricoRepository historicoRepository, ServiceRbx serviceRbx, EventoRepository eventoRepository, CobrancaConfiguracaoRepository configuracaoRepository) {
         this.repository = repository;
         this.historicoRepository = historicoRepository;
         this.serviceRbx = serviceRbx;
+        this.eventoRepository = eventoRepository;
+        this.configuracaoRepository = configuracaoRepository;
+    }
+
+    public CobrancaConfiguracaoDTO buscarConfiguracao() {
+        return new CobrancaConfiguracaoDTO(configuracao());
+    }
+
+    public CobrancaConfiguracaoDTO atualizarConfiguracao(CobrancaConfiguracaoDTO dto) {
+        CobrancaConfiguracao configuracao = configuracao();
+        configuracao.setPermitirFechamentoPorOutroUsuario(Boolean.TRUE.equals(dto.permitirFechamentoPorOutroUsuario()));
+        return new CobrancaConfiguracaoDTO(configuracaoRepository.save(configuracao));
     }
 
     public List<CobrancaDTO> listar() {
@@ -61,6 +89,21 @@ public class CobrancaService {
                 .toList();
     }
 
+    public CobrancaLembreteDTO lembretesPendentes() {
+        LocalDateTime limite = LocalDateTime.now().minusDays(7);
+        long quantidade = repository.findAll().stream()
+                .filter(cobranca -> !Boolean.TRUE.equals(cobranca.getExcluida()))
+                .filter(cobranca -> !"Fechada".equalsIgnoreCase(cobranca.getSituacaoAtendimento()))
+                .filter(cobranca -> isEditavel(cobranca.getStatus()))
+                .filter(cobranca -> ultimaMovimentacao(cobranca) != null && !ultimaMovimentacao(cobranca).isAfter(limite))
+                .count();
+        return new CobrancaLembreteDTO(quantidade);
+    }
+
+    private LocalDateTime ultimaMovimentacao(Cobranca cobranca) {
+        return cobranca.getAtualizadoEm() != null ? cobranca.getAtualizadoEm() : cobranca.getCriadoEm();
+    }
+
     public CobrancaDTO cadastrar(CobrancaCadastroDTO dto, String usuario) {
         ClienteFiltradoDTO clienteRbx = validarClienteRbx(dto.codigoCliente());
         validarCobrancaEmAndamento(dto.codigoCliente(), null);
@@ -77,17 +120,21 @@ public class CobrancaService {
         return toDto(salva);
     }
 
-    public CobrancaDTO atualizar(Long id, CobrancaCadastroDTO dto, String usuario) {
+    public CobrancaDTO atualizar(Long id, CobrancaCadastroDTO dto, String usuario, boolean admin) {
         Cobranca cobranca = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Cobranca nao encontrada."));
         validarNaoExcluida(cobranca);
-        if (!isEditavel(cobranca.getStatus())) {
+        if ("Fechada".equalsIgnoreCase(cobranca.getSituacaoAtendimento()) || !isEditavel(cobranca.getStatus())) {
             throw new IllegalStateException("Cobranca paga, fechada ou cancelada nao pode ser editada.");
         }
         validarCobrancaEmAndamento(dto.codigoCliente(), cobranca.getId());
         String statusAnterior = cobranca.getStatus();
         BigDecimal valorAnterior = cobranca.getValor();
+        validarPermissaoFechamento(cobranca, dto.status(), usuario, admin);
         aplicarDados(cobranca, dto);
+        if (!permiteAlterarValorOriginal(cobranca.getStatus())) {
+            cobranca.setValor(valorAnterior);
+        }
         cobranca.setAtualizadoEm(LocalDateTime.now());
         cobranca.setAtualizadoPor(fallback(usuario, "sistema"));
         fecharSeFinalizada(cobranca);
@@ -96,11 +143,11 @@ public class CobrancaService {
         return toDto(salva);
     }
 
-    public CobrancaDTO acompanhar(Long id, CobrancaAcompanhamentoDTO dto, String usuario) {
+    public CobrancaDTO acompanhar(Long id, CobrancaAcompanhamentoDTO dto, String usuario, boolean admin) {
         Cobranca cobranca = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Cobranca nao encontrada."));
         validarNaoExcluida(cobranca);
-        if (!isEditavel(cobranca.getStatus())) {
+        if ("Fechada".equalsIgnoreCase(cobranca.getSituacaoAtendimento()) || !isEditavel(cobranca.getStatus())) {
             throw new IllegalStateException("Cobranca paga, fechada ou cancelada nao pode ser alterada no acompanhamento.");
         }
         if (dto.observacao() == null || dto.observacao().isBlank()) {
@@ -109,15 +156,18 @@ public class CobrancaService {
 
         String statusAnterior = cobranca.getStatus();
         BigDecimal valorAnterior = cobranca.getValor();
-        String statusNovo = fallback(dto.status(), cobranca.getStatus());
+        String statusNovo = validarStatus(fallback(dto.status(), cobranca.getStatus()));
+        validarPermissaoFechamento(cobranca, statusNovo, usuario, admin);
         if (isPromessa(statusNovo) && dto.dataPromessa() == null) {
             throw new IllegalArgumentException("Informe a data da promessa de pagamento.");
         }
-        BigDecimal valorNovo = statusNovo.equals("Em negociacao")
-                ? (dto.valor() == null ? cobranca.getValor() : dto.valor())
+        BigDecimal valorNovo = permiteAlterarValorOriginal(statusNovo) && dto.valor() != null
+                ? dto.valor()
                 : cobranca.getValor();
 
         cobranca.setStatus(statusNovo);
+        aplicarValorPago(cobranca, dto.valorPago());
+        aplicarSituacaoAtendimento(cobranca);
         cobranca.setDataPromessa(isPromessa(statusNovo) ? dto.dataPromessa() : null);
         cobranca.setValor(valorNovo == null ? BigDecimal.ZERO : valorNovo);
         cobranca.setAtualizadoEm(LocalDateTime.now());
@@ -161,12 +211,15 @@ public class CobrancaService {
         return toDto(salva);
     }
 
-    public ClienteFiltradoDTO buscarClienteRbx(Long codigo) {
+    public CobrancaClienteRbxDTO buscarClienteRbx(Long codigo) {
         List<ClienteFiltradoDTO> clientes = serviceRbx.buscarClienteId(codigo);
         if (clientes == null || clientes.isEmpty()) {
             throw new IllegalArgumentException("Cliente nao encontrado no RBX.");
         }
-        return clientes.get(0);
+        return new CobrancaClienteRbxDTO(
+                clientes.get(0),
+                serviceRbx.buscarBoletoAbertoMaisRecente(codigo).orElse(null)
+        );
     }
 
     private void aplicarDados(Cobranca cobranca, CobrancaCadastroDTO dto) {
@@ -175,9 +228,15 @@ public class CobrancaService {
         cobranca.setCliente(dto.cliente());
         cobranca.setGrupoCliente(dto.grupoCliente());
         cobranca.setData(dto.data() == null ? LocalDate.now() : dto.data());
+        if (dto.dataVencimento() == null) {
+            throw new IllegalArgumentException("Informe a data de vencimento.");
+        }
+        cobranca.setDataVencimento(dto.dataVencimento());
         cobranca.setDataPromessa(isPromessa(dto.status()) ? dto.dataPromessa() : null);
         cobranca.setValor(dto.valor() == null ? BigDecimal.ZERO : dto.valor());
-        cobranca.setStatus(fallback(dto.status(), "Aberto"));
+        cobranca.setStatus(validarStatus(fallback(dto.status(), "Cobrança emitida")));
+        aplicarValorPago(cobranca, dto.valorPago());
+        aplicarSituacaoAtendimento(cobranca);
         cobranca.setObservacao(dto.observacao());
     }
 
@@ -207,7 +266,7 @@ public class CobrancaService {
     }
 
     private void fecharSeFinalizada(Cobranca cobranca) {
-        if (isEditavel(cobranca.getStatus())) {
+        if (!"Fechada".equalsIgnoreCase(cobranca.getSituacaoAtendimento())) {
             cobranca.setFechadoEm(null);
             return;
         }
@@ -256,6 +315,51 @@ public class CobrancaService {
         return !normalizado.equals("PAGO") && !normalizado.equals("FECHADO") && !normalizado.equals("CANCELADO");
     }
 
+    private void aplicarSituacaoAtendimento(Cobranca cobranca) {
+        String normalizado = String.valueOf(cobranca.getStatus()).trim().toUpperCase();
+        boolean encerra = normalizado.equals("PAGO") || normalizado.equals("CANCELADO") || normalizado.equals("FECHADO");
+        if (!encerra) {
+            encerra = eventoRepository.encontrarPorSegmento("COBRANCA_STATUS").stream()
+                    .filter(evento -> evento.getEvento().equalsIgnoreCase(cobranca.getStatus()))
+                    .anyMatch(evento -> Boolean.TRUE.equals(evento.getEncerraAtendimento()));
+        }
+        cobranca.setSituacaoAtendimento(encerra ? "Fechada" : "Aberta");
+    }
+
+    private void validarPermissaoFechamento(Cobranca cobranca, String statusNovo, String usuario, boolean admin) {
+        if (!statusEncerraAtendimento(statusNovo) || admin || Boolean.TRUE.equals(configuracao().getPermitirFechamentoPorOutroUsuario())) {
+            return;
+        }
+        if (!String.valueOf(cobranca.getCriadoPor()).equalsIgnoreCase(String.valueOf(usuario))) {
+            throw new IllegalStateException("Somente o usuario que abriu a cobranca pode fecha-la ou marca-la como paga.");
+        }
+    }
+
+    private boolean statusEncerraAtendimento(String status) {
+        String normalizado = String.valueOf(status).trim().toUpperCase();
+        if (normalizado.equals("PAGO") || normalizado.equals("CANCELADO") || normalizado.equals("FECHADO")) {
+            return true;
+        }
+        return eventoRepository.encontrarPorSegmento("COBRANCA_STATUS").stream()
+                .filter(evento -> evento.getEvento().equalsIgnoreCase(status))
+                .anyMatch(evento -> Boolean.TRUE.equals(evento.getEncerraAtendimento()));
+    }
+
+    private CobrancaConfiguracao configuracao() {
+        return configuracaoRepository.findById(1L).orElseGet(() -> configuracaoRepository.save(new CobrancaConfiguracao()));
+    }
+
+    private void aplicarValorPago(Cobranca cobranca, BigDecimal valorPago) {
+        if (!"PAGO".equals(String.valueOf(cobranca.getStatus()).trim().toUpperCase())) {
+            cobranca.setValorPago(null);
+            return;
+        }
+        if (valorPago == null || valorPago.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Informe um valor pago valido.");
+        }
+        cobranca.setValorPago(valorPago);
+    }
+
     private void validarCobrancaEmAndamento(Integer codigoCliente, Long idAtual) {
         if (codigoCliente == null) {
             return;
@@ -264,6 +368,7 @@ public class CobrancaService {
         repository.findAllByCodigoCliente(codigoCliente).stream()
                 .filter(cobranca -> !Boolean.TRUE.equals(cobranca.getExcluida()))
                 .filter(cobranca -> idAtual == null || !cobranca.getId().equals(idAtual))
+                .filter(cobranca -> !"Fechada".equalsIgnoreCase(cobranca.getSituacaoAtendimento()))
                 .filter(cobranca -> !isStatusPagoOuFechado(cobranca.getStatus()))
                 .findFirst()
                 .ifPresent(cobranca -> {
@@ -273,7 +378,7 @@ public class CobrancaService {
 
     private boolean isStatusPagoOuFechado(String status) {
         String normalizado = String.valueOf(status).trim().toUpperCase();
-        return normalizado.equals("PAGO") || normalizado.equals("FECHADO");
+        return normalizado.equals("PAGO") || normalizado.equals("FECHADO") || normalizado.equals("CANCELADO");
     }
 
     private void validarNaoExcluida(Cobranca cobranca) {
@@ -284,6 +389,29 @@ public class CobrancaService {
 
     private boolean isPromessa(String status) {
         return "PROMESSA DE PAGAMENTO".equals(String.valueOf(status).trim().toUpperCase());
+    }
+
+    private boolean permiteAlterarValorOriginal(String status) {
+        String normalizado = String.valueOf(status).trim().toUpperCase();
+        return normalizado.equals("NEGOCIACAO")
+                || normalizado.equals("NEGOCIAÇÃO")
+                || normalizado.equals("EM NEGOCIACAO")
+                || normalizado.equals("EM NEGOCIAÇÃO")
+                || normalizado.equals("PROMESSA DE PAGAMENTO");
+    }
+
+    private String validarStatus(String status) {
+        var statusPadrao = STATUS_PERMITIDOS.stream()
+                .filter(statusPermitido -> statusPermitido.equalsIgnoreCase(status.trim()))
+                .findFirst();
+        if (statusPadrao.isPresent()) {
+            return statusPadrao.get();
+        }
+        return eventoRepository.encontrarPorSegmento("COBRANCA_STATUS").stream()
+                .map(evento -> evento.getEvento().trim())
+                .filter(statusConfigurado -> statusConfigurado.equalsIgnoreCase(status.trim()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Status de cobranca invalido ou nao configurado."));
     }
 
     private String fallback(String value, String fallback) {

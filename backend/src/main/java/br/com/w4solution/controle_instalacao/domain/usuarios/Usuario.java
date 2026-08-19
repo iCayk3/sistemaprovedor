@@ -31,6 +31,7 @@ public class Usuario implements UserDetails {
     private Status status = Status.PENDENTE;
     @Enumerated(EnumType.STRING)
     private UserRole permissao = UserRole.GUEST;
+    private Boolean recursosIaChatHabilitados = false;
 
     public Usuario(UsuarioCadastroDTO dados) {
         this.usuario = dados.usuario();
@@ -123,5 +124,13 @@ public class Usuario implements UserDetails {
 
     public void alterarPermissao(UserRole role) {
         this.permissao = role;
+    }
+
+    public boolean possuiAcessoIaChat() {
+        return Boolean.TRUE.equals(recursosIaChatHabilitados);
+    }
+
+    public void alterarAcessoIaChat(boolean habilitado) {
+        this.recursosIaChatHabilitados = habilitado;
     }
 }

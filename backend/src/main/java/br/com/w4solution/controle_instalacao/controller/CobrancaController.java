@@ -4,6 +4,8 @@ import br.com.w4solution.controle_instalacao.domain.usuarios.Usuario;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaAcompanhamentoDTO;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaCadastroDTO;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaExclusaoDTO;
+import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaConfiguracaoDTO;
+import br.com.w4solution.controle_instalacao.domain.usuarios.UserRole;
 import br.com.w4solution.controle_instalacao.services.cobranca.CobrancaService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -47,6 +49,12 @@ public class CobrancaController {
         return ResponseEntity.ok(service.listarAuditoria());
     }
 
+    @GetMapping("/lembretes")
+    @PreAuthorize(CHARGING_ACCESS)
+    public ResponseEntity<?> lembretesPendentes() {
+        return ResponseEntity.ok(service.lembretesPendentes());
+    }
+
     @PostMapping
     @PreAuthorize(CHARGING_ACCESS)
     public ResponseEntity<?> cadastrar(@RequestBody CobrancaCadastroDTO dto, @AuthenticationPrincipal Usuario usuario) {
@@ -60,7 +68,7 @@ public class CobrancaController {
             @RequestBody CobrancaCadastroDTO dto,
             @AuthenticationPrincipal Usuario usuario
     ) {
-        return ResponseEntity.ok(service.atualizar(id, dto, nomeUsuario(usuario)));
+        return ResponseEntity.ok(service.atualizar(id, dto, nomeUsuario(usuario), isAdmin(usuario)));
     }
 
     @PatchMapping("/{id}/acompanhamento")
@@ -70,7 +78,19 @@ public class CobrancaController {
             @RequestBody CobrancaAcompanhamentoDTO dto,
             @AuthenticationPrincipal Usuario usuario
     ) {
-        return ResponseEntity.ok(service.acompanhar(id, dto, nomeUsuario(usuario)));
+        return ResponseEntity.ok(service.acompanhar(id, dto, nomeUsuario(usuario), isAdmin(usuario)));
+    }
+
+    @GetMapping("/configuracao")
+    @PreAuthorize(CHARGING_ACCESS)
+    public ResponseEntity<?> buscarConfiguracao() {
+        return ResponseEntity.ok(service.buscarConfiguracao());
+    }
+
+    @PutMapping("/configuracao")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> atualizarConfiguracao(@RequestBody CobrancaConfiguracaoDTO dto) {
+        return ResponseEntity.ok(service.atualizarConfiguracao(dto));
     }
 
     @PatchMapping("/{id}/excluir")
@@ -91,5 +111,9 @@ public class CobrancaController {
 
     private String nomeUsuario(Usuario usuario) {
         return usuario == null ? "sistema" : usuario.getUsuario();
+    }
+
+    private boolean isAdmin(Usuario usuario) {
+        return usuario != null && usuario.getPermissao() == UserRole.ADMIN;
     }
 }

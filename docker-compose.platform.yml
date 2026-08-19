@@ -33,6 +33,14 @@ services:
       LINK_RBX: ${LINK_RBX:?LINK_RBX obrigatorio}
       API_FRONTEND: ${API_FRONTEND:-http://localhost}
       API_KEY: ${API_KEY:?API_KEY obrigatorio}
+      IA_PROVIDER: ${IA_PROVIDER:-gemini}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6-luna}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.6-flash}
+      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com}
+      GEMINI_MAX_OUTPUT_TOKENS: ${GEMINI_MAX_OUTPUT_TOKENS:-4096}
     expose:
       - "8080"
     healthcheck:

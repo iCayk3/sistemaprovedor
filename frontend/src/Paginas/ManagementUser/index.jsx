@@ -12,6 +12,7 @@ import {
     Paper,
     Select,
     Stack,
+    Switch,
     Table,
     TableBody,
     TableCell,
@@ -127,6 +128,21 @@ const ManagementUser = () => {
         }
     };
 
+    const alterarAcessoIaChat = async (user, habilitado) => {
+        setSavingId(user.id);
+        setError("");
+        try {
+            await UseApi("usuario/acesso-ia-chat", "PUT", { id: user.id, habilitado });
+            setUsuarios((atuais) => atuais.map((item) =>
+                item.id === user.id ? { ...item, recursosIaChatHabilitados: habilitado } : item
+            ));
+        } catch (requestError) {
+            setError(requestError.message || "Erro ao alterar acesso à IA e ao chat.");
+        } finally {
+            setSavingId(null);
+        }
+    };
+
     const startRoleEdit = (user) => {
         setEditingRoleId(user.id);
         setSelectedRole(user.role || "GUEST");
@@ -237,6 +253,7 @@ const ManagementUser = () => {
                                 <TableCell>Usuario</TableCell>
                                 <TableCell>Permissao</TableCell>
                                 <TableCell>Status</TableCell>
+                                <TableCell align="center">IA e chat</TableCell>
                                 <TableCell align="right">Acoes</TableCell>
                             </TableRow>
                         </TableHead>
@@ -278,12 +295,20 @@ const ManagementUser = () => {
                                     <TableCell>
                                         <Chip size="small" color={statusColors[user.status] || "default"} label={user.status} />
                                     </TableCell>
+                                    <TableCell align="center">
+                                        <Switch
+                                            checked={Boolean(user.recursosIaChatHabilitados)}
+                                            disabled={savingId === user.id}
+                                            onChange={(event) => alterarAcessoIaChat(user, event.target.checked)}
+                                            inputProps={{ "aria-label": `Liberar IA e chat para ${user.usuario}` }}
+                                        />
+                                    </TableCell>
                                     <TableCell align="right">{actionButtons(user)}</TableCell>
                                 </TableRow>
                             ))}
                             {!filteredUsers.length && (
                                 <TableRow>
-                                    <TableCell colSpan={4} align="center">
+                                    <TableCell colSpan={5} align="center">
                                         Nenhum usuario encontrado com os filtros atuais.
                                     </TableCell>
                                 </TableRow>

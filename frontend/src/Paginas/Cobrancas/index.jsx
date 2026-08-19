@@ -25,6 +25,7 @@ import {
     TableCell,
     TableContainer,
     TableHead,
+    TablePagination,
     TableRow,
     TextField,
     Typography,
@@ -47,8 +48,8 @@ import {
 
 const UseApi = Api();
 
-const statusOptions = ['Aberto', 'Em negociacao', 'Promessa de pagamento', 'Pago', 'Fechado', 'Cancelado'];
-const actionOptions = [
+const defaultStatusOptions = ['Cobrança emitida', 'Promessa de pagamento', 'Sem retorno', 'Pago', 'Cancelado'];
+const defaultActionOptions = [
     'Contato',
     'Sem retorno',
     'Promessa de pagamento',
@@ -83,9 +84,11 @@ const emptyForm = {
     cliente: '',
     grupoCliente: '',
     data: new Date().toISOString().slice(0, 10),
+    dataVencimento: '',
     dataPromessa: '',
     valor: '',
-    status: 'Aberto',
+    valorPago: '',
+    status: 'Cobrança emitida',
     observacao: '',
 };
 
@@ -124,9 +127,12 @@ function normalizeCharge(charge) {
         client: charge.cliente,
         clientGroup: formatClientGroup(charge.grupoCliente),
         date: charge.data,
+        dueDate: charge.dataVencimento,
         promiseDate: charge.dataPromessa,
         value: Number(charge.valor || 0),
-        status: charge.status || 'Aberto',
+        paidValue: charge.valorPago == null ? null : Number(charge.valorPago),
+        status: charge.status || 'Cobrança emitida',
+        serviceSituation: charge.situacaoAtendimento || (isFinalStatus(charge.status) ? 'Fechada' : 'Aberta'),
         notes: charge.observacao,
         createdAt: charge.criadoEm,
         updatedAt: charge.atualizadoEm,
@@ -161,15 +167,24 @@ function toForm(charge) {
         cliente: charge?.client || '',
         grupoCliente: charge?.clientGroup || '',
         data: charge?.date || new Date().toISOString().slice(0, 10),
+        dataVencimento: charge?.dueDate || '',
         dataPromessa: charge?.promiseDate || '',
         valor: charge?.value ? String(charge.value) : '',
-        status: charge?.status || 'Aberto',
+        valorPago: charge?.paidValue != null ? String(charge.paidValue) : '',
+        status: charge?.status || 'Cobrança emitida',
         observacao: charge?.notes || '',
     };
 }
 
 function formatCurrency(value) {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
+}
+
+function formatConfiguredOption(value, defaults) {
+    const text = String(value || '').trim();
+    const known = defaults.find((item) => item.localeCompare(text, 'pt-BR', { sensitivity: 'base' }) === 0);
+    if (known) return known;
+    return text ? `${text.charAt(0).toUpperCase()}${text.slice(1).toLowerCase()}` : '';
 }
 
 function formatDate(value) {
@@ -193,6 +208,15 @@ function isPromiseStatus(status) {
     return String(status || '').trim().toUpperCase() === 'PROMESSA DE PAGAMENTO';
 }
 
+function isPaidStatus(status) {
+    return String(status || '').trim().toUpperCase() === 'PAGO';
+}
+
+function allowsOriginalValueChange(status) {
+    return ['NEGOCIACAO', 'NEGOCIAÇÃO', 'EM NEGOCIACAO', 'EM NEGOCIAÇÃO', 'PROMESSA DE PAGAMENTO']
+        .includes(String(status || '').trim().toUpperCase());
+}
+
 function todayIso() {
     return new Date().toISOString().slice(0, 10);
 }
@@ -206,6 +230,15 @@ function isSameMonth(value, month) {
     return String(value).slice(0, 7) === month;
 }
 
+function needsSevenDayReminder(charge) {
+    if (charge.excluded || charge.serviceSituation === 'Fechada') return false;
+    const lastMovement = charge.updatedAt || charge.createdAt;
+    if (!lastMovement) return false;
+    const limit = new Date();
+    limit.setDate(limit.getDate() - 7);
+    return new Date(lastMovement) <= limit;
+}
+
 function readClientField(cliente, lowerKey, upperKey) {
     return cliente?.[lowerKey] ?? cliente?.[upperKey] ?? '';
 }
@@ -216,7 +249,9 @@ function formatClientGroup(group) {
 }
 
 function normalizeRbxClient(response) {
-    const client = Array.isArray(response) ? response[0] : response?.data || response;
+    const payload = response?.data || response;
+    const client = Array.isArray(payload) ? payload[0] : payload?.cliente || payload;
+    const boleto = payload?.boleto || null;
 
     if (!client || typeof client !== 'object') {
         return null;
@@ -229,6 +264,10 @@ function normalizeRbxClient(response) {
         sigla: readClientField(client, 'sigla', 'Sigla'),
         grupo: formatClientGroup(readClientField(client, 'grupoNome', 'Grupo_Nome') || readClientField(client, 'grupo', 'Grupo')),
         situacao: readClientField(client, 'situacao', 'Situacao'),
+        boleto: boleto ? {
+            valor: Number(readClientField(boleto, 'valor', 'Valor') || 0),
+            vencimento: readClientField(boleto, 'vencimento', 'Vencimento'),
+        } : null,
     };
 }
 
@@ -304,6 +343,8 @@ const ClienteRbxPanel = ({ cliente }) => {
 };
 
 const Cobrancas = ({ readOnly = false, mode }) => {
+    const [statusOptions, setStatusOptions] = useState(defaultStatusOptions);
+    const [actionOptions, setActionOptions] = useState(defaultActionOptions);
     const viewMode = mode || (readOnly ? 'dashboard' : 'cadastro');
     const isDashboard = viewMode === 'dashboard';
     const isTracking = viewMode === 'acompanhamento';
@@ -320,6 +361,8 @@ const Cobrancas = ({ readOnly = false, mode }) => {
     const [actionFilter, setActionFilter] = useState('Todos');
     const [groupFilter, setGroupFilter] = useState('Todos');
     const [dashboardMonth, setDashboardMonth] = useState(currentMonthIso());
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(20);
     const [trackingNote, setTrackingNote] = useState('');
     const [open, setOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
@@ -346,6 +389,28 @@ const Cobrancas = ({ readOnly = false, mode }) => {
     useEffect(() => {
         loadCharges();
     }, [isPaidList]);
+
+    useEffect(() => {
+        const loadConfiguredOptions = async () => {
+            try {
+                const [configuredActions, configuredStatuses] = await Promise.all([
+                    UseApi('evento?segmento=COBRANCA_ACAO'),
+                    UseApi('evento?segmento=COBRANCA_STATUS'),
+                ]);
+                const actions = Array.isArray(configuredActions)
+                    ? configuredActions.map((item) => formatConfiguredOption(item.label, defaultActionOptions)).filter(Boolean)
+                    : [];
+                const statuses = Array.isArray(configuredStatuses)
+                    ? configuredStatuses.map((item) => formatConfiguredOption(item.label, defaultStatusOptions)).filter(Boolean)
+                    : [];
+                setActionOptions(actions.length ? actions : defaultActionOptions);
+                setStatusOptions(statuses.length ? statuses : defaultStatusOptions);
+            } catch (requestError) {
+                console.error('Erro ao carregar configuracoes de cobranca:', requestError);
+            }
+        };
+        loadConfiguredOptions();
+    }, []);
 
     const userOptions = useMemo(() => {
         return Array.from(new Set(charges.map((charge) => normalizeLabel(charge.lastUser)).filter(Boolean))).sort();
@@ -376,6 +441,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 if (statusFilter === 'Finalizadas') return isFinalStatus(charge.status);
                 if (statusFilter === 'Promessas hoje') return isPromiseStatus(charge.status) && charge.promiseDate === todayIso();
                 if (statusFilter === 'Promessas vencidas') return isPromiseStatus(charge.status) && charge.promiseDate && charge.promiseDate < todayIso();
+                if (statusFilter === 'Sem atualização há 7 dias') return needsSevenDayReminder(charge);
                 return charge.status === statusFilter;
             })
             .filter((charge) => userFilter === 'Todos' || normalizeLabel(charge.lastUser) === userFilter)
@@ -389,6 +455,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                     charge.clientCode,
                     charge.action,
                     charge.status,
+                    charge.serviceSituation,
                     charge.lastUser,
                     charge.clientGroup,
                     charge.excludedBy,
@@ -397,6 +464,25 @@ const Cobrancas = ({ readOnly = false, mode }) => {
             })
             .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
     }, [charges, dashboardMonth, isDashboard, statusFilter, searchFilter, userFilter, actionFilter, groupFilter]);
+
+    useEffect(() => {
+        setPage(0);
+    }, [dashboardMonth, statusFilter, searchFilter, userFilter, actionFilter, groupFilter, viewMode]);
+
+    useEffect(() => {
+        const lastPage = Math.max(0, Math.ceil(filteredCharges.length / rowsPerPage) - 1);
+        if (page > lastPage) setPage(lastPage);
+    }, [filteredCharges.length, page, rowsPerPage]);
+
+    const paginatedCharges = useMemo(
+        () => filteredCharges.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
+        [filteredCharges, page, rowsPerPage],
+    );
+
+    const reminderCount = useMemo(
+        () => charges.filter(needsSevenDayReminder).length,
+        [charges],
+    );
 
     const metrics = useMemo(() => {
         const source = isDashboard ? filteredCharges : charges;
@@ -412,9 +498,9 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         const promessasHoje = source.filter((charge) => !charge.excluded && isPromiseStatus(charge.status) && charge.promiseDate === todayIso());
         const promessasVencidas = source.filter((charge) => !charge.excluded && isPromiseStatus(charge.status) && charge.promiseDate && charge.promiseDate < todayIso());
         const valorAberto = abertas.reduce((total, charge) => total + charge.value, 0);
-        const valorPago = pagas.reduce((total, charge) => total + charge.value, 0);
+        const valorPago = pagas.reduce((total, charge) => total + (charge.paidValue ?? charge.value), 0);
         const valorExcluido = excluidas.reduce((total, charge) => total + charge.value, 0);
-        const valorPagoMes = pagasMes.reduce((total, charge) => total + charge.value, 0);
+        const valorPagoMes = pagasMes.reduce((total, charge) => total + (charge.paidValue ?? charge.value), 0);
         const valorTotal = source.reduce((total, charge) => total + charge.value, 0);
 
         return {
@@ -471,6 +557,29 @@ const Cobrancas = ({ readOnly = false, mode }) => {
             value: statusByUserSeries.reduce((total, serie) => total + Number(serie.data[index] || 0), 0),
             color: dashboardPalette[index % dashboardPalette.length],
         }));
+        const individualUsers = Array.from(new Set(filteredCharges
+            .map((charge) => normalizeLabel(charge.createdBy))
+            .filter((user) => user !== 'Nao informado'))).sort();
+        const individualRows = individualUsers.map((user) => {
+            const opened = filteredCharges.filter((charge) => (
+                !charge.excluded
+                && charge.serviceSituation !== 'Fechada'
+                && normalizeLabel(charge.createdBy) === user
+            ));
+            const paid = filteredCharges.filter((charge) => (
+                !charge.excluded
+                && isPaidStatus(charge.status)
+                && normalizeLabel(charge.createdBy) === user
+                && normalizeLabel(charge.updatedBy) === user
+            ));
+            return {
+                user,
+                openedCount: opened.length,
+                openedValue: opened.reduce((total, charge) => total + charge.value, 0),
+                paidCount: paid.length,
+                paidValue: paid.reduce((total, charge) => total + (charge.paidValue ?? charge.value), 0),
+            };
+        });
 
         return {
             statusPie: statusEntries.map(([label, value], index) => ({ id: index, label, value, color: dashboardPalette[index % dashboardPalette.length] })),
@@ -495,6 +604,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 value: Number(value),
                 color: dashboardPalette[index % dashboardPalette.length],
             })),
+            individualRows,
         };
     }, [filteredCharges]);
 
@@ -557,6 +667,8 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                     ...current,
                     cliente: normalizedClient?.nome || current.cliente,
                     grupoCliente: normalizedClient?.grupo || current.grupoCliente,
+                    dataVencimento: normalizedClient?.boleto?.vencimento || '',
+                    valor: normalizedClient?.boleto ? String(normalizedClient.boleto.valor) : '',
                 }));
             }
         } catch (requestError) {
@@ -586,7 +698,9 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 cliente: form.cliente,
                 grupoCliente: form.grupoCliente,
                 data: form.data || null,
+                dataVencimento: form.dataVencimento || null,
                 valor: Number(String(form.valor || 0).replace(',', '.')),
+                valorPago: isPaidStatus(form.status) ? Number(String(form.valorPago || 0).replace(',', '.')) : null,
                 dataPromessa: isPromiseStatus(form.status) ? form.dataPromessa || null : null,
                 status: form.status,
                 observacao: form.observacao,
@@ -594,7 +708,8 @@ const Cobrancas = ({ readOnly = false, mode }) => {
             const response = isTracking && selected
                 ? await UseApi(`cobrancas/${selected.id}/acompanhamento`, 'PATCH', {
                     status: form.status,
-                    valor: form.status === 'Em negociacao' ? Number(String(form.valor || 0).replace(',', '.')) : selected.value,
+                    valor: Number(String(form.valor || 0).replace(',', '.')),
+                    valorPago: isPaidStatus(form.status) ? Number(String(form.valorPago || 0).replace(',', '.')) : null,
                     dataPromessa: isPromiseStatus(form.status) ? form.dataPromessa || null : null,
                     observacao: trackingNote,
                 })
@@ -655,10 +770,12 @@ const Cobrancas = ({ readOnly = false, mode }) => {
     const canEditSelected = isRegister && (!selected || selected.editable);
     const canTrackSelected = isTracking && Boolean(selected?.editable);
     const canSaveSelected = canEditSelected || canTrackSelected;
-    const canEditTrackingValue = canTrackSelected && form.status === 'Em negociacao';
+    const canEditOriginalValue = canSaveSelected && allowsOriginalValueChange(form.status);
     const saveDisabled = saving
         || (isTracking && canTrackSelected && !trackingNote.trim())
         || (!selected && isRegister && (!validatedClientCode || String(form.codigoCliente).trim() !== validatedClientCode || !form.cliente))
+        || (canEditSelected && !form.dataVencimento)
+        || (canSaveSelected && isPaidStatus(form.status) && Number(String(form.valorPago || 0).replace(',', '.')) <= 0)
         || (canSaveSelected && isPromiseStatus(form.status) && !form.dataPromessa);
 
     const pageTitle = {
@@ -731,6 +848,19 @@ const Cobrancas = ({ readOnly = false, mode }) => {
             </Paper>
 
             {error && !open && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+            {reminderCount > 0 && (
+                <Alert
+                    severity="warning"
+                    sx={{ mb: 2 }}
+                    action={(
+                        <Button color="inherit" size="small" onClick={() => setStatusFilter('Sem atualização há 7 dias')}>
+                            Ver cobranças
+                        </Button>
+                    )}
+                >
+                    {reminderCount} cobrança(s) aberta(s) estão há 7 dias ou mais sem atualização.
+                </Alert>
+            )}
             {(metrics.promessasHoje > 0 || metrics.promessasVencidas > 0) && (
                 <Alert severity={metrics.promessasVencidas > 0 ? 'error' : 'warning'} sx={{ mb: 2 }}>
                     {metrics.promessasVencidas > 0
@@ -984,6 +1114,41 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                             </Stack>
                         )}
                     </Paper>
+                    <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2, gridColumn: '1 / -1' }}>
+                        <Typography variant="h6" fontWeight={800}>Resultado individual por usuário</Typography>
+                        <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">
+                            Uma cobrança paga só conta como resultado individual quando o mesmo usuário abriu e concluiu o atendimento.
+                        </Typography>
+                        <TableContainer>
+                            <Table size="small">
+                                <TableHead>
+                                    <TableRow>
+                                        <TableCell>Usuário</TableCell>
+                                        <TableCell align="right">Em aberto</TableCell>
+                                        <TableCell align="right">Valor em aberto</TableCell>
+                                        <TableCell align="right">Pagas pelo mesmo usuário</TableCell>
+                                        <TableCell align="right">Valor recuperado</TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {chartData.individualRows.map((row) => (
+                                        <TableRow key={row.user}>
+                                            <TableCell>{row.user}</TableCell>
+                                            <TableCell align="right">{row.openedCount}</TableCell>
+                                            <TableCell align="right">{formatCurrency(row.openedValue)}</TableCell>
+                                            <TableCell align="right">{row.paidCount}</TableCell>
+                                            <TableCell align="right">{formatCurrency(row.paidValue)}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {!chartData.individualRows.length && (
+                                        <TableRow>
+                                            <TableCell colSpan={5} align="center">Sem resultados individuais no período.</TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    </Paper>
                 </Box>
             )}
 
@@ -1017,6 +1182,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                             <MenuItem value="Finalizadas">Finalizadas</MenuItem>
                             <MenuItem value="Promessas hoje">Promessas hoje</MenuItem>
                             <MenuItem value="Promessas vencidas">Promessas vencidas</MenuItem>
+                            <MenuItem value="Sem atualização há 7 dias">Sem atualização há 7 dias</MenuItem>
                             {statusOptions.map((status) => <MenuItem key={status} value={status}>{status}</MenuItem>)}
                         </TextField>
                         {(isDashboard || isTracking) && (
@@ -1074,16 +1240,18 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                     <TableCell>Cliente</TableCell>
                                     <TableCell>Grupo</TableCell>
                                     <TableCell>Acao</TableCell>
-                                    <TableCell>Data</TableCell>
+                                    <TableCell>Data registro</TableCell>
+                                    <TableCell>Data vencimento</TableCell>
                                     <TableCell>Valor</TableCell>
                                     <TableCell>Status</TableCell>
+                                    <TableCell>Situação do atendimento</TableCell>
                                     <TableCell>Usuario</TableCell>
                                     {isPaidList && <TableCell>Exclusao</TableCell>}
                                     <TableCell align="right">{isPaidList ? 'Acoes' : 'Detalhes'}</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {filteredCharges.map((charge) => (
+                                {paginatedCharges.map((charge) => (
                                     <TableRow key={charge.id} hover>
                                         <TableCell>{charge.protocol}</TableCell>
                                         <TableCell>
@@ -1095,7 +1263,15 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                         <TableCell>{charge.clientGroup || 'Nao informado'}</TableCell>
                                         <TableCell>{charge.action}</TableCell>
                                         <TableCell>{formatDate(charge.date)}</TableCell>
-                                        <TableCell>{formatCurrency(charge.value)}</TableCell>
+                                        <TableCell>{formatDate(charge.dueDate)}</TableCell>
+                                        <TableCell>
+                                            <Typography fontSize="inherit">Original: {formatCurrency(charge.value)}</Typography>
+                                            {isPaidStatus(charge.status) && (
+                                                <Typography color="success.main" variant="caption" display="block">
+                                                    Pago: {formatCurrency(charge.paidValue ?? charge.value)}
+                                                </Typography>
+                                            )}
+                                        </TableCell>
                                         <TableCell>
                                             <Chip
                                                 size="small"
@@ -1107,6 +1283,14 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                                     Promessa: {formatDate(charge.promiseDate)}
                                                 </Typography>
                                             )}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Chip
+                                                size="small"
+                                                color={charge.serviceSituation === 'Fechada' ? 'default' : 'success'}
+                                                variant="outlined"
+                                                label={charge.serviceSituation}
+                                            />
                                         </TableCell>
                                         <TableCell>{charge.lastUser || 'sem usuario'}</TableCell>
                                         {isPaidList && (
@@ -1142,13 +1326,29 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                 ))}
                                 {!filteredCharges.length && (
                                     <TableRow>
-                                        <TableCell colSpan={isPaidList ? 10 : 9} align="center">Nenhuma cobranca cadastrada.</TableCell>
+                                        <TableCell colSpan={isPaidList ? 12 : 11} align="center">Nenhuma cobranca cadastrada.</TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>
                         </Table>
                     )}
                 </TableContainer>
+                {!loading && filteredCharges.length > 0 && (
+                    <TablePagination
+                        component="div"
+                        count={filteredCharges.length}
+                        page={page}
+                        onPageChange={(_, nextPage) => setPage(nextPage)}
+                        rowsPerPage={rowsPerPage}
+                        onRowsPerPageChange={(event) => {
+                            setRowsPerPage(Number(event.target.value));
+                            setPage(0);
+                        }}
+                        rowsPerPageOptions={[20, 50, 100]}
+                        labelRowsPerPage="Linhas por página"
+                        labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+                    />
+                )}
             </Paper>
 
             <Dialog
@@ -1247,11 +1447,24 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                             <TextField
                                 fullWidth
                                 type="date"
-                                label="Data"
+                                label="Data registro"
                                 value={form.data}
                                 onChange={(event) => updateForm('data', event.target.value)}
                                 InputLabelProps={{ shrink: true }}
                                 disabled={!canEditSelected}
+                            />
+                        </Box>
+                        <Box sx={{ gridColumn: fieldSpan.third }}>
+                            <TextField
+                                fullWidth
+                                required
+                                type="date"
+                                label="Data de vencimento"
+                                value={form.dataVencimento}
+                                onChange={(event) => updateForm('dataVencimento', event.target.value)}
+                                InputLabelProps={{ shrink: true }}
+                                disabled={!canEditSelected}
+                                helperText="Preenchimento manual"
                             />
                         </Box>
                         <Box sx={{ gridColumn: fieldSpan.third }}>
@@ -1262,8 +1475,10 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                 value={form.valor}
                                 onChange={(event) => updateForm('valor', event.target.value)}
                                 inputProps={{ step: '0.01', min: '0' }}
-                                disabled={!(canEditSelected || canEditTrackingValue)}
-                                helperText={isTracking ? 'Disponivel quando o status estiver Em negociacao' : ''}
+                                disabled={!canEditOriginalValue}
+                                helperText={canEditOriginalValue
+                                    ? 'Liberado pelo status selecionado'
+                                    : 'Valor original bloqueado; selecione Negociação ou Promessa de pagamento'}
                             />
                         </Box>
                         <Box sx={{ gridColumn: fieldSpan.third }}>
@@ -1278,6 +1493,21 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                 {statusOptions.map((status) => <MenuItem key={status} value={status}>{status}</MenuItem>)}
                             </TextField>
                         </Box>
+                        {isPaidStatus(form.status) && (
+                            <Box sx={{ gridColumn: fieldSpan.third }}>
+                                <TextField
+                                    fullWidth
+                                    required
+                                    type="number"
+                                    label="Valor pago"
+                                    value={form.valorPago}
+                                    onChange={(event) => updateForm('valorPago', event.target.value)}
+                                    inputProps={{ step: '0.01', min: '0.01' }}
+                                    disabled={!canSaveSelected}
+                                    helperText="Pode ser diferente do valor original"
+                                />
+                            </Box>
+                        )}
                         <Box sx={{ gridColumn: fieldSpan.full }}>
                             <TextField
                                 fullWidth
@@ -1306,6 +1536,14 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                     </Box>
 
                     <ClienteRbxPanel cliente={rbxClient} />
+
+                    {rbxClient && (
+                        <Alert severity={rbxClient.boleto ? 'success' : 'warning'} sx={{ mt: 2 }}>
+                            {rbxClient.boleto
+                                ? `Boleto aberto mais recente carregado: vencimento ${formatDate(rbxClient.boleto.vencimento)} e valor ${formatCurrency(rbxClient.boleto.valor)}.`
+                                : 'O cliente nao possui boleto em aberto no RBX. Informe o vencimento e o valor manualmente.'}
+                        </Alert>
+                    )}
 
                     {selected && (
                         <>

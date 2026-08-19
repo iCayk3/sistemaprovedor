@@ -18,6 +18,7 @@ public class Evento {
     private Long id;
     private String evento;
     private String segmento;
+    private Boolean encerraAtendimento;
 
     public void atualizarEvento(String evento) {
         this.evento = evento;
@@ -25,5 +26,9 @@ public class Evento {
 
     public void atualizarSegmento(String segmento) {
         this.segmento = segmento;
+    }
+
+    public void atualizarEncerraAtendimento(Boolean encerraAtendimento) {
+        this.encerraAtendimento = encerraAtendimento;
     }
 }

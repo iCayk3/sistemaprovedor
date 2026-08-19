@@ -34,9 +34,12 @@ public class Cobranca {
     private String cliente;
     private String grupoCliente;
     private LocalDate data;
+    private LocalDate dataVencimento;
     private LocalDate dataPromessa;
     private BigDecimal valor;
+    private BigDecimal valorPago;
     private String status;
+    private String situacaoAtendimento;
 
     @Column(length = 2000)
     private String observacao;

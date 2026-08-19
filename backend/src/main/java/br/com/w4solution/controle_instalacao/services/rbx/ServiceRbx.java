@@ -386,6 +386,28 @@ public class ServiceRbx {
         }
     }
 
+    public Optional<BoletosAbertos> buscarBoletoAbertoMaisRecente(Long codigoCliente) {
+        try {
+            return buscarBoletosAbertos().stream()
+                    .filter(boleto -> Objects.equals(
+                            String.valueOf(codigoCliente),
+                            String.valueOf(boleto.cliente()).trim()
+                    ))
+                    .filter(boleto -> boleto.vencimento() != null && !boleto.vencimento().isBlank())
+                    .max(Comparator.comparing(this::dataVencimentoBoleto));
+        } catch (Exception e) {
+            throw new RuntimeException("Erro ao consultar boletos em aberto do cliente no RBX.", e);
+        }
+    }
+
+    private LocalDate dataVencimentoBoleto(BoletosAbertos boleto) {
+        try {
+            return LocalDate.parse(boleto.vencimento());
+        } catch (Exception e) {
+            return LocalDate.MIN;
+        }
+    }
+
     private long numeroContrato(ContratoRbxDTO contrato) {
         try {
             return Long.parseLong(Optional.ofNullable(contrato.numero()).orElse("0").replaceAll("\\D", ""));

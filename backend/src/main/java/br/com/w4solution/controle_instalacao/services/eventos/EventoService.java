@@ -7,24 +7,46 @@ import br.com.w4solution.controle_instalacao.dto.evento.cadastrarEventoDTO;
 import br.com.w4solution.controle_instalacao.repository.eventos.EventoRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class EventoService {
+
+    private static final Map<String, List<String>> OPCOES_PADRAO_COBRANCA = Map.of(
+            "COBRANCA_ACAO", List.of("CONTATO", "SEM RETORNO", "PROMESSA DE PAGAMENTO", "ACORDO", "SEGUNDA VIA ENVIADA", "CONTESTACAO", "NEGATIVACAO", "PAGO"),
+            "COBRANCA_STATUS", List.of("COBRANÇA EMITIDA", "PROMESSA DE PAGAMENTO", "SEM RETORNO", "PAGO", "CANCELADO")
+    );
 
     @Autowired
     EventoRepository repository;
 
     public Evento cadastrarEvento(cadastrarEventoDTO dados) {
-        var evento = new Evento(null, dados.evento(), normalizarSegmento(dados.segmento()));
+        var evento = new Evento(null, dados.evento(), normalizarSegmento(dados.segmento()), Boolean.TRUE.equals(dados.encerraAtendimento()));
         repository.save(evento);
         return evento;
     }
 
+    @Transactional
     public List<EventoDTO> listarEventos(String segmento) {
         var segmentoNormalizado = normalizarSegmento(segmento);
-        return repository.encontrarPorSegmento(segmentoNormalizado).stream().map(EventoDTO::new).toList();
+        var eventos = repository.encontrarPorSegmento(segmentoNormalizado);
+        var opcoesPadrao = OPCOES_PADRAO_COBRANCA.get(segmentoNormalizado);
+        if (eventos.isEmpty() && opcoesPadrao != null) {
+            repository.saveAll(opcoesPadrao.stream()
+                    .map(opcao -> new Evento(null, opcao, segmentoNormalizado, encerraAtendimentoPadrao(opcao)))
+                    .toList());
+            eventos = repository.encontrarPorSegmento(segmentoNormalizado);
+        }
+        if ("COBRANCA_STATUS".equals(segmentoNormalizado)) {
+            eventos.stream()
+                    .filter(evento -> evento.getEncerraAtendimento() == null)
+                    .forEach(evento -> evento.setEncerraAtendimento(encerraAtendimentoPadrao(evento.getEvento())));
+            repository.saveAll(eventos);
+        }
+        return eventos.stream().map(EventoDTO::new).toList();
     }
 
     public void editarEvento(Long id, AtualizarEventoDTO ev) {
@@ -33,6 +55,7 @@ public class EventoService {
             var evento = eventoOptional.get();
             evento.atualizarEvento(ev.evento());
             evento.atualizarSegmento(normalizarSegmento(ev.segmento()));
+            evento.atualizarEncerraAtendimento(Boolean.TRUE.equals(ev.encerraAtendimento()));
         }else {
             throw new RuntimeException("Evento nao encontrado");
         }
@@ -47,5 +70,9 @@ public class EventoService {
             return "ATIVIDADE";
         }
         return segmento.trim().toUpperCase();
+    }
+
+    private boolean encerraAtendimentoPadrao(String opcao) {
+        return "PAGO".equalsIgnoreCase(opcao) || "CANCELADO".equalsIgnoreCase(opcao);
     }
 }

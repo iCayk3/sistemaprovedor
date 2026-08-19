@@ -22,7 +22,12 @@ public class CorsConfiguration {
 
         List<String> allowedOrigins = Stream.concat(
                         Arrays.stream(allowed.split(",")),
-                        Stream.of("http://localhost:5173", "http://127.0.0.1:5173")
+                        Stream.of(
+                                "http://localhost:5173",
+                                "http://127.0.0.1:5173",
+                                "http://10.12.199.110",
+                                "http://10.12.199.110:5173"
+                        )
                 )
                 .map(String::trim)
                 .map(origin -> origin.endsWith("/") ? origin.substring(0, origin.length() - 1) : origin)

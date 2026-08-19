@@ -137,6 +137,13 @@ public class UsuarioService {
         }
     }
 
+    public void alterarAcessoIaChat(AlterarAcessoIaChatDTO dados) {
+        var usuario = repository.findById(dados.id())
+                .orElseThrow(() -> new UsuarioNaoEncontradoException("Usuario nao encontrado"));
+        usuario.alterarAcessoIaChat(dados.habilitado());
+        repository.save(usuario);
+    }
+
     public Boolean checarUsuarioExistente(String usuiario) {
         var usuario = repository.findByUsuarioAndStatus(usuiario, Status.ATIVO);
         return usuario.isPresent();
