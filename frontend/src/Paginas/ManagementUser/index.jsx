@@ -143,6 +143,21 @@ const ManagementUser = () => {
         }
     };
 
+    const alterarSupervisor = async (user, supervisor) => {
+        setSavingId(user.id);
+        setError("");
+        try {
+            await UseApi("usuario/supervisor", "PUT", { id: user.id, supervisor });
+            setUsuarios((atuais) => atuais.map((item) =>
+                item.id === user.id ? { ...item, supervisor } : item
+            ));
+        } catch (requestError) {
+            setError(requestError.message || "Erro ao alterar perfil de supervisao.");
+        } finally {
+            setSavingId(null);
+        }
+    };
+
     const startRoleEdit = (user) => {
         setEditingRoleId(user.id);
         setSelectedRole(user.role || "GUEST");
@@ -253,6 +268,7 @@ const ManagementUser = () => {
                                 <TableCell>Usuario</TableCell>
                                 <TableCell>Permissao</TableCell>
                                 <TableCell>Status</TableCell>
+                                <TableCell align="center">Supervisor</TableCell>
                                 <TableCell align="center">IA e chat</TableCell>
                                 <TableCell align="right">Acoes</TableCell>
                             </TableRow>
@@ -297,6 +313,14 @@ const ManagementUser = () => {
                                     </TableCell>
                                     <TableCell align="center">
                                         <Switch
+                                            checked={Boolean(user.supervisor)}
+                                            disabled={savingId === user.id || user.role === "ADMIN"}
+                                            onChange={(event) => alterarSupervisor(user, event.target.checked)}
+                                            inputProps={{ "aria-label": `Definir ${user.usuario} como supervisor` }}
+                                        />
+                                    </TableCell>
+                                    <TableCell align="center">
+                                        <Switch
                                             checked={Boolean(user.recursosIaChatHabilitados)}
                                             disabled={savingId === user.id}
                                             onChange={(event) => alterarAcessoIaChat(user, event.target.checked)}
@@ -308,7 +332,7 @@ const ManagementUser = () => {
                             ))}
                             {!filteredUsers.length && (
                                 <TableRow>
-                                    <TableCell colSpan={5} align="center">
+                                    <TableCell colSpan={6} align="center">
                                         Nenhum usuario encontrado com os filtros atuais.
                                     </TableCell>
                                 </TableRow>

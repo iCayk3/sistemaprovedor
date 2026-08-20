@@ -38,6 +38,11 @@ public interface AtividadeRepository extends JpaRepository<Atividade, Long> {
             " ORDER BY COUNT(a) DESC")
     Integer encontrarAtividadesMensal(String evento, String segmento, int monthValue, int year);
 
+    @Query("SELECT COUNT(a) FROM Atividade a WHERE a.evento = :evento AND a.usuario = :usuario " +
+            "AND (a.segmento = :segmento OR (:segmento = 'ATIVIDADE' AND a.segmento IS NULL)) " +
+            "AND EXTRACT(MONTH FROM a.data) = :monthValue AND EXTRACT(YEAR FROM a.data) = :year")
+    Integer encontrarAtividadesMensalPorUsuario(String evento, String segmento, int monthValue, int year, String usuario);
+
     @Query("SELECT a FROM Atividade a WHERE (a.segmento = :segmento OR (:segmento = 'ATIVIDADE' AND a.segmento IS NULL)) AND EXTRACT(MONTH FROM a.data) = :mes AND EXTRACT(YEAR FROM a.data) = :ano ORDER BY a.id DESC")
     List<Atividade> listarAtividadesDoMes(String segmento, Integer ano, Integer mes);
 

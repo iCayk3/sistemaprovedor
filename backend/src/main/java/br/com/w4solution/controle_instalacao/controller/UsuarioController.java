@@ -4,6 +4,7 @@ import br.com.w4solution.controle_instalacao.domain.usuarios.Usuario;
 import br.com.w4solution.controle_instalacao.dto.usuarios.AlterarPermissao;
 import br.com.w4solution.controle_instalacao.dto.usuarios.AlterarStatusDTO;
 import br.com.w4solution.controle_instalacao.dto.usuarios.AlterarAcessoIaChatDTO;
+import br.com.w4solution.controle_instalacao.dto.usuarios.AlterarSupervisorDTO;
 import br.com.w4solution.controle_instalacao.dto.usuarios.DadosAutenticao;
 import br.com.w4solution.controle_instalacao.dto.usuarios.DadosToken;
 import br.com.w4solution.controle_instalacao.dto.usuarios.RedefinirSenhaDTO;
@@ -162,6 +163,14 @@ public class UsuarioController {
     @PreAuthorize(ADMIN_ONLY)
     public ResponseEntity<Void> alterarAcessoIaChat(@Valid @RequestBody AlterarAcessoIaChatDTO dados) {
         service.alterarAcessoIaChat(dados);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/supervisor")
+    @Transactional
+    @PreAuthorize(ADMIN_ONLY)
+    public ResponseEntity<Void> alterarSupervisor(@RequestBody AlterarSupervisorDTO dados) {
+        service.alterarSupervisor(dados);
         return ResponseEntity.noContent().build();
     }
 }

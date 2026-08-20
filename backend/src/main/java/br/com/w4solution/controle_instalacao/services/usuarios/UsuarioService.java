@@ -144,6 +144,13 @@ public class UsuarioService {
         repository.save(usuario);
     }
 
+    public void alterarSupervisor(AlterarSupervisorDTO dados) {
+        var usuario = repository.findById(dados.id())
+                .orElseThrow(() -> new UsuarioNaoEncontradoException("Usuario nao encontrado"));
+        usuario.setSupervisor(Boolean.TRUE.equals(dados.supervisor()));
+        repository.save(usuario);
+    }
+
     public Boolean checarUsuarioExistente(String usuiario) {
         var usuario = repository.findByUsuarioAndStatus(usuiario, Status.ATIVO);
         return usuario.isPresent();

@@ -60,8 +60,9 @@ public class CobrancaService {
         return new CobrancaConfiguracaoDTO(configuracaoRepository.save(configuracao));
     }
 
-    public List<CobrancaDTO> listar() {
+    public List<CobrancaDTO> listar(String usuario, boolean podeVerGeral) {
         return repository.findAll().stream()
+                .filter(cobranca -> podeAcessar(cobranca, usuario, podeVerGeral))
                 .filter(cobranca -> !Boolean.TRUE.equals(cobranca.getExcluida()))
                 .sorted(Comparator.comparing(Cobranca::getData, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(Cobranca::getCriadoEm, Comparator.nullsLast(Comparator.reverseOrder())))
@@ -69,8 +70,9 @@ public class CobrancaService {
                 .toList();
     }
 
-    public List<CobrancaDTO> listarPagas() {
+    public List<CobrancaDTO> listarPagas(String usuario, boolean podeVerGeral) {
         return repository.findAll().stream()
+                .filter(cobranca -> podeAcessar(cobranca, usuario, podeVerGeral))
                 .filter(cobranca -> "PAGO".equals(String.valueOf(cobranca.getStatus()).trim().toUpperCase()))
                 .sorted(Comparator.comparing(Cobranca::getFechadoEm, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(Cobranca::getAtualizadoEm, Comparator.nullsLast(Comparator.reverseOrder()))
@@ -79,8 +81,9 @@ public class CobrancaService {
                 .toList();
     }
 
-    public List<CobrancaDTO> listarAuditoria() {
+    public List<CobrancaDTO> listarAuditoria(String usuario, boolean podeVerGeral) {
         return repository.findAll().stream()
+                .filter(cobranca -> podeAcessar(cobranca, usuario, podeVerGeral))
                 .sorted(Comparator.comparing(Cobranca::getExcluidoEm, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(Cobranca::getFechadoEm, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(Cobranca::getAtualizadoEm, Comparator.nullsLast(Comparator.reverseOrder()))
@@ -89,9 +92,10 @@ public class CobrancaService {
                 .toList();
     }
 
-    public CobrancaLembreteDTO lembretesPendentes() {
+    public CobrancaLembreteDTO lembretesPendentes(String usuario, boolean podeVerGeral) {
         LocalDateTime limite = LocalDateTime.now().minusDays(7);
         long quantidade = repository.findAll().stream()
+                .filter(cobranca -> podeAcessar(cobranca, usuario, podeVerGeral))
                 .filter(cobranca -> !Boolean.TRUE.equals(cobranca.getExcluida()))
                 .filter(cobranca -> !"Fechada".equalsIgnoreCase(cobranca.getSituacaoAtendimento()))
                 .filter(cobranca -> isEditavel(cobranca.getStatus()))
@@ -120,10 +124,11 @@ public class CobrancaService {
         return toDto(salva);
     }
 
-    public CobrancaDTO atualizar(Long id, CobrancaCadastroDTO dto, String usuario, boolean admin) {
+    public CobrancaDTO atualizar(Long id, CobrancaCadastroDTO dto, String usuario, boolean admin, boolean podeVerGeral) {
         Cobranca cobranca = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Cobranca nao encontrada."));
         validarNaoExcluida(cobranca);
+        validarAcesso(cobranca, usuario, podeVerGeral);
         if ("Fechada".equalsIgnoreCase(cobranca.getSituacaoAtendimento()) || !isEditavel(cobranca.getStatus())) {
             throw new IllegalStateException("Cobranca paga, fechada ou cancelada nao pode ser editada.");
         }
@@ -143,10 +148,11 @@ public class CobrancaService {
         return toDto(salva);
     }
 
-    public CobrancaDTO acompanhar(Long id, CobrancaAcompanhamentoDTO dto, String usuario, boolean admin) {
+    public CobrancaDTO acompanhar(Long id, CobrancaAcompanhamentoDTO dto, String usuario, boolean admin, boolean podeVerGeral) {
         Cobranca cobranca = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Cobranca nao encontrada."));
         validarNaoExcluida(cobranca);
+        validarAcesso(cobranca, usuario, podeVerGeral);
         if ("Fechada".equalsIgnoreCase(cobranca.getSituacaoAtendimento()) || !isEditavel(cobranca.getStatus())) {
             throw new IllegalStateException("Cobranca paga, fechada ou cancelada nao pode ser alterada no acompanhamento.");
         }
@@ -180,10 +186,11 @@ public class CobrancaService {
         return toDto(salva);
     }
 
-    public CobrancaDTO excluir(Long id, CobrancaExclusaoDTO dto, String usuario) {
+    public CobrancaDTO excluir(Long id, CobrancaExclusaoDTO dto, String usuario, boolean podeVerGeral) {
         Cobranca cobranca = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Cobranca nao encontrada."));
         validarNaoExcluida(cobranca);
+        validarAcesso(cobranca, usuario, podeVerGeral);
         if (dto.motivo() == null || dto.motivo().isBlank()) {
             throw new IllegalArgumentException("Informe o motivo da exclusao.");
         }
@@ -384,6 +391,16 @@ public class CobrancaService {
     private void validarNaoExcluida(Cobranca cobranca) {
         if (Boolean.TRUE.equals(cobranca.getExcluida())) {
             throw new IllegalStateException("Cobranca excluida nao pode ser alterada.");
+        }
+    }
+
+    private boolean podeAcessar(Cobranca cobranca, String usuario, boolean podeVerGeral) {
+        return podeVerGeral || String.valueOf(cobranca.getCriadoPor()).equalsIgnoreCase(String.valueOf(usuario));
+    }
+
+    private void validarAcesso(Cobranca cobranca, String usuario, boolean podeVerGeral) {
+        if (!podeAcessar(cobranca, usuario, podeVerGeral)) {
+            throw new IllegalStateException("Voce nao possui acesso a esta cobranca.");
         }
     }
 

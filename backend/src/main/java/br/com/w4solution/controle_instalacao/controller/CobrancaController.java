@@ -33,26 +33,26 @@ public class CobrancaController {
 
     @GetMapping
     @PreAuthorize(CHARGING_ACCESS)
-    public ResponseEntity<?> listar() {
-        return ResponseEntity.ok(service.listar());
+    public ResponseEntity<?> listar(@AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(service.listar(nomeUsuario(usuario), podeVerGeral(usuario)));
     }
 
     @GetMapping("/pagas")
     @PreAuthorize(CHARGING_ACCESS)
-    public ResponseEntity<?> listarPagas() {
-        return ResponseEntity.ok(service.listarPagas());
+    public ResponseEntity<?> listarPagas(@AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(service.listarPagas(nomeUsuario(usuario), podeVerGeral(usuario)));
     }
 
     @GetMapping("/auditoria")
     @PreAuthorize(CHARGING_ACCESS)
-    public ResponseEntity<?> listarAuditoria() {
-        return ResponseEntity.ok(service.listarAuditoria());
+    public ResponseEntity<?> listarAuditoria(@AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(service.listarAuditoria(nomeUsuario(usuario), podeVerGeral(usuario)));
     }
 
     @GetMapping("/lembretes")
     @PreAuthorize(CHARGING_ACCESS)
-    public ResponseEntity<?> lembretesPendentes() {
-        return ResponseEntity.ok(service.lembretesPendentes());
+    public ResponseEntity<?> lembretesPendentes(@AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(service.lembretesPendentes(nomeUsuario(usuario), podeVerGeral(usuario)));
     }
 
     @PostMapping
@@ -68,7 +68,7 @@ public class CobrancaController {
             @RequestBody CobrancaCadastroDTO dto,
             @AuthenticationPrincipal Usuario usuario
     ) {
-        return ResponseEntity.ok(service.atualizar(id, dto, nomeUsuario(usuario), isAdmin(usuario)));
+        return ResponseEntity.ok(service.atualizar(id, dto, nomeUsuario(usuario), isAdmin(usuario), podeVerGeral(usuario)));
     }
 
     @PatchMapping("/{id}/acompanhamento")
@@ -78,7 +78,7 @@ public class CobrancaController {
             @RequestBody CobrancaAcompanhamentoDTO dto,
             @AuthenticationPrincipal Usuario usuario
     ) {
-        return ResponseEntity.ok(service.acompanhar(id, dto, nomeUsuario(usuario), isAdmin(usuario)));
+        return ResponseEntity.ok(service.acompanhar(id, dto, nomeUsuario(usuario), isAdmin(usuario), podeVerGeral(usuario)));
     }
 
     @GetMapping("/configuracao")
@@ -100,7 +100,7 @@ public class CobrancaController {
             @RequestBody CobrancaExclusaoDTO dto,
             @AuthenticationPrincipal Usuario usuario
     ) {
-        return ResponseEntity.ok(service.excluir(id, dto, nomeUsuario(usuario)));
+        return ResponseEntity.ok(service.excluir(id, dto, nomeUsuario(usuario), podeVerGeral(usuario)));
     }
 
     @GetMapping("/rbx/clientes/{codigo}")
@@ -115,5 +115,9 @@ public class CobrancaController {
 
     private boolean isAdmin(Usuario usuario) {
         return usuario != null && usuario.getPermissao() == UserRole.ADMIN;
+    }
+
+    private boolean podeVerGeral(Usuario usuario) {
+        return isAdmin(usuario) || (usuario != null && usuario.isSupervisor());
     }
 }

@@ -2,6 +2,7 @@ package br.com.w4solution.controle_instalacao.services.eventos;
 
 import br.com.w4solution.controle_instalacao.domain.atividades.Atividade;
 import br.com.w4solution.controle_instalacao.domain.usuarios.UserRole;
+import br.com.w4solution.controle_instalacao.domain.usuarios.Usuario;
 import br.com.w4solution.controle_instalacao.dto.evento.*;
 import br.com.w4solution.controle_instalacao.repository.eventos.AtividadeRepository;
 import br.com.w4solution.controle_instalacao.repository.eventos.EventoRepository;
@@ -80,16 +81,16 @@ public class AtividadesService {
         );
     }
 
-    public List<AtividadesDTO> listarAtividades() {
-        return repository.findAll().stream().map(AtividadesDTO::new).toList();
+    public List<AtividadesDTO> listarAtividades(Usuario usuario) {
+        return repository.findAll().stream().filter(a -> podeAcessar(a, usuario)).map(AtividadesDTO::new).toList();
     }
 
-    public List<ServicoPorUsuarioDiario> listarAtividadesPorUsuario(String filtro, String segmento) {
+    public List<ServicoPorUsuarioDiario> listarAtividadesPorUsuario(String filtro, String segmento, Usuario usuarioAtual) {
 
         var usuarios = usuarioRepository.encontrarUsuariosPorFragmento(UserRole.COMERCIAL.toString());
         var segmentoNormalizado = normalizarSegmento(segmento);
 
-        return usuarios.stream().map(u -> {
+        return usuarios.stream().filter(u -> podeVerGeral(usuarioAtual) || u.getUsuario().equalsIgnoreCase(usuarioAtual.getUsuario())).map(u -> {
             List<Object[]> resultados = null;
 
             if(filtro != null){
@@ -112,7 +113,7 @@ public class AtividadesService {
         }).toList();
     }
 
-    public List<ServicoPorUsuarioDiario> listarAtividadesMensaisPorUsuario(String data, String segmento) {
+    public List<ServicoPorUsuarioDiario> listarAtividadesMensaisPorUsuario(String data, String segmento, Usuario usuarioAtual) {
         var segmentoNormalizado = normalizarSegmento(segmento);
         var dataConvertida = data == null || data.isBlank() ? LocalDate.now() : LocalDate.parse(data);
         var resultados = repository.encontrarAtividadesMensaisPorUsuario(segmentoNormalizado, dataConvertida.getMonthValue(), dataConvertida.getYear());
@@ -120,6 +121,7 @@ public class AtividadesService {
 
         for (Object[] resultado : resultados) {
             String usuario = (String) resultado[0];
+            if (!podeVerGeral(usuarioAtual) && !usuario.equalsIgnoreCase(usuarioAtual.getUsuario())) continue;
             String evento = (String) resultado[1];
             Long quantidade = (Long) resultado[2];
             porUsuario.computeIfAbsent(usuario, key -> new ArrayList<>()).add(new TotalAtividadeDTO(evento, quantidade));
@@ -130,39 +132,42 @@ public class AtividadesService {
                 .toList();
     }
 
-    public List<ResumoMensalDTO> buscarResumoMensalAtividade(String data, String segmento) {
+    public List<ResumoMensalDTO> buscarResumoMensalAtividade(String data, String segmento, Usuario usuario) {
 
         var segmentoNormalizado = normalizarSegmento(segmento);
         var eventos = eventoRepository.encontrarPorSegmento(segmentoNormalizado);
         var dataConvertida = LocalDate.parse(data);
         return eventos.stream().map(e -> {
-            var value = repository.encontrarAtividadesMensal(e.getEvento(), segmentoNormalizado, dataConvertida.getMonthValue(), dataConvertida.getYear());
+            var value = podeVerGeral(usuario)
+                    ? repository.encontrarAtividadesMensal(e.getEvento(), segmentoNormalizado, dataConvertida.getMonthValue(), dataConvertida.getYear())
+                    : repository.encontrarAtividadesMensalPorUsuario(e.getEvento(), segmentoNormalizado, dataConvertida.getMonthValue(), dataConvertida.getYear(), usuario.getUsuario());
             return new ResumoMensalDTO(e.getEvento(), value != null ? value : 0);
         }).toList();
     }
 
-    public List<AtividadesDTO> listarAtividadesPorMes(String data, String segmento) {
+    public List<AtividadesDTO> listarAtividadesPorMes(String data, String segmento, Usuario usuario) {
         var segmentoNormalizado = normalizarSegmento(segmento);
         if(data == null){
-            return repository.listarAtividadesDoMes(segmentoNormalizado, LocalDate.now().getYear(), LocalDate.now().getMonthValue()).stream().map(AtividadesDTO::new).toList();
+            return repository.listarAtividadesDoMes(segmentoNormalizado, LocalDate.now().getYear(), LocalDate.now().getMonthValue()).stream().filter(a -> podeAcessar(a, usuario)).map(AtividadesDTO::new).toList();
         }
         var dataConvertida = LocalDate.parse(data);
-        return repository.listarAtividadesDoMes(segmentoNormalizado, dataConvertida.getYear(), dataConvertida.getMonthValue()).stream().map(AtividadesDTO::new).toList();
+        return repository.listarAtividadesDoMes(segmentoNormalizado, dataConvertida.getYear(), dataConvertida.getMonthValue()).stream().filter(a -> podeAcessar(a, usuario)).map(AtividadesDTO::new).toList();
     }
 
-    public List<AtividadesDTO> listarAtividadesPorAno(String data, String segmento) {
+    public List<AtividadesDTO> listarAtividadesPorAno(String data, String segmento, Usuario usuario) {
         var segmentoNormalizado = normalizarSegmento(segmento);
         var dataConvertida = data == null || data.isBlank() ? LocalDate.now() : LocalDate.parse(data);
-        return repository.listarAtividadesDoAno(segmentoNormalizado, dataConvertida.getYear()).stream().map(AtividadesDTO::new).toList();
+        return repository.listarAtividadesDoAno(segmentoNormalizado, dataConvertida.getYear()).stream().filter(a -> podeAcessar(a, usuario)).map(AtividadesDTO::new).toList();
     }
 
-    public AtividadesDTO converterLead(Long id, ConverterLeadDTO dto, HttpServletRequest request) {
+    public AtividadesDTO converterLead(Long id, ConverterLeadDTO dto, HttpServletRequest request, Usuario usuario) {
         if (dto.codigoCliente() == null) {
             throw new IllegalArgumentException("Informe o codigo do cliente.");
         }
 
         var atividade = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Lead nao encontrado."));
+        validarAcesso(atividade, usuario);
 
         if (!"LEAD".equalsIgnoreCase(atividade.getSegmento())) {
             throw new IllegalArgumentException("Apenas leads podem ser convertidos em venda.");
@@ -188,8 +193,10 @@ public class AtividadesService {
         return new AtividadesDTO(repository.save(atividade));
     }
 
-    public void deletarAtividade(Long id) {
-        repository.deleteById(id);
+    public void deletarAtividade(Long id, Usuario usuario) {
+        var atividade = repository.findById(id).orElseThrow(() -> new IllegalArgumentException("Registro nao encontrado."));
+        validarAcesso(atividade, usuario);
+        repository.delete(atividade);
     }
 
     private Atividade prepararAtividade(CadastrarAtividadesDTO dto, String usuario) {
@@ -238,6 +245,18 @@ public class AtividadesService {
             case "43" -> "SOL";
             default -> grupo;
         };
+    }
+
+    private boolean podeVerGeral(Usuario usuario) {
+        return usuario != null && (usuario.getPermissao() == UserRole.ADMIN || usuario.isSupervisor());
+    }
+
+    private boolean podeAcessar(Atividade atividade, Usuario usuario) {
+        return podeVerGeral(usuario) || (usuario != null && String.valueOf(atividade.getUsuario()).equalsIgnoreCase(usuario.getUsuario()));
+    }
+
+    private void validarAcesso(Atividade atividade, Usuario usuario) {
+        if (!podeAcessar(atividade, usuario)) throw new IllegalStateException("Voce nao possui acesso a este registro.");
     }
 }
 

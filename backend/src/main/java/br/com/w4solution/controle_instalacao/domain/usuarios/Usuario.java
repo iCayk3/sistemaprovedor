@@ -32,6 +32,7 @@ public class Usuario implements UserDetails {
     @Enumerated(EnumType.STRING)
     private UserRole permissao = UserRole.GUEST;
     private Boolean recursosIaChatHabilitados = false;
+    private Boolean supervisor = false;
 
     public Usuario(UsuarioCadastroDTO dados) {
         this.usuario = dados.usuario();
@@ -132,5 +133,9 @@ public class Usuario implements UserDetails {
 
     public void alterarAcessoIaChat(boolean habilitado) {
         this.recursosIaChatHabilitados = habilitado;
+    }
+
+    public boolean isSupervisor() {
+        return Boolean.TRUE.equals(supervisor);
     }
 }
