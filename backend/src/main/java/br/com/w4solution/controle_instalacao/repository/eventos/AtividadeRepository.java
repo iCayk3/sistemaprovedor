@@ -48,4 +48,8 @@ public interface AtividadeRepository extends JpaRepository<Atividade, Long> {
 
     @Query("SELECT a FROM Atividade a WHERE (a.segmento = :segmento OR (:segmento = 'ATIVIDADE' AND a.segmento IS NULL)) AND EXTRACT(YEAR FROM a.data) = :ano ORDER BY a.id DESC")
     List<Atividade> listarAtividadesDoAno(String segmento, Integer ano);
+
+    List<Atividade> findBySegmentoIgnoreCaseAndStatusInAndCodigoClienteIsNotNull(String segmento, List<String> statuses);
+
+    List<Atividade> findBySegmentoIgnoreCaseAndRequerAtencaoTrueOrderByUltimaConsultaRbxDesc(String segmento);
 }

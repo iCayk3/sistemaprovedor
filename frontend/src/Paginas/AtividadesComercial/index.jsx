@@ -11,6 +11,7 @@ import dayjs from "dayjs";
 import TabelaExibicao from "../../Componentes/TabelaExibicao";
 import DeleteIcon from '@mui/icons-material/Delete';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import { GridActionsCellItem } from "@mui/x-data-grid";
 
@@ -79,6 +80,11 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
     const [conversionLead, setConversionLead] = useState(null);
     const [conversionCode, setConversionCode] = useState('');
     const [conversionError, setConversionError] = useState('');
+    const [notCompletedLead, setNotCompletedLead] = useState(null);
+    const [notCompletedReason, setNotCompletedReason] = useState('');
+    const [notCompletedNote, setNotCompletedNote] = useState('');
+    const [notCompletedError, setNotCompletedError] = useState('');
+    const [leadAlerts, setLeadAlerts] = useState([]);
     const [formError, setFormError] = useState('');
     const [leadSearch, setLeadSearch] = useState('');
     const [leadStatusFilter, setLeadStatusFilter] = useState('Todos');
@@ -184,6 +190,9 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
             try {
                 const response = await UseApi(`atividades/registro/mensal?segmento=${segmento}`);
                 setData(response);
+                if (segmento === 'LEAD') {
+                    setLeadAlerts(await UseApi('atividades/alertas'));
+                }
             } catch (error) {
                 console.error('Erro ao buscar dados:', error);
             } finally {
@@ -313,13 +322,46 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
         }
     };
 
+    const registrarNaoConclusao = async () => {
+        if (!notCompletedReason) {
+            setNotCompletedError('Selecione o motivo da nao conclusao.');
+            return;
+        }
+        if (notCompletedReason === 'OUTRO' && !notCompletedNote.trim()) {
+            setNotCompletedError('Descreva o motivo da nao conclusao.');
+            return;
+        }
+        try {
+            await UseApi(`atividades/${notCompletedLead.id}/venda-nao-concluida`, 'PATCH', {
+                motivo: notCompletedReason,
+                observacao: notCompletedNote,
+            });
+            setNotCompletedLead(null);
+            setNotCompletedReason('');
+            setNotCompletedNote('');
+            setNotCompletedError('');
+            handleFormSubmit();
+        } catch (error) {
+            setNotCompletedError(error.message || 'Erro ao registrar a venda nao concluida.');
+        }
+    };
+
+    const statusPresentation = {
+        ABERTO: { label: 'Lead aberto', color: 'warning' },
+        AGUARDANDO_INSTALACAO: { label: 'Aguardando instalacao', color: 'info' },
+        CONVERTIDO: { label: 'Cliente ativo', color: 'success' },
+    };
+
     const colunas = [
         {
             field: 'options',
             width: 10,
             type: 'actions',
             getActions: (params) => {
-                const canConvertLead = segmento === 'LEAD' && params.row.status !== 'CONVERTIDO';
+                const canConvertLead = segmento === 'LEAD' && (!params.row.status || params.row.status === 'ABERTO');
+                const canMarkNotCompleted = segmento === 'LEAD'
+                    && Boolean(params.row.codigoCliente)
+                    && ['AGUARDANDO_INSTALACAO', 'CONVERTIDO'].includes(params.row.status);
                 const actions = [];
 
                 if (canConvertLead) {
@@ -329,6 +371,22 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
                             showInMenu
                             icon={<CheckCircleIcon />}
                             onClick={() => abrirConversao(params.row)}
+                        />
+                    );
+                }
+
+                if (canMarkNotCompleted) {
+                    actions.push(
+                        <GridActionsCellItem
+                            label="Venda nao concluida"
+                            showInMenu
+                            icon={<WarningAmberRoundedIcon />}
+                            onClick={() => {
+                                setNotCompletedLead(params.row);
+                                setNotCompletedReason('');
+                                setNotCompletedNote('');
+                                setNotCompletedError('');
+                            }}
                         />
                     );
                 }
@@ -371,8 +429,8 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
                 renderCell: (params) => (
                     <Chip
                         size="small"
-                        color={params.value === 'CONVERTIDO' ? 'success' : 'warning'}
-                        label={params.value || 'ABERTO'}
+                        color={params.row.requerAtencao ? 'error' : (statusPresentation[params.value]?.color || 'default')}
+                        label={params.row.requerAtencao ? 'Revisar situacao' : (statusPresentation[params.value]?.label || params.value || 'Lead aberto')}
                     />
                 ),
             },
@@ -547,6 +605,17 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
             </Paper>
 
             <Divider sx={{ marginTop: 2, marginBottom: 2 }} />
+            {segmento === 'LEAD' && leadAlerts.length > 0 && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                    <Typography fontWeight={700}>
+                        {leadAlerts.length} venda(s) precisam de revisao
+                    </Typography>
+                    <Typography variant="body2">
+                        O RBX indica cancelamento ou inatividade para: {leadAlerts.slice(0, 4).map((item) => item.cliente).join(', ')}
+                        {leadAlerts.length > 4 ? ` e mais ${leadAlerts.length - 4}` : ''}. Use a acao “Venda nao concluida” e informe o motivo para devolver o registro ao funil.
+                    </Typography>
+                </Alert>
+            )}
             {showLeadFilters && (
                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, mb: 2 }}>
                     <Stack direction={{ xs: 'column', md: 'row' }} gap={1.5} alignItems={{ xs: 'stretch', md: 'center' }}>
@@ -659,6 +728,44 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
                 <DialogActions>
                     <Button onClick={() => setConversionLead(null)}>Cancelar</Button>
                     <Button variant="contained" onClick={converterLead}>Converter</Button>
+                </DialogActions>
+            </Dialog>
+            <Dialog open={Boolean(notCompletedLead)} onClose={() => setNotCompletedLead(null)} maxWidth="sm" fullWidth>
+                <DialogTitle>Registrar venda nao concluida</DialogTitle>
+                <DialogContent>
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                        O cliente voltara a ser um lead aberto. O codigo e a situacao consultada no RBX serao preservados para auditoria e relatorios.
+                    </Alert>
+                    <TextField
+                        select
+                        fullWidth
+                        label="Motivo"
+                        value={notCompletedReason}
+                        onChange={(event) => setNotCompletedReason(event.target.value)}
+                        sx={{ mb: 2 }}
+                    >
+                        <MenuItem value="DESISTENCIA_CLIENTE">Desistencia do cliente</MenuItem>
+                        <MenuItem value="SEM_VIABILIDADE_TECNICA">Sem viabilidade tecnica</MenuItem>
+                        <MenuItem value="ENDERECO_INCORRETO">Endereco incorreto</MenuItem>
+                        <MenuItem value="SEM_CONTATO">Sem contato</MenuItem>
+                        <MenuItem value="PENDENCIA_DOCUMENTAL">Pendencia documental</MenuItem>
+                        <MenuItem value="DIVERGENCIA_COMERCIAL">Divergencia comercial</MenuItem>
+                        <MenuItem value="OUTRO">Outro</MenuItem>
+                    </TextField>
+                    <TextField
+                        fullWidth
+                        multiline
+                        minRows={3}
+                        label="Observacao"
+                        value={notCompletedNote}
+                        onChange={(event) => setNotCompletedNote(event.target.value)}
+                        error={Boolean(notCompletedError)}
+                        helperText={notCompletedError || 'Obrigatoria quando o motivo for Outro.'}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setNotCompletedLead(null)}>Cancelar</Button>
+                    <Button color="warning" variant="contained" onClick={registrarNaoConclusao}>Confirmar e reabrir lead</Button>
                 </DialogActions>
             </Dialog>
         </>

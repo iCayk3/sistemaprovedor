@@ -19,7 +19,16 @@ public record AtividadesDTO(
         String plano,
         Double valorPlano,
         LocalDateTime convertidoEm,
-        String convertidoPor
+        String convertidoPor,
+        LocalDateTime efetivadoEm,
+        String situacaoRbx,
+        String situacaoContratoRbx,
+        LocalDateTime ultimaConsultaRbx,
+        Boolean requerAtencao,
+        String motivoNaoConclusao,
+        String observacaoNaoConclusao,
+        LocalDateTime naoConcluidoEm,
+        String naoConcluidoPor
 ) {
     public AtividadesDTO(Atividade atv){
         this(
@@ -36,7 +45,16 @@ public record AtividadesDTO(
                 atv.getPlano(),
                 atv.getValorPlano(),
                 atv.getConvertidoEm(),
-                atv.getConvertidoPor()
+                atv.getConvertidoPor(),
+                atv.getEfetivadoEm(),
+                atv.getSituacaoRbx(),
+                atv.getSituacaoContratoRbx(),
+                atv.getUltimaConsultaRbx(),
+                Boolean.TRUE.equals(atv.getRequerAtencao()),
+                atv.getMotivoNaoConclusao(),
+                atv.getObservacaoNaoConclusao(),
+                atv.getNaoConcluidoEm(),
+                atv.getNaoConcluidoPor()
         );
     }
 }

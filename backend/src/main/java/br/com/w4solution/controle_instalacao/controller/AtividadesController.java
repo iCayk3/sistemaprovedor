@@ -35,6 +35,11 @@ public class AtividadesController {
         return ResponseEntity.ok().body(atividadesResumidas);
     }
 
+    @GetMapping("/alertas")
+    public ResponseEntity<List<AtividadesDTO>> listarAlertas(@AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(service.listarAlertas(usuario));
+    }
+
     @GetMapping("/registro/mensal")
     public ResponseEntity<List<AtividadesDTO>> registroMensal(@RequestParam(required = false) String data, @RequestParam(required = false) String segmento, @AuthenticationPrincipal Usuario usuario){
         var atividades = service.listarAtividadesPorMes(data, segmento, usuario);
@@ -77,6 +82,12 @@ public class AtividadesController {
     public ResponseEntity<AtividadesDTO> converterLead(@PathVariable Long id, @RequestBody ConverterLeadDTO dados, HttpServletRequest request, @AuthenticationPrincipal Usuario usuario){
         var atividade = service.converterLead(id, dados, request, usuario);
         return ResponseEntity.ok().body(atividade);
+    }
+
+    @PatchMapping("/{id}/venda-nao-concluida")
+    @Transactional
+    public ResponseEntity<AtividadesDTO> registrarVendaNaoConcluida(@PathVariable Long id, @RequestBody NaoConcluirVendaDTO dados, HttpServletRequest request, @AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(service.registrarVendaNaoConcluida(id, dados, request, usuario));
     }
 
     @DeleteMapping

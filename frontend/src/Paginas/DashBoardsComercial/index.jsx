@@ -21,7 +21,6 @@ import ChartValueList from '../../Componentes/ChartValueList';
 import {
     dashboardHeaderSx,
     dashboardHeaderInputSx,
-    dashboardInputSx,
     dashboardMetricSx,
     dashboardMutedTextSx,
     dashboardPanelSx,
@@ -47,6 +46,15 @@ const chartSetting = {
 const chartColors = ['#0f4c81', '#2f80c0', '#2D9C75', '#f97316', '#8a9f20', '#c89b08', '#8064c8', '#8aa0ad'];
 const cancellationColor = '#d32f2f';
 const postSaleColor = '#7c3aed';
+const notCompletedReasonLabels = {
+    DESISTENCIA_CLIENTE: 'Desistencia do cliente',
+    SEM_VIABILIDADE_TECNICA: 'Sem viabilidade tecnica',
+    ENDERECO_INCORRETO: 'Endereco incorreto',
+    SEM_CONTATO: 'Sem contato',
+    PENDENCIA_DOCUMENTAL: 'Pendencia documental',
+    DIVERGENCIA_COMERCIAL: 'Divergencia comercial',
+    OUTRO: 'Outro',
+};
 
 function normalizeChartLabel(label) {
     return String(label || '')
@@ -107,6 +115,18 @@ function cleanClientName(value) {
 
 function isCancellationEvent(item) {
     return normalizeChartLabel(item?.evento) === 'CANCELAMENTO';
+}
+
+function isSameMonth(value, reference) {
+    if (!value) return false;
+    const date = new Date(value);
+    const selected = new Date(`${reference}T00:00:00`);
+    return date.getFullYear() === selected.getFullYear() && date.getMonth() === selected.getMonth();
+}
+
+function isSameYear(value, reference) {
+    if (!value) return false;
+    return new Date(value).getFullYear() === new Date(`${reference}T00:00:00`).getFullYear();
 }
 
 const planByValue = [
@@ -270,32 +290,35 @@ const DashBoardsComercial = ({
         color: chartColors[index % chartColors.length],
     }));
     const leadMetrics = React.useMemo(() => {
-        const convertidos = registrosMensais.filter((item) => item.status === 'CONVERTIDO');
-        const abertos = registrosMensais.filter((item) => (item.status || 'ABERTO') !== 'CONVERTIDO');
+        const convertidos = registrosMensais.filter((item) => item.status === 'CONVERTIDO' && isSameMonth(item.efetivadoEm, dataMensal));
+        const abertos = registrosMensais.filter((item) => (item.status || 'ABERTO') === 'ABERTO');
+        const aguardando = registrosMensais.filter((item) => item.status === 'AGUARDANDO_INSTALACAO');
+        const naoConcluidos = registrosMensais.filter((item) => isSameMonth(item.naoConcluidoEm, dataMensal));
+        const leadsCriados = registrosMensais.filter((item) => isSameMonth(item.data, dataMensal));
         const valorConvertido = convertidos.reduce((total, item) => total + Number(item.valorPlano || item.valor || 0), 0);
         const grupos = new Set(convertidos.map((item) => item.grupoCliente).filter(Boolean));
-        const convertidosAnuais = registrosAnuais.filter((item) => item.status === 'CONVERTIDO');
+        const convertidosAnuais = registrosAnuais.filter((item) => item.status === 'CONVERTIDO' && isSameYear(item.efetivadoEm, dataMensal));
         const valorAnual = convertidosAnuais.reduce((total, item) => total + Number(item.valorPlano || item.valor || 0), 0);
-        return { convertidos: convertidos.length, abertos: abertos.length, valorConvertido, grupos: grupos.size, vendasAnuais: convertidosAnuais.length, valorAnual };
-    }, [registrosAnuais, registrosMensais]);
+        return { convertidos: convertidos.length, abertos: abertos.length, aguardando: aguardando.length, naoConcluidos: naoConcluidos.length, leadsCriados: leadsCriados.length, valorConvertido, grupos: grupos.size, vendasAnuais: convertidosAnuais.length, valorAnual };
+    }, [dataMensal, registrosAnuais, registrosMensais]);
 
     const monthlySales = React.useMemo(() => {
         const monthNames = Array.from({ length: 12 }, (_, index) => (
             new Date(2000, index, 1).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')
         ));
-        const totals = monthNames.map((label, index) => ({ mes: label, vendas: 0 }));
+        const totals = monthNames.map((label) => ({ mes: label, vendas: 0 }));
 
         registrosAnuais
-            .filter((item) => item.status === 'CONVERTIDO' && item.data)
+            .filter((item) => item.status === 'CONVERTIDO' && item.efetivadoEm && isSameYear(item.efetivadoEm, dataMensal))
             .forEach((item) => {
-                const monthIndex = new Date(`${item.data}T00:00:00`).getMonth();
+                const monthIndex = new Date(item.efetivadoEm).getMonth();
                 if (totals[monthIndex]) {
                     totals[monthIndex].vendas += 1;
                 }
             });
 
         return totals;
-    }, [registrosAnuais]);
+    }, [dataMensal, registrosAnuais]);
 
     const monthlySalesItems = monthlySales.map((item, index) => ({
         label: item.mes,
@@ -307,12 +330,15 @@ const DashBoardsComercial = ({
         monthlySales.map((item, index) => ({
             mes: item.mes,
             vendidos: item.vendas,
-            cancelados: cancelamentosAtividadeAnuais.filter((cancelamento) => {
+            cancelados: registrosAnuais.filter((registro) => {
+                if (!registro.naoConcluidoEm) return false;
+                return new Date(registro.naoConcluidoEm).getMonth() === index;
+            }).length + cancelamentosAtividadeAnuais.filter((cancelamento) => {
                 if (!cancelamento.data) return false;
                 return new Date(`${cancelamento.data}T00:00:00`).getMonth() === index;
             }).length,
         }))
-    ), [cancelamentosAtividadeAnuais, monthlySales]);
+    ), [cancelamentosAtividadeAnuais, monthlySales, registrosAnuais]);
 
     const monthlySalesVsCancellationsItems = [
         {
@@ -328,14 +354,25 @@ const DashBoardsComercial = ({
     ];
 
     const convertedMonth = React.useMemo(
-        () => registrosMensais.filter((item) => item.status === 'CONVERTIDO'),
-        [registrosMensais],
+        () => registrosMensais.filter((item) => item.status === 'CONVERTIDO' && isSameMonth(item.efetivadoEm, dataMensal)),
+        [dataMensal, registrosMensais],
     );
 
     const convertedYear = React.useMemo(
-        () => registrosAnuais.filter((item) => item.status === 'CONVERTIDO'),
-        [registrosAnuais],
+        () => registrosAnuais.filter((item) => item.status === 'CONVERTIDO' && isSameYear(item.efetivadoEm, dataMensal)),
+        [dataMensal, registrosAnuais],
     );
+
+    const notCompletedReasons = React.useMemo(() => (
+        rankedItems(
+            sumBy(
+                registrosMensais.filter((item) => isSameMonth(item.naoConcluidoEm, dataMensal)),
+                (item) => notCompletedReasonLabels[item.motivoNaoConclusao] || item.motivoNaoConclusao || 'Nao informado',
+            ),
+            10,
+            'quantidade',
+        ).map((item, index) => ({ id: item.label, label: item.label, value: item.quantidade, color: chartColors[index % chartColors.length] }))
+    ), [dataMensal, registrosMensais]);
 
     const leadSalesRanking = React.useMemo(() => (
         rankedItems(
@@ -508,14 +545,14 @@ const DashBoardsComercial = ({
             {segmento === 'LEAD' && (
                 <Box className="commercial-metric-grid" sx={{ display: 'grid', gap: 1.25, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' } }}>
                     {[
-                        ['Leads no mes', registrosMensais.length, 'registros cadastrados'],
-                        ['Convertidos', leadMetrics.convertidos, 'vendas confirmadas'],
-                        ['Vendas no mes', formatMoney(commercialReport.totalMes), `${formatNumber(leadMetrics.convertidos)} venda(s)`],
-                        ['Em acompanhamento', leadMetrics.abertos, 'aguardando conversao'],
+                        ['Leads no mes', leadMetrics.leadsCriados, 'registros cadastrados'],
+                        ['Clientes ativados', leadMetrics.convertidos, 'vendas efetivadas no RBX'],
+                        ['Receita efetivada', formatMoney(commercialReport.totalMes), `${formatNumber(leadMetrics.convertidos)} cliente(s) ativo(s)`],
+                        ['Aguardando instalacao', leadMetrics.aguardando, 'vendas registradas no RBX'],
                         ['Ticket medio mensal', formatMoney(commercialReport.ticketMedio), `${formatNumber(leadMetrics.convertidos)} venda(s) no mes`],
                         ['Vendas no ano', leadMetrics.vendasAnuais, formatMoney(leadMetrics.valorAnual)],
-                        ['Total anual', formatMoney(commercialReport.totalAno), `${formatNumber(convertedYear.length)} venda(s)`],
-                        ['Ticket medio anual', formatMoney(commercialReport.ticketMedioAnual), 'media do ano selecionado'],
+                        ['Nao concluidas', leadMetrics.naoConcluidos, 'voltaram para o funil no mes'],
+                        ['Leads em aberto', leadMetrics.abertos, 'aguardando nova conversao'],
                     ].map(([label, value, detail]) => (
                         <Paper
                             className="commercial-metric-card"
@@ -537,6 +574,19 @@ const DashBoardsComercial = ({
 
             {segmento === 'LEAD' && (
                 <Box sx={{ display: 'grid', gap: 1.5 }}>
+                    {notCompletedReasons.length > 0 && (
+                        <ChartCard
+                            className="commercial-chart-card"
+                            dark
+                            title="Motivos de vendas nao concluidas"
+                            subtitle="Clientes devolvidos ao funil no mes selecionado."
+                        >
+                            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 300px' }, alignItems: 'center' }}>
+                                <PieChart series={[{ data: notCompletedReasons, innerRadius: 58, paddingAngle: 2 }]} height={300} />
+                                <ChartValueList items={notCompletedReasons} showPercent />
+                            </Box>
+                        </ChartCard>
+                    )}
                     <ChartCard
                         className="commercial-chart-card"
                         dark

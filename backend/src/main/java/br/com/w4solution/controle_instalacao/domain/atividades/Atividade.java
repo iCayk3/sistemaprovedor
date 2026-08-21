@@ -31,6 +31,16 @@ public class Atividade {
     private Double valorPlano;
     private LocalDateTime convertidoEm;
     private String convertidoPor;
+    private LocalDateTime efetivadoEm;
+    private String situacaoRbx;
+    private String situacaoContratoRbx;
+    private LocalDateTime ultimaConsultaRbx;
+    private Boolean requerAtencao = false;
+    private String motivoNaoConclusao;
+    @Column(length = 1000)
+    private String observacaoNaoConclusao;
+    private LocalDateTime naoConcluidoEm;
+    private String naoConcluidoPor;
 
     public Atividade(CadastrarAtividadesDTO atv, String usuario){
         this.evento = atv.evento();
