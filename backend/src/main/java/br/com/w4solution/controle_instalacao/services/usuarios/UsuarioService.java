@@ -41,6 +41,9 @@ public class UsuarioService {
     @Autowired
     LogRepository logRepository;
 
+    @Autowired
+    private CriptografiaChaveRbxService criptografiaChaveRbxService;
+
     public UsuarioDTO cadastrarUsuario(UsuarioCadastroDTO dados) {
         var usuario = new Usuario(dados);
         repository.save(usuario);
@@ -150,6 +153,41 @@ public class UsuarioService {
         usuario.setSupervisor(Boolean.TRUE.equals(dados.supervisor()));
         repository.save(usuario);
     }
+
+    public UsuarioDTO configurarIntegracaoRbx(ConfigurarIntegracaoRbxDTO dados) {
+        if (dados.id() == null) throw new IllegalArgumentException("Informe o usuário.");
+        var usuario = repository.findById(dados.id())
+                .orElseThrow(() -> new UsuarioNaoEncontradoException("Usuario não encontrado"));
+        String usuarioRbx = dados.usuarioRbx() == null ? "" : dados.usuarioRbx().trim();
+        usuario.setUsuarioRbx(usuarioRbx.isBlank() ? null : usuarioRbx);
+        if (Boolean.TRUE.equals(dados.removerChave())) {
+            usuario.setChaveApiRbxCriptografada(null);
+        } else if (dados.chaveApi() != null && !dados.chaveApi().isBlank()) {
+            usuario.setChaveApiRbxCriptografada(criptografiaChaveRbxService.criptografar(dados.chaveApi().trim()));
+        }
+        return new UsuarioDTO(repository.save(usuario));
+    }
+
+    public CredenciaisRbx credenciaisRbx(Usuario usuario) {
+        if (usuario == null || usuario.getId() == null) throw new IllegalStateException("Usuário não autenticado.");
+        Usuario persistido = repository.findById(usuario.getId())
+                .orElseThrow(() -> new UsuarioNaoEncontradoException("Usuario não encontrado"));
+        if (persistido.getUsuarioRbx() == null || persistido.getUsuarioRbx().isBlank()
+                || persistido.getChaveApiRbxCriptografada() == null || persistido.getChaveApiRbxCriptografada().isBlank()) {
+            throw new IllegalStateException("O usuário não possui usuário e chave de API do RBX configurados.");
+        }
+        return new CredenciaisRbx(persistido.getUsuarioRbx(),
+                criptografiaChaveRbxService.descriptografar(persistido.getChaveApiRbxCriptografada()));
+    }
+
+    public CredenciaisRbx credenciaisRbx(String nomeUsuario) {
+        if (nomeUsuario == null || nomeUsuario.isBlank()) throw new IllegalStateException("Usuário responsável não informado.");
+        Usuario persistido = repository.findByUsuario(nomeUsuario.trim())
+                .orElseThrow(() -> new UsuarioNaoEncontradoException("Usuario não encontrado"));
+        return credenciaisRbx(persistido);
+    }
+
+    public record CredenciaisRbx(String usuarioRbx, String chaveApi) {}
 
     public Boolean checarUsuarioExistente(String usuiario) {
         var usuario = repository.findByUsuarioAndStatus(usuiario, Status.ATIVO);

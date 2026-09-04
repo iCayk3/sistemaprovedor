@@ -361,6 +361,12 @@ public class ServiceRbx {
 
 
     public Optional<ContratoRbxDTO> buscarContratoMaisRecenteComValor(Integer codigoCliente) {
+        return buscarContratos(codigoCliente).stream()
+                .filter(contrato -> valorContrato(contrato) > 0)
+                .max(Comparator.comparingLong(this::numeroContrato));
+    }
+
+    public List<ContratoRbxDTO> buscarContratos(Integer codigoCliente) {
         var corpoMessage = """
                 {
                    "ConsultaContratos": {
@@ -378,11 +384,27 @@ public class ServiceRbx {
                     }
             );
 
-            return contratos.stream()
-                    .filter(contrato -> valorContrato(contrato) > 0)
-                    .max(Comparator.comparingLong(this::numeroContrato));
+            return contratos;
         } catch (Exception e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    public Optional<ContratoRbxDTO> buscarContrato(Integer codigoCliente, String numeroContrato) {
+        if (numeroContrato == null || numeroContrato.isBlank()) return Optional.empty();
+        return buscarContratos(codigoCliente).stream()
+                .filter(contrato -> numeroContrato.trim().equalsIgnoreCase(Optional.ofNullable(contrato.numero()).orElse("").trim()))
+                .findFirst();
+    }
+
+    public List<BoletosAbertos> buscarBoletosAbertosDoCliente(Long codigoCliente) {
+        try {
+            return buscarBoletosAbertos().stream()
+                    .filter(boleto -> Objects.equals(String.valueOf(codigoCliente), String.valueOf(boleto.cliente()).trim()))
+                    .sorted(Comparator.comparing(this::dataVencimentoBoleto))
+                    .toList();
+        } catch (Exception e) {
+            throw new RuntimeException("Erro ao consultar boletos em aberto do cliente no RBX.", e);
         }
     }
 

@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
+import java.time.YearMonth;
 
 
 @Service
@@ -127,6 +128,25 @@ public class AtividadesService {
                 .stream().filter(a -> podeAcessar(a, usuario)).map(AtividadesDTO::new).toList();
     }
 
+    public List<AtividadesDTO> listarLeadsPendentesDoMes(String data, Usuario usuario) {
+        var referencia = data == null || data.isBlank() ? LocalDate.now() : LocalDate.parse(data);
+        return repository.listarLeadsPendentesDoMes(referencia.getYear(), referencia.getMonthValue())
+                .stream().filter(a -> podeAcessar(a, usuario)).map(AtividadesDTO::new).toList();
+    }
+
+    public List<String> listarCompetenciasComLeadsPendentes(Usuario usuario) {
+        return repository.findAll().stream()
+                .filter(a -> "LEAD".equalsIgnoreCase(a.getSegmento()))
+                .filter(a -> a.getStatus() == null || "ABERTO".equalsIgnoreCase(a.getStatus()))
+                .filter(a -> a.getData() != null)
+                .filter(a -> podeAcessar(a, usuario))
+                .map(a -> YearMonth.from(a.getData()))
+                .distinct()
+                .sorted(java.util.Comparator.reverseOrder())
+                .map(YearMonth::toString)
+                .toList();
+    }
+
     public List<ServicoPorUsuarioDiario> listarAtividadesMensaisPorUsuario(String data, String segmento, Usuario usuarioAtual) {
         var segmentoNormalizado = normalizarSegmento(segmento);
         var dataConvertida = data == null || data.isBlank() ? LocalDate.now() : LocalDate.parse(data);
@@ -213,6 +233,9 @@ public class AtividadesService {
         if (dto.codigoCliente() == null) {
             throw new IllegalArgumentException("Informe o codigo do cliente.");
         }
+        if (dto.numeroContrato() == null || dto.numeroContrato().isBlank()) {
+            throw new IllegalArgumentException("Selecione o contrato que sera convertido.");
+        }
 
         var atividade = repository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Lead nao encontrado."));
@@ -226,8 +249,9 @@ public class AtividadesService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Cliente nao encontrado no RBX."));
 
-        var contrato = serviceRbx.buscarContratoMaisRecenteComValor(dto.codigoCliente())
-                .orElseThrow(() -> new IllegalArgumentException("Nenhum contrato com valor encontrado para o cliente."));
+        var contrato = serviceRbx.buscarContrato(dto.codigoCliente(), dto.numeroContrato())
+                .filter(item -> !contratoTransferido(item.situacaoDescricao()))
+                .orElseThrow(() -> new IllegalArgumentException("Contrato nao encontrado, transferido ou nao pertence ao cliente informado."));
 
         atividade.setStatus("AGUARDANDO_INSTALACAO");
         atividade.setCodigoCliente(dto.codigoCliente());
@@ -236,6 +260,7 @@ public class AtividadesService {
         atividade.setPlano(contrato.planoDescricao());
         atividade.setValorPlano(serviceRbx.valorContrato(contrato));
         atividade.setValor(serviceRbx.valorContrato(contrato));
+        atividade.setNumeroContratoRbx(contrato.numero());
         atividade.setConvertidoEm(LocalDateTime.now());
         atividade.setConvertidoPor(extrator.extrairUsuario(request));
         atividade.setMotivoNaoConclusao(null);
@@ -246,6 +271,18 @@ public class AtividadesService {
         atualizarSituacaoRbx(atividade, cliente.situacao(), contrato.situacaoDescricao());
 
         return new AtividadesDTO(repository.save(atividade));
+    }
+
+    public List<ContratoLeadRbxDTO> listarContratosParaConversao(Integer codigoCliente) {
+        if (codigoCliente == null) throw new IllegalArgumentException("Informe o codigo do cliente.");
+        serviceRbx.buscarClienteId(codigoCliente.longValue()).stream().findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Cliente nao encontrado no RBX."));
+        var contratos = serviceRbx.buscarContratos(codigoCliente).stream()
+                .filter(contrato -> !contratoTransferido(contrato.situacaoDescricao()))
+                .map(contrato -> new ContratoLeadRbxDTO(contrato, serviceRbx.valorContrato(contrato)))
+                .toList();
+        if (contratos.isEmpty()) throw new IllegalArgumentException("Nenhum contrato disponivel para conversao. Contratos transferidos nao sao exibidos.");
+        return contratos;
     }
 
     public AtividadesDTO registrarVendaNaoConcluida(Long id, NaoConcluirVendaDTO dto, HttpServletRequest request, Usuario usuario) {
@@ -278,7 +315,9 @@ public class AtividadesService {
                 .forEach(atividade -> {
                     try {
                         var cliente = serviceRbx.buscarClienteId(atividade.getCodigoCliente().longValue()).stream().findFirst().orElse(null);
-                        var contrato = serviceRbx.buscarContratoMaisRecenteComValor(atividade.getCodigoCliente()).orElse(null);
+                        var contrato = atividade.getNumeroContratoRbx() == null
+                                ? serviceRbx.buscarContratoMaisRecenteComValor(atividade.getCodigoCliente()).orElse(null)
+                                : serviceRbx.buscarContrato(atividade.getCodigoCliente(), atividade.getNumeroContratoRbx()).orElse(null);
                         atualizarSituacaoRbx(
                                 atividade,
                                 cliente == null ? null : cliente.situacao(),
@@ -314,6 +353,10 @@ public class AtividadesService {
 
     private String normalizarSituacao(String situacao) {
         return situacao == null ? "" : situacao.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private boolean contratoTransferido(String situacao) {
+        return normalizarSituacao(situacao).contains("TRANSFERID");
     }
 
     public void deletarAtividade(Long id, Usuario usuario) {

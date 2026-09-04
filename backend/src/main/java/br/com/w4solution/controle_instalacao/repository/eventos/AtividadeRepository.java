@@ -52,4 +52,10 @@ public interface AtividadeRepository extends JpaRepository<Atividade, Long> {
     List<Atividade> findBySegmentoIgnoreCaseAndStatusInAndCodigoClienteIsNotNull(String segmento, List<String> statuses);
 
     List<Atividade> findBySegmentoIgnoreCaseAndRequerAtencaoTrueOrderByUltimaConsultaRbxDesc(String segmento);
+
+    @Query("SELECT a FROM Atividade a WHERE UPPER(a.segmento) = 'LEAD' " +
+            "AND (a.status IS NULL OR UPPER(a.status) = 'ABERTO') " +
+            "AND EXTRACT(MONTH FROM a.data) = :mes AND EXTRACT(YEAR FROM a.data) = :ano " +
+            "ORDER BY a.data DESC, a.id DESC")
+    List<Atividade> listarLeadsPendentesDoMes(Integer ano, Integer mes);
 }

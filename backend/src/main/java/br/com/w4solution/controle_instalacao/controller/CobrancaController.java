@@ -5,8 +5,11 @@ import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaAcompanhamento
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaCadastroDTO;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaExclusaoDTO;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaConfiguracaoDTO;
+import br.com.w4solution.controle_instalacao.dto.cobranca.MetaCobrancaMensalDTO;
 import br.com.w4solution.controle_instalacao.domain.usuarios.UserRole;
 import br.com.w4solution.controle_instalacao.services.cobranca.CobrancaService;
+import br.com.w4solution.controle_instalacao.services.cobranca.FaturamentoMensalService;
+import br.com.w4solution.controle_instalacao.services.cobranca.MetaCobrancaMensalService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,7 +20,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.time.LocalDate;
 
 import static br.com.w4solution.controle_instalacao.infra.configuration.security.SecurityExpressions.CHARGING_ACCESS;
 
@@ -26,15 +33,32 @@ import static br.com.w4solution.controle_instalacao.infra.configuration.security
 public class CobrancaController {
 
     private final CobrancaService service;
+    private final FaturamentoMensalService faturamentoMensalService;
+    private final MetaCobrancaMensalService metaCobrancaMensalService;
 
-    public CobrancaController(CobrancaService service) {
+    public CobrancaController(CobrancaService service, FaturamentoMensalService faturamentoMensalService,
+                              MetaCobrancaMensalService metaCobrancaMensalService) {
         this.service = service;
+        this.faturamentoMensalService = faturamentoMensalService;
+        this.metaCobrancaMensalService = metaCobrancaMensalService;
     }
 
     @GetMapping
     @PreAuthorize(CHARGING_ACCESS)
     public ResponseEntity<?> listar(@AuthenticationPrincipal Usuario usuario) {
         return ResponseEntity.ok(service.listar(nomeUsuario(usuario), podeVerGeral(usuario)));
+    }
+
+    @GetMapping("/automaticas")
+    @PreAuthorize(CHARGING_ACCESS)
+    public ResponseEntity<?> listarAutomaticasDisponiveis() {
+        return ResponseEntity.ok(service.listarAutomaticasDisponiveis());
+    }
+
+    @GetMapping("/acompanhamento")
+    @PreAuthorize(CHARGING_ACCESS)
+    public ResponseEntity<?> listarAcompanhamento(@AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(service.listarAcompanhamento(nomeUsuario(usuario)));
     }
 
     @GetMapping("/pagas")
@@ -53,6 +77,59 @@ public class CobrancaController {
     @PreAuthorize(CHARGING_ACCESS)
     public ResponseEntity<?> lembretesPendentes(@AuthenticationPrincipal Usuario usuario) {
         return ResponseEntity.ok(service.lembretesPendentes(nomeUsuario(usuario), podeVerGeral(usuario)));
+    }
+
+    @GetMapping("/painel/financeiro")
+    @PreAuthorize(CHARGING_ACCESS)
+    public ResponseEntity<?> resumoFinanceiroPainel(@RequestParam LocalDate from, @RequestParam LocalDate to) throws Exception {
+        return ResponseEntity.ok(faturamentoMensalService.resumo(from));
+    }
+
+    @PostMapping(value = "/painel/faturamento/importar", consumes = "multipart/form-data")
+    @PreAuthorize(CHARGING_ACCESS)
+    public ResponseEntity<?> importarFaturamento(@RequestParam MultipartFile arquivo, @RequestParam LocalDate mes,
+                                                  @AuthenticationPrincipal Usuario usuario) throws Exception {
+        var response = faturamentoMensalService.importar(arquivo, mes, nomeUsuario(usuario));
+        response.put("syncInProgress", true);
+        faturamentoMensalService.sincronizarEmBackground(mes);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/painel/faturamento/sincronizar")
+    @PreAuthorize(CHARGING_ACCESS)
+    public ResponseEntity<?> sincronizarFaturamento(@RequestParam LocalDate mes) throws Exception {
+        return ResponseEntity.ok(faturamentoMensalService.sincronizar(mes));
+    }
+
+    @PostMapping("/painel/faturamento/reconciliar")
+    @PreAuthorize(CHARGING_ACCESS)
+    public ResponseEntity<?> reconciliarFaturamentosImportados() {
+        return ResponseEntity.ok(faturamentoMensalService.reconciliarImportacoesExistentes());
+    }
+
+    @GetMapping("/painel/fila-inadimplentes")
+    @PreAuthorize(CHARGING_ACCESS)
+    public ResponseEntity<?> filaInadimplentes() {
+        return ResponseEntity.ok(service.filaInadimplentes());
+    }
+
+    @GetMapping("/painel/operacional")
+    @PreAuthorize(CHARGING_ACCESS)
+    public ResponseEntity<?> relatorioOperacional(@RequestParam LocalDate mes) {
+        return ResponseEntity.ok(service.relatorioOperacional(mes));
+    }
+
+    @GetMapping("/painel/metas")
+    @PreAuthorize(CHARGING_ACCESS)
+    public ResponseEntity<?> buscarMetas(@RequestParam LocalDate mes) {
+        return ResponseEntity.ok(metaCobrancaMensalService.buscar(mes));
+    }
+
+    @PutMapping("/painel/metas")
+    @PreAuthorize(CHARGING_ACCESS)
+    public ResponseEntity<?> salvarMetas(@RequestParam LocalDate mes, @RequestBody MetaCobrancaMensalDTO dto,
+                                         @AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(metaCobrancaMensalService.salvar(mes, dto, nomeUsuario(usuario)));
     }
 
     @PostMapping
@@ -79,6 +156,12 @@ public class CobrancaController {
             @AuthenticationPrincipal Usuario usuario
     ) {
         return ResponseEntity.ok(service.acompanhar(id, dto, nomeUsuario(usuario), isAdmin(usuario), podeVerGeral(usuario)));
+    }
+
+    @PatchMapping("/{id}/capturar")
+    @PreAuthorize(CHARGING_ACCESS)
+    public ResponseEntity<?> capturar(@PathVariable Long id, @AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(service.capturar(id, usuario));
     }
 
     @GetMapping("/configuracao")

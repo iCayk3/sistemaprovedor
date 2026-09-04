@@ -43,6 +43,7 @@ import DashboardClientes from '../Paginas/DashboardClientes';
 import AcpEventos from '../Paginas/AcpEventos';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import Cobrancas from '../Paginas/Cobrancas';
+import PainelCobrancaGerencial from '../Paginas/PainelCobrancaGerencial';
 import { dashboardHeaderInputSx, dashboardHeaderSx } from '../Utils/DashboardTheme';
 import AssistenteIa from '../Componentes/AssistenteIa';
 import ChatInterno from '../Paginas/ChatInterno';
@@ -196,6 +197,16 @@ const Menu = () => {
             segment: 'dashboard',
             title: 'Dashboard cobranca',
             icon: <DashboardIcon />,
+        },
+        {
+            segment: 'painel-gerencial',
+            title: 'Painel gerencial',
+            icon: <BarChartIcon />,
+        },
+        {
+            segment: 'automaticas',
+            title: 'Atendimentos automaticos',
+            icon: <RequestQuoteOutlinedIcon />,
         },
         {
             segment: 'acompanhamento',
@@ -360,7 +371,7 @@ const Menu = () => {
                             },
                             {
                                 segment: 'acompanhamento',
-                                title: 'Acompanhamento',
+                                title: 'Acompanhamento mensal',
                                 icon: <DescriptionIcon />,
                             },
                             {
@@ -532,6 +543,8 @@ const Menu = () => {
                         <Route path="/financeiro/dados" element={hasRole('financial') ? <Financeiro /> : semPermissao} />
                         <Route path="/financeiro/cobranca/registrar" element={hasRole('charging') ? <Cobrancas mode="cadastro" /> : semPermissao} />
                         <Route path="/financeiro/cobranca/dashboard" element={hasRole('charging') ? <Cobrancas mode="dashboard" /> : semPermissao} />
+                        <Route path="/financeiro/cobranca/painel-gerencial" element={hasRole('charging') ? <PainelCobrancaGerencial /> : semPermissao} />
+                        <Route path="/financeiro/cobranca/automaticas" element={hasRole('charging') ? <Cobrancas mode="automaticas" /> : semPermissao} />
                         <Route path="/financeiro/cobranca/acompanhamento" element={hasRole('charging') ? <Cobrancas mode="acompanhamento" /> : semPermissao} />
                         <Route path="/financeiro/cobranca/pagas" element={hasRole('charging') ? <Cobrancas mode="pagas" /> : semPermissao} />
                         <Route path="/financeiro/cobranca/bloqueados" element={hasRole('charging') ? <Inadiplentes /> : semPermissao} />

@@ -34,6 +34,7 @@ public class Atividade {
     private LocalDateTime efetivadoEm;
     private String situacaoRbx;
     private String situacaoContratoRbx;
+    private String numeroContratoRbx;
     private LocalDateTime ultimaConsultaRbx;
     private Boolean requerAtencao = false;
     private String motivoNaoConclusao;

@@ -1,6 +1,7 @@
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import VpnKeyRoundedIcon from "@mui/icons-material/VpnKeyRounded";
 import {
     Alert,
     Box,
@@ -57,6 +58,9 @@ const ManagementUser = () => {
     const [statusFilter, setStatusFilter] = useState("TODOS");
     const [editingRoleId, setEditingRoleId] = useState(null);
     const [selectedRole, setSelectedRole] = useState("");
+    const [editingRbxId, setEditingRbxId] = useState(null);
+    const [rbxUser, setRbxUser] = useState("");
+    const [rbxApiKey, setRbxApiKey] = useState("");
 
     useEffect(() => {
         const fetchData = async () => {
@@ -161,6 +165,32 @@ const ManagementUser = () => {
     const startRoleEdit = (user) => {
         setEditingRoleId(user.id);
         setSelectedRole(user.role || "GUEST");
+    };
+
+    const startRbxEdit = (user) => {
+        setEditingRbxId(user.id);
+        setRbxUser(user.usuarioRbx || "");
+        setRbxApiKey("");
+    };
+
+    const salvarIntegracaoRbx = async (user, removerChave = false) => {
+        setSavingId(user.id);
+        setError("");
+        try {
+            const updated = await UseApi("usuario/integracao-rbx", "PUT", {
+                id: user.id,
+                usuarioRbx: rbxUser,
+                chaveApi: rbxApiKey || null,
+                removerChave,
+            });
+            setUsuarios((atuais) => atuais.map((item) => item.id === user.id ? updated : item));
+            setEditingRbxId(null);
+            setRbxApiKey("");
+        } catch (requestError) {
+            setError(requestError.message || "Erro ao configurar a integração individual com o RBX.");
+        } finally {
+            setSavingId(null);
+        }
     };
 
     const actionButtons = (user) => {
@@ -270,6 +300,7 @@ const ManagementUser = () => {
                                 <TableCell>Status</TableCell>
                                 <TableCell align="center">Supervisor</TableCell>
                                 <TableCell align="center">IA e chat</TableCell>
+                                <TableCell>Integração RBX</TableCell>
                                 <TableCell align="right">Acoes</TableCell>
                             </TableRow>
                         </TableHead>
@@ -327,12 +358,55 @@ const ManagementUser = () => {
                                             inputProps={{ "aria-label": `Liberar IA e chat para ${user.usuario}` }}
                                         />
                                     </TableCell>
+                                    <TableCell sx={{ minWidth: 300 }}>
+                                        {editingRbxId === user.id ? (
+                                            <Stack spacing={1}>
+                                                <TextField
+                                                    size="small"
+                                                    label="Usuário no RBX"
+                                                    value={rbxUser}
+                                                    onChange={(event) => setRbxUser(event.target.value)}
+                                                    autoComplete="off"
+                                                />
+                                                <TextField
+                                                    size="small"
+                                                    type="password"
+                                                    label={user.chaveApiRbxConfigurada ? "Nova chave API (opcional)" : "Chave API do RBX"}
+                                                    value={rbxApiKey}
+                                                    onChange={(event) => setRbxApiKey(event.target.value)}
+                                                    helperText={user.chaveApiRbxConfigurada ? "Deixe vazio para manter a chave atual." : "A chave será armazenada criptografada."}
+                                                    autoComplete="new-password"
+                                                />
+                                                <Stack direction="row" spacing={1}>
+                                                    <Button size="small" variant="contained" startIcon={<SaveRoundedIcon />} disabled={savingId === user.id || !rbxUser.trim() || (!user.chaveApiRbxConfigurada && !rbxApiKey.trim())} onClick={() => salvarIntegracaoRbx(user)}>
+                                                        Salvar
+                                                    </Button>
+                                                    {user.chaveApiRbxConfigurada && (
+                                                        <Button size="small" color="error" onClick={() => salvarIntegracaoRbx(user, true)}>Remover chave</Button>
+                                                    )}
+                                                    <IconButton size="small" onClick={() => setEditingRbxId(null)}><CloseRoundedIcon fontSize="small" /></IconButton>
+                                                </Stack>
+                                            </Stack>
+                                        ) : (
+                                            <Stack direction="row" alignItems="center" spacing={1}>
+                                                <Chip
+                                                    size="small"
+                                                    color={user.chaveApiRbxConfigurada && user.usuarioRbx ? "success" : "warning"}
+                                                    variant="outlined"
+                                                    label={user.chaveApiRbxConfigurada && user.usuarioRbx ? `Configurada • ${user.usuarioRbx}` : "Não configurada"}
+                                                />
+                                                <IconButton size="small" color="primary" onClick={() => startRbxEdit(user)} aria-label={`Configurar RBX de ${user.usuario}`}>
+                                                    <VpnKeyRoundedIcon fontSize="small" />
+                                                </IconButton>
+                                            </Stack>
+                                        )}
+                                    </TableCell>
                                     <TableCell align="right">{actionButtons(user)}</TableCell>
                                 </TableRow>
                             ))}
                             {!filteredUsers.length && (
                                 <TableRow>
-                                    <TableCell colSpan={6} align="center">
+                                    <TableCell colSpan={7} align="center">
                                         Nenhum usuario encontrado com os filtros atuais.
                                     </TableCell>
                                 </TableRow>

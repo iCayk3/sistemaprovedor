@@ -3,25 +3,25 @@ const apiUrl = import.meta.env.VITE_API_URL
 
 export default function Api() {
     return async (endpoint, method = "GET", body = null) => {
-        const headers = {
-            "Content-Type": "application/json",
-        };
+        const isFormData = body instanceof FormData;
+        const headers = isFormData ? {} : { "Content-Type": "application/json" };
 
         const options = {
             method,
             credentials: "include",
             headers,
+            cache: method === "GET" ? "no-store" : "default",
         };
 
-        if (body) {
-            options.body = JSON.stringify(body);
-        }
+        if (body) options.body = isFormData ? body : JSON.stringify(body);
 
         const response = await fetch(`${apiUrl}${endpoint}`, options);
 
         if (!response.ok) {
             const errorText = await response.text();
-            let message = errorText;
+            let message = response.status === 413
+                ? "O arquivo excede o limite permitido de 20 MB."
+                : errorText;
 
             try {
                 const parsed = JSON.parse(errorText);

@@ -5,6 +5,7 @@ import br.com.w4solution.controle_instalacao.dto.usuarios.AlterarPermissao;
 import br.com.w4solution.controle_instalacao.dto.usuarios.AlterarStatusDTO;
 import br.com.w4solution.controle_instalacao.dto.usuarios.AlterarAcessoIaChatDTO;
 import br.com.w4solution.controle_instalacao.dto.usuarios.AlterarSupervisorDTO;
+import br.com.w4solution.controle_instalacao.dto.usuarios.ConfigurarIntegracaoRbxDTO;
 import br.com.w4solution.controle_instalacao.dto.usuarios.DadosAutenticao;
 import br.com.w4solution.controle_instalacao.dto.usuarios.DadosToken;
 import br.com.w4solution.controle_instalacao.dto.usuarios.RedefinirSenhaDTO;
@@ -172,5 +173,11 @@ public class UsuarioController {
     public ResponseEntity<Void> alterarSupervisor(@RequestBody AlterarSupervisorDTO dados) {
         service.alterarSupervisor(dados);
         return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/integracao-rbx")
+    @PreAuthorize(ADMIN_ONLY)
+    public ResponseEntity<UsuarioDTO> configurarIntegracaoRbx(@RequestBody ConfigurarIntegracaoRbxDTO dados) {
+        return ResponseEntity.ok(service.configurarIntegracaoRbx(dados));
     }
 }

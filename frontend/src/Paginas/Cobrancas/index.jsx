@@ -31,6 +31,7 @@ import {
     Typography,
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ChartValueList from '../../Componentes/ChartValueList';
 import ExportDashboardPdfButton from '../../Componentes/ExportDashboardPdfButton';
 import Api from '../../Services/Api';
@@ -81,6 +82,8 @@ const clientGroupNames = {
 const emptyForm = {
     acao: 'Contato',
     codigoCliente: '',
+    numeroContrato: '',
+    boletoSelecionado: '',
     cliente: '',
     grupoCliente: '',
     data: new Date().toISOString().slice(0, 10),
@@ -124,6 +127,8 @@ function normalizeCharge(charge) {
         protocol: charge.protocolo,
         action: charge.acao,
         clientCode: charge.codigoCliente,
+        contractNumber: charge.numeroContrato,
+        documentNumber: charge.documentoTitulo,
         client: charge.cliente,
         clientGroup: formatClientGroup(charge.grupoCliente),
         date: charge.data,
@@ -140,6 +145,11 @@ function normalizeCharge(charge) {
         createdBy: charge.criadoPor,
         updatedBy: charge.atualizadoPor,
         lastUser: charge.ultimoUsuario || charge.atualizadoPor || charge.criadoPor || '',
+        automatic: Boolean(charge.geradaAutomaticamente),
+        responsible: charge.responsavel || '',
+        capturedAt: charge.capturadoEm,
+        rbxStatus: charge.statusIntegracaoRbx || '',
+        rbxTicket: charge.atendimentoRbxNumero || '',
         editable: charge.editavel !== false,
         excluded: Boolean(charge.excluida),
         excludedAt: charge.excluidoEm,
@@ -164,6 +174,8 @@ function toForm(charge) {
     return {
         acao: charge?.action || 'Contato',
         codigoCliente: charge?.clientCode || '',
+        numeroContrato: charge?.contractNumber || '',
+        boletoSelecionado: charge?.documentNumber || '',
         cliente: charge?.client || '',
         grupoCliente: charge?.clientGroup || '',
         data: charge?.date || new Date().toISOString().slice(0, 10),
@@ -194,10 +206,6 @@ function formatDate(value) {
 
 function isFinalStatus(status) {
     return ['PAGO', 'FECHADO', 'CANCELADO'].includes(String(status || '').trim().toUpperCase());
-}
-
-function isPaidOrClosedStatus(status) {
-    return ['PAGO', 'FECHADO'].includes(String(status || '').trim().toUpperCase());
 }
 
 function isClosedStatus(status) {
@@ -251,7 +259,7 @@ function formatClientGroup(group) {
 function normalizeRbxClient(response) {
     const payload = response?.data || response;
     const client = Array.isArray(payload) ? payload[0] : payload?.cliente || payload;
-    const boleto = payload?.boleto || null;
+    const contratosPayload = Array.isArray(payload?.contratos) ? payload.contratos : [];
 
     if (!client || typeof client !== 'object') {
         return null;
@@ -264,10 +272,17 @@ function normalizeRbxClient(response) {
         sigla: readClientField(client, 'sigla', 'Sigla'),
         grupo: formatClientGroup(readClientField(client, 'grupoNome', 'Grupo_Nome') || readClientField(client, 'grupo', 'Grupo')),
         situacao: readClientField(client, 'situacao', 'Situacao'),
-        boleto: boleto ? {
-            valor: Number(readClientField(boleto, 'valor', 'Valor') || 0),
-            vencimento: readClientField(boleto, 'vencimento', 'Vencimento'),
-        } : null,
+        contratos: contratosPayload.map((contrato) => ({
+            numero: readClientField(contrato, 'numero', 'Numero'),
+            plano: readClientField(contrato, 'plano', 'Plano'),
+            situacao: readClientField(contrato, 'situacao', 'Situacao'),
+            boletos: (Array.isArray(contrato.boletos) ? contrato.boletos : []).map((boleto, index) => ({
+                id: readClientField(boleto, 'documento', 'Documento') || `${readClientField(boleto, 'vencimento', 'Vencimento')}-${index}`,
+                documento: readClientField(boleto, 'documento', 'Documento'),
+                valor: Number(readClientField(boleto, 'valor', 'Valor') || 0),
+                vencimento: readClientField(boleto, 'vencimento', 'Vencimento'),
+            })),
+        })),
     };
 }
 
@@ -343,14 +358,17 @@ const ClienteRbxPanel = ({ cliente }) => {
 };
 
 const Cobrancas = ({ readOnly = false, mode }) => {
+    const navigate = useNavigate();
     const [statusOptions, setStatusOptions] = useState(defaultStatusOptions);
     const [actionOptions, setActionOptions] = useState(defaultActionOptions);
     const viewMode = mode || (readOnly ? 'dashboard' : 'cadastro');
     const isDashboard = viewMode === 'dashboard';
     const isTracking = viewMode === 'acompanhamento';
+    const isAutomaticQueue = viewMode === 'automaticas';
     const isRegister = viewMode === 'cadastro';
     const isPaidList = viewMode === 'pagas';
     const [charges, setCharges] = useState([]);
+    const [delinquentQueue, setDelinquentQueue] = useState([]);
     const [form, setForm] = useState(emptyForm);
     const [selected, setSelected] = useState(null);
     const [rbxClient, setRbxClient] = useState(null);
@@ -377,8 +395,18 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         setLoading(true);
         setError('');
         try {
-            const response = await UseApi(isPaidList ? 'cobrancas/auditoria' : 'cobrancas');
+            const [response, queue] = await Promise.all([
+                UseApi(isPaidList
+                    ? 'cobrancas/auditoria'
+                    : isTracking
+                        ? 'cobrancas/acompanhamento'
+                        : isAutomaticQueue
+                            ? 'cobrancas/automaticas'
+                            : 'cobrancas'),
+                isRegister ? UseApi('cobrancas/painel/fila-inadimplentes') : Promise.resolve([]),
+            ]);
             setCharges(Array.isArray(response) ? response.map(normalizeCharge) : []);
+            setDelinquentQueue(Array.isArray(queue) ? queue : []);
         } catch (requestError) {
             setError(requestError.message || 'Erro ao carregar cobrancas.');
         } finally {
@@ -388,7 +416,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
 
     useEffect(() => {
         loadCharges();
-    }, [isPaidList]);
+    }, [isPaidList, isTracking, isAutomaticQueue]);
 
     useEffect(() => {
         const loadConfiguredOptions = async () => {
@@ -610,15 +638,18 @@ const Cobrancas = ({ readOnly = false, mode }) => {
 
     const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
-    const findChargeInProgressByCode = (code, ignoredId = selected?.id) => {
+    const findChargeInProgressByContract = (code, contractNumber, ignoredId = selected?.id) => {
         const normalizedCode = String(code || '').trim();
-        if (!normalizedCode) return null;
+        const normalizedContract = String(contractNumber || '').trim();
+        if (!normalizedCode || !normalizedContract) return null;
 
         return charges.find((charge) => (
             String(charge.clientCode || '').trim() === normalizedCode
+            && String(charge.contractNumber || '').trim() === normalizedContract
             && charge.id !== ignoredId
             && !charge.excluded
-            && !isPaidOrClosedStatus(charge.status)
+            && charge.serviceSituation !== 'Fechada'
+            && !isFinalStatus(charge.status)
         ));
     };
 
@@ -640,16 +671,11 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         setOpen(true);
     };
 
-    const searchRbxClient = async () => {
-        const code = form.codigoCliente || selected?.clientCode;
+    const searchRbxClient = async (codeOverride) => {
+        const explicitCode = typeof codeOverride === 'string' || typeof codeOverride === 'number' ? codeOverride : null;
+        const code = explicitCode || form.codigoCliente || selected?.clientCode;
         if (!code) {
             setError('Informe o codigo do cliente para buscar no RBX.');
-            return;
-        }
-        const chargeInProgress = isRegister && !selected ? findChargeInProgressByCode(code, null) : null;
-        if (chargeInProgress) {
-            setError(`Ja existe uma cobranca em andamento para o codigo ${code}: ${chargeInProgress.protocol} (${chargeInProgress.status}).`);
-            setRbxClient(null);
             return;
         }
         setRbxLoading(true);
@@ -667,8 +693,10 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                     ...current,
                     cliente: normalizedClient?.nome || current.cliente,
                     grupoCliente: normalizedClient?.grupo || current.grupoCliente,
-                    dataVencimento: normalizedClient?.boleto?.vencimento || '',
-                    valor: normalizedClient?.boleto ? String(normalizedClient.boleto.valor) : '',
+                    numeroContrato: '',
+                    boletoSelecionado: '',
+                    dataVencimento: '',
+                    valor: '',
                 }));
             }
         } catch (requestError) {
@@ -676,6 +704,21 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         } finally {
             setRbxLoading(false);
         }
+    };
+
+    const openFromDelinquentQueue = (item) => {
+        setSelected(null);
+        setRbxClient(null);
+        setValidatedClientCode('');
+        setTrackingNote('');
+        setForm({
+            ...emptyForm,
+            codigoCliente: item.codigoCliente,
+            cliente: item.cliente || '',
+            data: new Date().toISOString().slice(0, 10),
+        });
+        setOpen(true);
+        searchRbxClient(item.codigoCliente);
     };
 
     const handleSubmit = async () => {
@@ -688,13 +731,18 @@ const Cobrancas = ({ readOnly = false, mode }) => {
             if (!selected && (!validatedClientCode || String(form.codigoCliente).trim() !== validatedClientCode || !form.cliente)) {
                 throw new Error('Busque e valide um codigo de cliente no RBX antes de cadastrar a cobranca.');
             }
-            const chargeInProgress = !selected ? findChargeInProgressByCode(form.codigoCliente, null) : null;
+            if (!selected && (!form.numeroContrato || !form.boletoSelecionado)) {
+                throw new Error('Selecione o contrato e um boleto em aberto antes de cadastrar a cobranca.');
+            }
+            const chargeInProgress = !selected ? findChargeInProgressByContract(form.codigoCliente, form.numeroContrato, null) : null;
             if (chargeInProgress) {
-                throw new Error(`Ja existe uma cobranca em andamento para o codigo ${form.codigoCliente}: ${chargeInProgress.protocol} (${chargeInProgress.status}).`);
+                throw new Error(`Ja existe uma cobranca em andamento para o contrato ${form.numeroContrato}: ${chargeInProgress.protocol} (${chargeInProgress.status}).`);
             }
             const payload = {
                 acao: form.acao,
                 codigoCliente: form.codigoCliente ? Number(form.codigoCliente) : null,
+                numeroContrato: form.numeroContrato,
+                documentoTitulo: selectedRbxContract?.boletos.find((item) => item.id === form.boletoSelecionado)?.documento || null,
                 cliente: form.cliente,
                 grupoCliente: form.grupoCliente,
                 data: form.data || null,
@@ -767,13 +815,30 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         }
     };
 
+    const captureCharge = async (charge) => {
+        setSaving(true);
+        setError('');
+        try {
+            const response = await UseApi(`cobrancas/${charge.id}/capturar`, 'PATCH');
+            const normalized = normalizeCharge(response);
+            setCharges((current) => current.map((item) => (item.id === normalized.id ? normalized : item)));
+            if (isAutomaticQueue) navigate('/financeiro/cobranca/acompanhamento');
+        } catch (requestError) {
+            setError(requestError.message || 'Erro ao capturar atendimento.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const canEditSelected = isRegister && (!selected || selected.editable);
     const canTrackSelected = isTracking && Boolean(selected?.editable);
     const canSaveSelected = canEditSelected || canTrackSelected;
     const canEditOriginalValue = canSaveSelected && allowsOriginalValueChange(form.status);
+    const selectedRbxContract = rbxClient?.contratos?.find((item) => String(item.numero) === String(form.numeroContrato));
     const saveDisabled = saving
         || (isTracking && canTrackSelected && !trackingNote.trim())
         || (!selected && isRegister && (!validatedClientCode || String(form.codigoCliente).trim() !== validatedClientCode || !form.cliente))
+        || (!selected && isRegister && (!form.numeroContrato || !form.boletoSelecionado))
         || (canEditSelected && !form.dataVencimento)
         || (canSaveSelected && isPaidStatus(form.status) && Number(String(form.valorPago || 0).replace(',', '.')) <= 0)
         || (canSaveSelected && isPromiseStatus(form.status) && !form.dataPromessa);
@@ -782,6 +847,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         cadastro: 'Cobrancas',
         dashboard: 'Dashboard de cobrancas',
         acompanhamento: 'Acompanhamento de cobrancas',
+        automaticas: 'Atendimentos automaticos',
         pagas: 'Baixas e auditoria',
     }[viewMode];
 
@@ -789,6 +855,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         cadastro: 'Cadastro, acompanhamento e fechamento das acoes de cobranca.',
         dashboard: 'Resumo geral da carteira de cobrancas, sem alteracao de registros.',
         acompanhamento: 'Fila operacional para acompanhar status, priorizando cobrancas em aberto.',
+        automaticas: 'Boletos vencidos identificados automaticamente e ainda aguardando captura.',
         pagas: 'Consulta de baixas, exclusoes logicas e historico de auditoria.',
     }[viewMode];
 
@@ -867,6 +934,58 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                         ? `${metrics.promessasVencidas} promessa(s) de pagamento vencida(s).`
                         : `${metrics.promessasHoje} promessa(s) de pagamento vencem hoje.`}
                 </Alert>
+            )}
+
+            {isRegister && (
+                <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: 2 }}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={1} mb={1.5}>
+                        <Box>
+                            <Typography variant="h6" fontWeight={800}>Fila automática de inadimplentes</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Clientes identificados pelos boletos importados, vencidos e ainda sem baixa. Selecione um cliente para consultar contratos e iniciar a cobrança.
+                            </Typography>
+                        </Box>
+                        <Chip color={delinquentQueue.length ? 'error' : 'success'} variant="outlined" label={`${delinquentQueue.length} cliente(s)`} />
+                    </Stack>
+                    <TableContainer sx={{ maxHeight: 330 }}>
+                        <Table size="small" stickyHeader>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell>Código / cliente</TableCell>
+                                    <TableCell>Vencidos</TableCell>
+                                    <TableCell>Mais antigo</TableCell>
+                                    <TableCell>Valor vencido</TableCell>
+                                    <TableCell>Situação</TableCell>
+                                    <TableCell align="right">Ação</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {delinquentQueue.map((item) => (
+                                    <TableRow key={item.codigoCliente} hover>
+                                        <TableCell>
+                                            <Typography fontWeight={700}>{item.cliente || 'Nome será atualizado pelo RBX'}</Typography>
+                                            <Typography variant="caption" color="text.secondary">Código {item.codigoCliente}</Typography>
+                                        </TableCell>
+                                        <TableCell>{Number(item.boletosVencidos || 0).toLocaleString('pt-BR')}</TableCell>
+                                        <TableCell>{formatDate(item.vencimentoMaisAntigo)}</TableCell>
+                                        <TableCell>{formatCurrency(item.valorVencido)}</TableCell>
+                                        <TableCell>
+                                            <Chip size="small" color={item.atendimentoAberto ? 'warning' : 'error'} variant="outlined" label={item.atendimentoAberto ? 'Em atendimento' : 'Pendente'} />
+                                        </TableCell>
+                                        <TableCell align="right">
+                                            <Button size="small" variant="outlined" onClick={() => openFromDelinquentQueue(item)}>
+                                                {item.atendimentoAberto ? 'Ver contratos' : 'Iniciar cobrança'}
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                                {!delinquentQueue.length && (
+                                    <TableRow><TableCell colSpan={6} align="center">Nenhum boleto vencido importado e pendente de baixa.</TableCell></TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </Paper>
             )}
 
             {isDashboard && <Box sx={{ ...pageGridSx, mb: 2 }}>
@@ -1160,7 +1279,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2} mb={2}>
                     <Box>
                         <Typography variant="h6" fontWeight={800}>
-                            {isDashboard ? 'Resumo da fila' : isPaidList ? 'Baixas registradas' : 'Fila de cobranca'}
+                            {isDashboard ? 'Resumo da fila' : isPaidList ? 'Baixas registradas' : isAutomaticQueue ? 'Disponiveis para captura' : 'Fila de cobranca'}
                         </Typography>
                         <Typography color="text.secondary" variant="body2">{filteredCharges.length} registros encontrados</Typography>
                     </Box>
@@ -1296,7 +1415,16 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                                 label={charge.serviceSituation}
                                             />
                                         </TableCell>
-                                        <TableCell>{charge.lastUser || 'sem usuario'}</TableCell>
+                                        <TableCell>
+                                            <Typography fontSize="inherit">
+                                                {charge.responsible || (charge.automatic ? 'Aguardando captura' : charge.lastUser || 'sem usuario')}
+                                            </Typography>
+                                            {charge.automatic && (
+                                                <Typography color="text.secondary" variant="caption" display="block">
+                                                    Automático • RBX: {charge.rbxStatus || 'não iniciado'}
+                                                </Typography>
+                                            )}
+                                        </TableCell>
                                         {isPaidList && (
                                             <TableCell>
                                                 {charge.excluded ? (
@@ -1317,6 +1445,19 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                             </TableCell>
                                         )}
                                         <TableCell align="right">
+                                            {charge.automatic
+                                                && (!charge.responsible || charge.rbxStatus === 'ERRO_ABERTURA_TESTE_RBX')
+                                                && charge.serviceSituation !== 'Fechada' && (
+                                                <Button
+                                                    size="small"
+                                                    variant="outlined"
+                                                    disabled={saving}
+                                                    onClick={() => captureCharge(charge)}
+                                                    sx={{ mr: 0.5 }}
+                                                >
+                                                    {charge.responsible ? 'Tentar RBX novamente' : 'Capturar'}
+                                                </Button>
+                                            )}
                                             <IconButton size="small" onClick={() => openCharge(charge)}>
                                                 {isDashboard || !charge.editable ? <InfoOutlinedIcon fontSize="small" /> : <EditRoundedIcon fontSize="small" />}
                                             </IconButton>
@@ -1401,6 +1542,10 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                     updateForm('codigoCliente', event.target.value);
                                     updateForm('cliente', '');
                                     updateForm('grupoCliente', '');
+                                    updateForm('numeroContrato', '');
+                                    updateForm('boletoSelecionado', '');
+                                    updateForm('dataVencimento', '');
+                                    updateForm('valor', '');
                                     setRbxClient(null);
                                     setValidatedClientCode('');
                                 }}
@@ -1447,6 +1592,66 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                 helperText="Grupo do cliente no RBX"
                             />
                         </Box>
+                        <Box sx={{ gridColumn: fieldSpan.third }}>
+                            <TextField
+                                select={Boolean(rbxClient) && !selected}
+                                fullWidth
+                                required={!selected}
+                                label="Contrato / ponto de internet"
+                                value={form.numeroContrato}
+                                onChange={(event) => {
+                                    const numeroContrato = event.target.value;
+                                    updateForm('numeroContrato', numeroContrato);
+                                    updateForm('boletoSelecionado', '');
+                                    updateForm('dataVencimento', '');
+                                    updateForm('valor', '');
+                                    const charge = findChargeInProgressByContract(form.codigoCliente, numeroContrato, null);
+                                    setError(charge
+                                        ? `Ja existe uma cobranca em andamento para o contrato ${numeroContrato}: ${charge.protocol} (${charge.status}).`
+                                        : '');
+                                }}
+                                disabled={!rbxClient || Boolean(selected)}
+                                helperText={!rbxClient
+                                    ? 'Busque o cliente para listar os contratos com boletos'
+                                    : `${rbxClient.contratos.length} contrato(s) com boleto em aberto`}
+                            >
+                                {(rbxClient?.contratos || []).map((contrato) => (
+                                    <MenuItem key={contrato.numero} value={contrato.numero}>
+                                        Contrato {contrato.numero}{contrato.plano ? ` - ${contrato.plano}` : ''}
+                                    </MenuItem>
+                                ))}
+                            </TextField>
+                        </Box>
+                        {!selected && (
+                            <Box sx={{ gridColumn: fieldSpan.third }}>
+                                <TextField
+                                    select
+                                    fullWidth
+                                    required
+                                    label="Boleto em aberto"
+                                    value={form.boletoSelecionado}
+                                    onChange={(event) => {
+                                        const boletoId = event.target.value;
+                                        const boleto = selectedRbxContract?.boletos.find((item) => item.id === boletoId);
+                                        setForm((current) => ({
+                                            ...current,
+                                            boletoSelecionado: boletoId,
+                                            dataVencimento: boleto?.vencimento || '',
+                                            valor: boleto ? String(boleto.valor) : '',
+                                        }));
+                                    }}
+                                    disabled={!selectedRbxContract}
+                                    helperText="Selecione um boleto do contrato"
+                                >
+                                    {(selectedRbxContract?.boletos || []).map((boleto) => (
+                                        <MenuItem key={boleto.id} value={boleto.id}>
+                                            {formatDate(boleto.vencimento)} - {formatCurrency(boleto.valor)}
+                                            {boleto.documento ? ` - ${boleto.documento}` : ''}
+                                        </MenuItem>
+                                    ))}
+                                </TextField>
+                            </Box>
+                        )}
                         <Box sx={{ gridColumn: fieldSpan.third }}>
                             <TextField
                                 fullWidth
@@ -1542,10 +1747,10 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                     <ClienteRbxPanel cliente={rbxClient} />
 
                     {rbxClient && (
-                        <Alert severity={rbxClient.boleto ? 'success' : 'warning'} sx={{ mt: 2 }}>
-                            {rbxClient.boleto
-                                ? `Boleto aberto mais recente carregado: vencimento ${formatDate(rbxClient.boleto.vencimento)} e valor ${formatCurrency(rbxClient.boleto.valor)}.`
-                                : 'O cliente nao possui boleto em aberto no RBX. Informe o vencimento e o valor manualmente.'}
+                        <Alert severity={rbxClient.contratos.length ? 'success' : 'warning'} sx={{ mt: 2 }}>
+                            {rbxClient.contratos.length
+                                ? 'Selecione primeiro o contrato e depois um dos boletos em aberto vinculados a ele.'
+                                : 'O cliente nao possui contratos com boletos em aberto no RBX.'}
                         </Alert>
                     )}
 

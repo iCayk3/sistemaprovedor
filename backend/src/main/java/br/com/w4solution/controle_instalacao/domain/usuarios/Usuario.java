@@ -33,6 +33,10 @@ public class Usuario implements UserDetails {
     private UserRole permissao = UserRole.GUEST;
     private Boolean recursosIaChatHabilitados = false;
     private Boolean supervisor = false;
+    private String usuarioRbx;
+
+    @Column(length = 1000)
+    private String chaveApiRbxCriptografada;
 
     public Usuario(UsuarioCadastroDTO dados) {
         this.usuario = dados.usuario();

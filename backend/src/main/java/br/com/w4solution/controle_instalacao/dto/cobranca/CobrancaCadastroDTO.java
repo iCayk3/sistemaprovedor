@@ -6,6 +6,8 @@ import java.time.LocalDate;
 public record CobrancaCadastroDTO(
         String acao,
         Integer codigoCliente,
+        String numeroContrato,
+        String documentoTitulo,
         String cliente,
         String grupoCliente,
         LocalDate data,

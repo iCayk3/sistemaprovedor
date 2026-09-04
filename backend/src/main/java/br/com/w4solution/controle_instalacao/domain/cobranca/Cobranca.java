@@ -31,6 +31,23 @@ public class Cobranca {
     private String protocolo;
     private String acao;
     private Integer codigoCliente;
+    private String numeroContrato;
+    private String documentoTitulo;
+    private String atendimentoRbxNumero;
+    private String atendimentoRbxProtocolo;
+    private String statusIntegracaoRbx;
+
+    @Column(length = 2000)
+    private String erroIntegracaoRbx;
+
+    private LocalDateTime abertoNoRbxEm;
+    private LocalDateTime fechadoNoRbxEm;
+    private Boolean geradaAutomaticamente = false;
+    private String responsavel;
+    private LocalDateTime capturadoEm;
+
+    @Column(columnDefinition = "TEXT")
+    private String solucaoRbxPreparada;
     private String cliente;
     private String grupoCliente;
     private LocalDate data;

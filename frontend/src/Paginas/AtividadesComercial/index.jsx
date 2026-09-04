@@ -80,6 +80,9 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
     const [conversionLead, setConversionLead] = useState(null);
     const [conversionCode, setConversionCode] = useState('');
     const [conversionError, setConversionError] = useState('');
+    const [conversionContracts, setConversionContracts] = useState([]);
+    const [conversionContract, setConversionContract] = useState('');
+    const [conversionLoading, setConversionLoading] = useState(false);
     const [notCompletedLead, setNotCompletedLead] = useState(null);
     const [notCompletedReason, setNotCompletedReason] = useState('');
     const [notCompletedNote, setNotCompletedNote] = useState('');
@@ -91,6 +94,9 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
     const [leadEventFilter, setLeadEventFilter] = useState('Todos');
     const [leadUserFilter, setLeadUserFilter] = useState('Todos');
     const [leadGroupFilter, setLeadGroupFilter] = useState('Todos');
+    const [trackingMonth, setTrackingMonth] = useState(today.slice(0, 7));
+    const [trackingMonths, setTrackingMonths] = useState([]);
+    const [trackingMonthReady, setTrackingMonthReady] = useState(false);
     const isTracking = mode === 'acompanhamento';
     const isActivity = segmento === 'ATIVIDADE';
     const showLeadFilters = isTracking && segmento === 'LEAD';
@@ -186,9 +192,36 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
 
     };
     useEffect(() => {
+        if (!isTracking || segmento !== 'LEAD') {
+            setTrackingMonthReady(true);
+            return;
+        }
+
+        const fetchTrackingMonths = async () => {
+            try {
+                const response = await UseApi('atividades/leads/pendentes/competencias');
+                const months = Array.isArray(response) ? response : [];
+                setTrackingMonths(months);
+                if (months.length > 0) {
+                    setTrackingMonth((current) => months.includes(current) ? current : months[0]);
+                }
+            } catch (error) {
+                console.error('Erro ao buscar competencias com leads pendentes:', error);
+            } finally {
+                setTrackingMonthReady(true);
+            }
+        };
+
+        fetchTrackingMonths();
+    }, [isTracking, segmento]);
+
+    useEffect(() => {
         const fetchData = async () => {
             try {
-                const response = await UseApi(`atividades/registro/mensal?segmento=${segmento}`);
+                const endpoint = isTracking && segmento === 'LEAD'
+                    ? `atividades/leads/pendentes?data=${trackingMonth}-01`
+                    : `atividades/registro/mensal?segmento=${segmento}`;
+                const response = await UseApi(endpoint);
                 setData(response);
                 if (segmento === 'LEAD') {
                     setLeadAlerts(await UseApi('atividades/alertas'));
@@ -200,8 +233,8 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
             }
         };
 
-        if (refreshTable) fetchData();
-    }, [refreshTable, segmento]);
+        if (refreshTable && trackingMonthReady) fetchData();
+    }, [isTracking, refreshTable, segmento, trackingMonth, trackingMonthReady]);
 
     const handleFormSubmit = () => {
         setRefreshTable(true);
@@ -302,20 +335,46 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
         setConversionLead(lead);
         setConversionCode(lead.codigoCliente || '');
         setConversionError('');
+        setConversionContracts([]);
+        setConversionContract('');
+    };
+
+    const buscarContratosConversao = async () => {
+        if (!conversionCode) {
+            setConversionError('Informe o codigo do cliente.');
+            return;
+        }
+        setConversionLoading(true);
+        setConversionError('');
+        setConversionContracts([]);
+        setConversionContract('');
+        try {
+            const response = await UseApi(`atividades/rbx/clientes/${Number(conversionCode)}/contratos`);
+            const contracts = Array.isArray(response) ? response : [];
+            setConversionContracts(contracts);
+            if (contracts.length === 1) setConversionContract(contracts[0].numero);
+        } catch (error) {
+            setConversionError(error.message || 'Erro ao buscar contratos do cliente.');
+        } finally {
+            setConversionLoading(false);
+        }
     };
 
     const converterLead = async () => {
-        if (!conversionLead || !conversionCode) {
-            setConversionError('Informe o codigo do cliente.');
+        if (!conversionLead || !conversionCode || !conversionContract) {
+            setConversionError('Busque o cliente e selecione o contrato que sera convertido.');
             return;
         }
 
         try {
             await UseApi(`atividades/${conversionLead.id}/converter-lead`, 'PATCH', {
                 codigoCliente: Number(conversionCode),
+                numeroContrato: conversionContract,
             });
             setConversionLead(null);
             setConversionCode('');
+            setConversionContracts([]);
+            setConversionContract('');
             handleFormSubmit();
         } catch (error) {
             setConversionError(error.message || 'Erro ao converter lead.');
@@ -435,6 +494,7 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
                 ),
             },
             { field: 'codigoCliente', headerName: 'Codigo cliente', width: 130 },
+            { field: 'numeroContratoRbx', headerName: 'Contrato RBX', width: 140 },
             { field: 'grupoCliente', headerName: 'Grupo', width: 130 },
             { field: 'plano', headerName: 'Plano', width: 180 },
             {
@@ -471,9 +531,9 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
             <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
             <FormControl sx={{ width: '100%', display: 'flex', gap: 2 }}>
                 <Box>
-                    <Typography variant="h4" fontWeight={800}>{isTracking ? `Acompanhamento de ${config.subtitle.toLowerCase()}` : config.title}</Typography>
+                    <Typography variant="h4" fontWeight={800}>{isTracking ? 'Acompanhamento mensal de leads' : config.title}</Typography>
                     <Typography color="text.secondary">
-                        {isTracking ? 'Fila operacional para acompanhamento e conversao de leads.' : `${config.subtitle} do comercial no sistema principal.`}
+                        {isTracking ? 'Leads cadastrados na competencia selecionada que ainda aguardam conversao.' : `${config.subtitle} do comercial no sistema principal.`}
                     </Typography>
                 </Box>
 
@@ -619,6 +679,28 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
             {showLeadFilters && (
                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, mb: 2 }}>
                     <Stack direction={{ xs: 'column', md: 'row' }} gap={1.5} alignItems={{ xs: 'stretch', md: 'center' }}>
+                        <Box sx={{ minWidth: 190 }}>
+                            <TextField
+                                select={trackingMonths.length > 0}
+                                fullWidth
+                                size="small"
+                                type={trackingMonths.length > 0 ? undefined : 'month'}
+                                label="Mes de cadastro"
+                                value={trackingMonth}
+                                onChange={(event) => {
+                                    setTrackingMonth(event.target.value || today.slice(0, 7));
+                                    setLeadSearch('');
+                                    setLeadStatusFilter('Todos');
+                                }}
+                                InputLabelProps={{ shrink: true }}
+                            >
+                                {trackingMonths.map((month) => (
+                                    <MenuItem key={month} value={month}>
+                                        {new Date(`${month}-01T00:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                                    </MenuItem>
+                                ))}
+                            </TextField>
+                        </Box>
                         <Box sx={{ flex: 1.5, minWidth: 240 }}>
                             <TextField
                                 fullWidth
@@ -704,7 +786,7 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
                         </Button>
                     </Stack>
                     <Typography color="text.secondary" variant="body2" sx={{ mt: 1 }}>
-                        {filteredData.length} de {data.length} leads exibidos.
+                        {filteredData.length} lead(s) pendente(s) de conversao em {new Date(`${trackingMonth}-01T00:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}.
                     </Typography>
                 </Paper>
             )}
@@ -713,21 +795,59 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
                 <DialogTitle>Converter lead em venda</DialogTitle>
                 <DialogContent>
                     <Typography color="text.secondary" sx={{ mb: 2 }}>
-                        Informe o codigo do cliente na base RBX. O sistema buscara o nome, grupo, plano e valor do contrato mais recente com valor.
+                        Informe o codigo do cliente na base RBX e busque os contratos. Se for um ponto adicional, selecione especificamente o contrato correspondente antes de converter.
                     </Typography>
-                    <TextField
-                        fullWidth
-                        type="number"
-                        label="Codigo do cliente"
-                        value={conversionCode}
-                        onChange={(event) => setConversionCode(event.target.value)}
-                        error={Boolean(conversionError)}
-                        helperText={conversionError || conversionLead?.cliente || ''}
-                    />
+                    <Stack direction={{ xs: 'column', sm: 'row' }} gap={1.5} alignItems="flex-start">
+                        <TextField
+                            fullWidth
+                            type="number"
+                            label="Codigo do cliente"
+                            value={conversionCode}
+                            onChange={(event) => {
+                                setConversionCode(event.target.value);
+                                setConversionContracts([]);
+                                setConversionContract('');
+                                setConversionError('');
+                            }}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                    event.preventDefault();
+                                    buscarContratosConversao();
+                                }
+                            }}
+                            error={Boolean(conversionError)}
+                            helperText={conversionError || conversionLead?.cliente || ''}
+                        />
+                        <Button
+                            variant="outlined"
+                            onClick={buscarContratosConversao}
+                            disabled={conversionLoading}
+                            startIcon={conversionLoading ? <CircularProgress size={16} /> : <SearchRoundedIcon />}
+                            sx={{ minWidth: 180, height: 56 }}
+                        >
+                            Buscar contratos
+                        </Button>
+                    </Stack>
+                    {conversionContracts.length > 0 && (
+                        <TextField
+                            select
+                            fullWidth
+                            label="Contrato que sera convertido"
+                            value={conversionContract}
+                            onChange={(event) => setConversionContract(event.target.value)}
+                            sx={{ mt: 2 }}
+                        >
+                            {conversionContracts.map((contract) => (
+                                <MenuItem key={contract.numero} value={contract.numero}>
+                                    Contrato {contract.numero} — {contract.plano || 'Plano nao informado'} — {formatCurrency(contract.valor)}{contract.situacao ? ` — ${contract.situacao}` : ''}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+                    )}
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setConversionLead(null)}>Cancelar</Button>
-                    <Button variant="contained" onClick={converterLead}>Converter</Button>
+                    <Button variant="contained" onClick={converterLead} disabled={!conversionContract || conversionLoading}>Converter contrato selecionado</Button>
                 </DialogActions>
             </Dialog>
             <Dialog open={Boolean(notCompletedLead)} onClose={() => setNotCompletedLead(null)} maxWidth="sm" fullWidth>

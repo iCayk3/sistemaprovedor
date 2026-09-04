@@ -40,6 +40,16 @@ public class AtividadesController {
         return ResponseEntity.ok(service.listarAlertas(usuario));
     }
 
+    @GetMapping("/leads/pendentes")
+    public ResponseEntity<List<AtividadesDTO>> listarLeadsPendentesDoMes(@RequestParam(required = false) String data, @AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(service.listarLeadsPendentesDoMes(data, usuario));
+    }
+
+    @GetMapping("/leads/pendentes/competencias")
+    public ResponseEntity<List<String>> listarCompetenciasComLeadsPendentes(@AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(service.listarCompetenciasComLeadsPendentes(usuario));
+    }
+
     @GetMapping("/registro/mensal")
     public ResponseEntity<List<AtividadesDTO>> registroMensal(@RequestParam(required = false) String data, @RequestParam(required = false) String segmento, @AuthenticationPrincipal Usuario usuario){
         var atividades = service.listarAtividadesPorMes(data, segmento, usuario);
@@ -68,6 +78,11 @@ public class AtividadesController {
     public ResponseEntity<AtividadeClienteRbxDTO> buscarClienteAtividadeRbx(@PathVariable Integer codigo) {
         var cliente = service.buscarClienteAtividadeRbx(codigo);
         return ResponseEntity.ok().body(cliente);
+    }
+
+    @GetMapping("/rbx/clientes/{codigo}/contratos")
+    public ResponseEntity<List<ContratoLeadRbxDTO>> listarContratosParaConversao(@PathVariable Integer codigo) {
+        return ResponseEntity.ok(service.listarContratosParaConversao(codigo));
     }
 
     @PostMapping

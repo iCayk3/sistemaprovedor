@@ -159,6 +159,59 @@ public class DashboardClientesService {
         return response;
     }
 
+    public Map<String, Object> faturamentoMensalCobranca(LocalDate referenceFrom, LocalDate referenceTo) throws Exception {
+        validatePeriod(referenceFrom, referenceTo);
+
+        LocalDate dueFrom = referenceFrom.withDayOfMonth(10);
+        LocalDate dueTo = referenceTo.withDayOfMonth(referenceTo.lengthOfMonth());
+        LocalDate launchMonth = dueFrom.minusMonths(1);
+        LocalDate launchFrom = launchMonth.withDayOfMonth(10);
+        LocalDate launchTo = launchMonth.withDayOfMonth(Math.min(27, launchMonth.lengthOfMonth()));
+
+        String paidFilter = "Movimento.DataLancto >= '%s' AND Movimento.DataLancto <= '%s' "
+                + "AND Movimento.Data >= '%s' AND Movimento.Data <= '%s' AND Movimento.Origem = 'FAT' "
+                + "AND Movimento.Conta = 3 AND Movimento.Tipo = 'C'";
+        String openFilter = "DataLancto >= '%s' AND DataLancto <= '%s' "
+                + "AND Data >= '%s' AND Data <= '%s' AND Origem = 'FAT' AND Conta = 3 AND Tipo = 'C'";
+
+        List<Map<String, Object>> paidDocuments = fetch("ConsultaDocumentosBaixados",
+                paidFilter.formatted(launchFrom, launchTo, dueFrom, dueTo));
+        List<Map<String, Object>> openDocuments = fetch("ConsultaDocumentosAbertos",
+                openFilter.formatted(launchFrom, launchTo, dueFrom, dueTo));
+
+        List<Map<String, Object>> receivedDocuments = paidDocuments.stream()
+                .filter(document -> "Documento a receber".equalsIgnoreCase(text(document, "Historico")))
+                .toList();
+        double received = round(receivedDocuments.stream()
+                .mapToDouble(document -> number(document, "ValorOriginal"))
+                .sum());
+        double open = round(openDocuments.stream()
+                .mapToDouble(document -> number(document, "Valor"))
+                .sum());
+        double billed = round(received + open);
+
+        Map<String, Object> totals = new LinkedHashMap<>();
+        totals.put("billed", billed);
+        totals.put("received", received);
+        totals.put("open", open);
+        totals.put("collectionRate", billed > 0 ? received / billed * 100 : 0);
+        totals.put("documents", receivedDocuments.size() + openDocuments.size());
+        totals.put("receivedDocuments", receivedDocuments.size());
+        totals.put("openDocuments", openDocuments.size());
+
+        Map<String, Object> period = new LinkedHashMap<>();
+        period.put("referenceMonth", dueFrom.withDayOfMonth(1).toString().substring(0, 7));
+        period.put("launchFrom", launchFrom.toString());
+        period.put("launchTo", launchTo.toString());
+        period.put("dueFrom", dueFrom.toString());
+        period.put("dueTo", dueTo.toString());
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("billing", Map.of("period", period, "totals", totals));
+        response.put("updatedAt", java.time.Instant.now().toString());
+        return response;
+    }
+
     public Map<String, Object> resumoAtendimentos(LocalDate from, LocalDate to) throws Exception {
         validatePeriod(from, to);
         List<Map<String, Object>> atendimentos = fetch("ConsultaAtendimentos",
