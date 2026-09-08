@@ -245,7 +245,7 @@ public class FaturamentoMensalService {
     private void sincronizarTitulos(List<FaturamentoMensalTitulo> titulos) throws Exception {
         LocalDate mes = titulos.get(0).getMesReferencia();
         LocalDate day30 = mes.withDayOfMonth(Math.min(30, mes.lengthOfMonth()));
-        LocalDate nextMonthDay1 = mes.plusMonths(1).withDayOfMonth(1);
+        LocalDate nextMonthDay3 = mes.plusMonths(1).withDayOfMonth(3);
         String filtro = "((Movimento.Data >= '%s' AND Movimento.Data <= '%s') OR "
                 + "(Movimento.Data >= '%s' AND Movimento.Data <= '%s') OR "
                 + "(Movimento.Data >= '%s' AND Movimento.Data <= '%s')) "
@@ -253,7 +253,7 @@ public class FaturamentoMensalService {
         filtro = filtro.formatted(
                 mes.withDayOfMonth(10), mes.withDayOfMonth(12),
                 mes.withDayOfMonth(20), mes.withDayOfMonth(22),
-                day30, nextMonthDay1
+                day30, nextMonthDay3
         );
         List<Map<String, Object>> baixados = fetch("ConsultaDocumentosBaixados", filtro).stream()
                 .filter(item -> "Documento a receber".equalsIgnoreCase(value(item, "Historico"))).toList();
@@ -318,12 +318,13 @@ public class FaturamentoMensalService {
             if (day >= 30) return 30;
         }
         LocalDate nextMonthDay1 = reference.plusMonths(1).withDayOfMonth(1);
-        return dueDate.equals(nextMonthDay1) ? 30 : null;
+        LocalDate nextMonthDay3 = reference.plusMonths(1).withDayOfMonth(3);
+        return !dueDate.isBefore(nextMonthDay1) && !dueDate.isAfter(nextMonthDay3) ? 30 : null;
     }
     private String dueRangeLabel(Integer bucket, LocalDate reference) {
         if (bucket == 10) return "10 a 12";
         if (bucket == 20) return "20 a 22";
-        return "30 a " + reference.plusMonths(1).withDayOfMonth(1).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM"));
+        return "30 a " + reference.plusMonths(1).withDayOfMonth(3).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM"));
     }
     private String normalizeDocument(String value) { return value == null ? "" : value.replaceAll("[^0-9A-Za-z]", "").replaceFirst("^0+", ""); }
     private String value(Map<String, Object> item, String key) { Object value = item.get(key); return value == null ? "" : String.valueOf(value); }
