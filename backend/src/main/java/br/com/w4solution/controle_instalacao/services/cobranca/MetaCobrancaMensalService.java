@@ -22,7 +22,7 @@ public class MetaCobrancaMensalService {
         LocalDate referencia = mes.withDayOfMonth(1);
         return repository.findByMesReferencia(referencia)
                 .map(this::dto)
-                .orElse(new MetaCobrancaMensalDTO(referencia, null, null, null, null));
+                .orElse(new MetaCobrancaMensalDTO(referencia, null, null, null, null, null, null));
     }
 
     @Transactional
@@ -59,6 +59,7 @@ public class MetaCobrancaMensalService {
 
     private MetaCobrancaMensalDTO dto(MetaCobrancaMensal meta) {
         return new MetaCobrancaMensalDTO(meta.getMesReferencia(), meta.getMetaRecebimento(),
-                meta.getMetaRecuperacao(), meta.getLimiteInadimplencia(), meta.getMetaAcordos());
+                meta.getMetaRecuperacao(), meta.getLimiteInadimplencia(), meta.getMetaAcordos(),
+                meta.getAtualizadoEm(), meta.getAtualizadoPor());
     }
 }

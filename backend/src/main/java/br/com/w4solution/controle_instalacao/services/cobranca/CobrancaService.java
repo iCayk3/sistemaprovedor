@@ -10,6 +10,7 @@ import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaClienteRbxDTO;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaContratoRbxDTO;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaDTO;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaExclusaoDTO;
+import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaEncerramentoNotificacaoDTO;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaHistoricoDTO;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaLembreteDTO;
 import br.com.w4solution.controle_instalacao.dto.cobranca.CobrancaConfiguracaoDTO;
@@ -32,6 +33,7 @@ import org.springframework.context.event.EventListener;
 import jakarta.transaction.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -53,6 +55,7 @@ public class CobrancaService {
 
     private static final ZoneId FUSO_BRASILIA = ZoneId.of("America/Sao_Paulo");
     private static final DateTimeFormatter DATA_HORA_PT_BR = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
+    private static final long DIAS_ATRASO_FILA_AUTOMATICA = 7;
 
     private static final List<String> STATUS_PERMITIDOS = List.of(
             "Cobrança emitida",
@@ -106,8 +109,10 @@ public class CobrancaService {
     }
 
     public List<CobrancaDTO> listarAutomaticasDisponiveis() {
+        LocalDate hoje = LocalDate.now();
         return repository.findAll().stream()
                 .filter(cobranca -> Boolean.TRUE.equals(cobranca.getGeradaAutomaticamente()))
+                .filter(cobranca -> atrasoMinimoAtingido(cobranca.getDataVencimento(), hoje))
                 .filter(cobranca -> cobranca.getResponsavel() == null || cobranca.getResponsavel().isBlank())
                 .filter(cobranca -> !Boolean.TRUE.equals(cobranca.getExcluida()))
                 .filter(cobranca -> !"Fechada".equalsIgnoreCase(cobranca.getSituacaoAtendimento()))
@@ -165,6 +170,26 @@ public class CobrancaService {
                 .filter(cobranca -> ultimaMovimentacao(cobranca) != null && !ultimaMovimentacao(cobranca).isAfter(limite))
                 .count();
         return new CobrancaLembreteDTO(quantidade);
+    }
+
+    public List<CobrancaEncerramentoNotificacaoDTO> notificacoesEncerramento(String usuario) {
+        return repository.findAll().stream()
+                .filter(cobranca -> Boolean.TRUE.equals(cobranca.getNotificacaoEncerramentoPendente()))
+                .filter(cobranca -> String.valueOf(cobranca.getResponsavel()).equalsIgnoreCase(String.valueOf(usuario)))
+                .sorted(Comparator.comparing(Cobranca::getNotificacaoEncerramentoEm,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .map(CobrancaEncerramentoNotificacaoDTO::new)
+                .toList();
+    }
+
+    public void confirmarNotificacaoEncerramento(Long id, String usuario) {
+        Cobranca cobranca = repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Cobranca nao encontrada."));
+        if (!String.valueOf(cobranca.getResponsavel()).equalsIgnoreCase(String.valueOf(usuario))) {
+            throw new IllegalStateException("Este aviso pertence ao responsável pela cobrança.");
+        }
+        cobranca.setNotificacaoEncerramentoPendente(false);
+        repository.save(cobranca);
     }
 
     private LocalDateTime ultimaMovimentacao(Cobranca cobranca) {
@@ -270,30 +295,26 @@ public class CobrancaService {
             cobranca.setResponsavel(fallback(usuario, "sistema"));
             cobranca.setCapturadoEm(LocalDateTime.now());
             identificarContratoDoTitulo(cobranca);
-            cobranca.setStatusIntegracaoRbx("PREPARANDO_ABERTURA_TESTE_RBX");
+            cobranca.setStatusIntegracaoRbx("PREPARANDO_ABERTURA_RBX");
             cobranca.setAtualizadoEm(LocalDateTime.now());
             cobranca.setAtualizadoPor(fallback(usuario, "sistema"));
             repository.save(cobranca);
             salvarHistorico(cobranca, cobranca.getStatus(), cobranca.getStatus(), cobranca.getValor(), cobranca.getValor(),
-                    "Atendimento capturado. Preparando abertura controlada no cliente de teste 911 do RBX.", usuario);
+                    "Atendimento capturado. Preparando abertura no RBX para o cliente e contrato da cobrança.", usuario);
         }
         if ((cobranca.getAtendimentoRbxNumero() == null || cobranca.getAtendimentoRbxNumero().isBlank())
                 && Boolean.TRUE.equals(cobranca.getGeradaAutomaticamente())) {
-            abrirAtendimentoTesteRbx(cobranca, usuarioLogado, usuario);
+            abrirAtendimentoRbx(cobranca, usuarioLogado, usuario);
         }
         return toDto(cobranca);
     }
 
-    private void abrirAtendimentoTesteRbx(Cobranca cobranca, Usuario usuarioLogado, String usuario) {
+    private void abrirAtendimentoRbx(Cobranca cobranca, Usuario usuarioLogado, String usuario) {
         try {
-            // Para abrir um atendimento basta existir um contrato do cliente. A busca usada
-            // pela tela de cobrança filtra contratos sem boleto aberto e não serve para isso.
-            Long contratoTeste = serviceRbx.buscarContratos(911).stream()
-                    .map(contrato -> contrato.numero())
-                    .map(this::numeroLong)
-                    .filter(Objects::nonNull)
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalStateException("O cliente de teste 911 não possui contrato disponível."));
+            Long cliente = cobranca.getCodigoCliente() == null ? null : cobranca.getCodigoCliente().longValue();
+            Long contrato = numeroLong(cobranca.getNumeroContrato());
+            if (cliente == null) throw new IllegalStateException("A cobrança não possui código de cliente para abertura no RBX.");
+            if (contrato == null) throw new IllegalStateException("Não foi possível identificar o contrato do boleto para abertura no RBX.");
             String valorBoleto = cobranca.getValor() == null
                     ? "valor não informado"
                     : NumberFormat.getCurrencyInstance(new Locale("pt", "BR")).format(cobranca.getValor());
@@ -302,30 +323,30 @@ public class CobrancaService {
                     : cobranca.getDataVencimento().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
             String assunto = "Chamado do sistema de controle - cobrança " + cobranca.getProtocolo()
                     + " - " + valorBoleto + " - vencimento " + vencimentoBoleto;
-            String ocorrencia = "Teste de integração. Cobrança local: " + cobranca.getProtocolo()
-                    + "; cliente original: " + cobranca.getCodigoCliente()
-                    + "; contrato original: " + fallback(cobranca.getNumeroContrato(), "não identificado")
+            String ocorrencia = "Cobrança aberta pelo sistema de controle. Protocolo local: " + cobranca.getProtocolo()
+                    + "; cliente: " + cobranca.getCodigoCliente()
+                    + "; contrato: " + cobranca.getNumeroContrato()
                     + "; boleto: " + fallback(cobranca.getDocumentoTitulo(), "não informado")
                     + "; vencimento: " + vencimentoBoleto
                     + "; valor: " + valorBoleto + ".";
-            var resultado = atendimentoClient.abrirTesteCobranca(new AtendimentoAberturaRbxDTO(
-                    LocalDate.now(), LocalTime.now(), "A", "T", "C", 911L, contratoTeste,
+            var resultado = atendimentoClient.abrir(new AtendimentoAberturaRbxDTO(
+                    LocalDate.now(), LocalTime.now(), "A", "T", "C", cliente, contrato,
                     null, 1, "A", "A", 187L, null, assunto, ocorrencia
             ), usuarioService.credenciaisRbx(usuarioLogado));
             cobranca.setAtendimentoRbxNumero(resultado.numeroAtendimento());
             cobranca.setAtendimentoRbxProtocolo(resultado.protocolo());
-            cobranca.setStatusIntegracaoRbx("ABERTO_TESTE_RBX");
+            cobranca.setStatusIntegracaoRbx("ABERTO_RBX");
             cobranca.setAbertoNoRbxEm(LocalDateTime.now());
             cobranca.setErroIntegracaoRbx(null);
             repository.save(cobranca);
             salvarHistorico(cobranca, cobranca.getStatus(), cobranca.getStatus(), cobranca.getValor(), cobranca.getValor(),
-                    "Atendimento de teste aberto no RBX para o cliente 911. Número: " + resultado.numeroAtendimento(), usuario);
+                    "Atendimento aberto no RBX. Número: " + resultado.numeroAtendimento() + ".", usuario);
         } catch (Exception e) {
-            cobranca.setStatusIntegracaoRbx("ERRO_ABERTURA_TESTE_RBX");
+            cobranca.setStatusIntegracaoRbx("ERRO_ABERTURA_RBX");
             cobranca.setErroIntegracaoRbx(e.getMessage());
             repository.save(cobranca);
             salvarHistorico(cobranca, cobranca.getStatus(), cobranca.getStatus(), cobranca.getValor(), cobranca.getValor(),
-                    "Falha ao abrir atendimento de teste no RBX: " + e.getMessage(), usuario);
+                    "Falha ao abrir atendimento no RBX: " + e.getMessage(), usuario);
         }
     }
 
@@ -343,8 +364,12 @@ public class CobrancaService {
         LocalDate hoje = LocalDate.now();
         for (FaturamentoMensalTitulo titulo : titulos) {
             if (titulo.isBaixado()) finalizarAutomaticamentePorPagamento(titulo);
-            else if (titulo.getVencimento() != null && titulo.getVencimento().isBefore(hoje)) gerarAtendimentoAutomatico(titulo);
+            else if (atrasoMinimoAtingido(titulo.getVencimento(), hoje)) gerarAtendimentoAutomatico(titulo);
         }
+    }
+
+    private boolean atrasoMinimoAtingido(LocalDate vencimento, LocalDate hoje) {
+        return vencimento != null && !vencimento.isAfter(hoje.minusDays(DIAS_ATRASO_FILA_AUTOMATICA));
     }
 
     private void gerarAtendimentoAutomatico(FaturamentoMensalTitulo titulo) {
@@ -397,7 +422,25 @@ public class CobrancaService {
             salvarHistorico(cobranca, anterior, "Pago", cobranca.getValor(), cobranca.getValor(),
                     "Pagamento identificado automaticamente na sincronização do faturamento.", "sistema");
             prepararFechamentoRbx(cobranca);
+            criarNotificacaoEncerramentoAutomatico(cobranca);
         });
+    }
+
+    private void criarNotificacaoEncerramentoAutomatico(Cobranca cobranca) {
+        if (cobranca.getResponsavel() == null || cobranca.getResponsavel().isBlank()) return;
+        String valorPago = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"))
+                .format(cobranca.getValorPago() == null ? BigDecimal.ZERO : cobranca.getValorPago());
+        boolean fechadoRbx = "FECHADO_RBX".equals(cobranca.getStatusIntegracaoRbx());
+        String resultadoRbx = fechadoRbx
+                ? "O atendimento " + fallback(cobranca.getAtendimentoRbxNumero(), "") + " também foi encerrado no RBX."
+                : "A cobrança foi encerrada localmente; situação do RBX: "
+                    + fallback(cobranca.getStatusIntegracaoRbx(), "não iniciado") + ".";
+        cobranca.setNotificacaoEncerramentoMensagem("Pagamento identificado automaticamente para "
+                + fallback(cobranca.getCliente(), "cliente não informado") + " (" + cobranca.getProtocolo()
+                + "). Valor pago: " + valorPago + ". " + resultadoRbx);
+        cobranca.setNotificacaoEncerramentoEm(LocalDateTime.now());
+        cobranca.setNotificacaoEncerramentoPendente(true);
+        repository.save(cobranca);
     }
 
     private void identificarContratoDoTitulo(Cobranca cobranca) {
@@ -414,43 +457,43 @@ public class CobrancaService {
 
     private void prepararFechamentoRbx(Cobranca cobranca) {
         if (!"Fechada".equalsIgnoreCase(cobranca.getSituacaoAtendimento())) return;
-        boolean atendimentoTesteAberto = "ABERTO_TESTE_RBX".equals(cobranca.getStatusIntegracaoRbx());
-        if (atendimentoTesteAberto && cobranca.getAtendimentoRbxNumero() != null && !cobranca.getAtendimentoRbxNumero().isBlank()) {
-            cobranca.setStatusIntegracaoRbx("AGUARDANDO_AUTORIZACAO_FECHAMENTO");
+        boolean atendimentoRbxAberto = "ABERTO_RBX".equals(cobranca.getStatusIntegracaoRbx());
+        if (atendimentoRbxAberto && cobranca.getAtendimentoRbxNumero() != null && !cobranca.getAtendimentoRbxNumero().isBlank()) {
+            cobranca.setStatusIntegracaoRbx("AGUARDANDO_FECHAMENTO_RBX");
         } else if (cobranca.getCapturadoEm() != null) {
             cobranca.setStatusIntegracaoRbx("FINALIZADO_SEM_ABERTURA_RBX");
         }
         cobranca.setSolucaoRbxPreparada(montarSolucaoRbx(cobranca));
         repository.save(cobranca);
-        if (atendimentoTesteAberto) encerrarAtendimentoTesteRbx(cobranca);
+        if (atendimentoRbxAberto) encerrarAtendimentoRbx(cobranca);
     }
 
     @EventListener(ApplicationReadyEvent.class)
-    public void encerrarTestesPendentesAoIniciar() {
+    public void encerrarAtendimentosPendentesAoIniciar() {
         repository.findAll().stream()
-                .filter(cobranca -> "AGUARDANDO_AUTORIZACAO_FECHAMENTO".equals(cobranca.getStatusIntegracaoRbx()))
+                .filter(cobranca -> "AGUARDANDO_FECHAMENTO_RBX".equals(cobranca.getStatusIntegracaoRbx()))
                 .filter(cobranca -> cobranca.getAbertoNoRbxEm() != null)
-                .forEach(this::encerrarAtendimentoTesteRbx);
+                .forEach(this::encerrarAtendimentoRbx);
     }
 
-    private void encerrarAtendimentoTesteRbx(Cobranca cobranca) {
+    private void encerrarAtendimentoRbx(Cobranca cobranca) {
         try {
             Long causa = 76L; // Verificação Financeira
-            atendimentoClient.encerrarTesteCobranca(cobranca.getAtendimentoRbxNumero(),
+            atendimentoClient.encerrar(cobranca.getAtendimentoRbxNumero(),
                     new AtendimentoEncerramentoRbxDTO(causa, cobranca.getSolucaoRbxPreparada(), LocalDateTime.now(FUSO_BRASILIA)),
                     usuarioService.credenciaisRbx(cobranca.getResponsavel()));
-            cobranca.setStatusIntegracaoRbx("FECHADO_TESTE_RBX");
+            cobranca.setStatusIntegracaoRbx("FECHADO_RBX");
             cobranca.setFechadoNoRbxEm(LocalDateTime.now());
             cobranca.setErroIntegracaoRbx(null);
             repository.save(cobranca);
             salvarHistorico(cobranca, cobranca.getStatus(), cobranca.getStatus(), cobranca.getValor(), cobranca.getValor(),
-                    "Atendimento de teste encerrado no RBX. Causa: " + causa + ".", cobranca.getResponsavel());
+                    "Atendimento encerrado no RBX. Causa: " + causa + ".", cobranca.getResponsavel());
         } catch (Exception e) {
-            cobranca.setStatusIntegracaoRbx("ERRO_FECHAMENTO_TESTE_RBX");
+            cobranca.setStatusIntegracaoRbx("ERRO_FECHAMENTO_RBX");
             cobranca.setErroIntegracaoRbx(e.getMessage());
             repository.save(cobranca);
             salvarHistorico(cobranca, cobranca.getStatus(), cobranca.getStatus(), cobranca.getValor(), cobranca.getValor(),
-                    "Falha ao encerrar atendimento de teste no RBX: " + e.getMessage(), cobranca.getResponsavel());
+                    "Falha ao encerrar atendimento no RBX: " + e.getMessage(), cobranca.getResponsavel());
         }
     }
 
@@ -600,7 +643,7 @@ public class CobrancaService {
                 .map(Cobranca::getCodigoCliente).filter(Objects::nonNull).collect(Collectors.toSet());
 
         return faturamentoRepository.findByBaixadoFalse().stream()
-                .filter(titulo -> titulo.getVencimento().isBefore(hoje))
+                .filter(titulo -> atrasoMinimoAtingido(titulo.getVencimento(), hoje))
                 .filter(titulo -> titulo.getCodigoCliente() != null && !titulo.getCodigoCliente().isBlank())
                 .collect(Collectors.groupingBy(titulo -> titulo.getCodigoCliente().trim()))
                 .entrySet().stream().map(entry -> {
@@ -620,13 +663,18 @@ public class CobrancaService {
     public Map<String, Object> relatorioOperacional(LocalDate mes) {
         LocalDate inicio = mes.withDayOfMonth(1);
         LocalDate fim = inicio.plusMonths(1);
-        List<Cobranca> cobrancas = repository.findAll().stream()
+        List<Cobranca> todasCobrancas = repository.findAll().stream()
                 .filter(item -> !Boolean.TRUE.equals(item.getExcluida()))
+                .toList();
+        List<Cobranca> cobrancas = todasCobrancas.stream()
+                .filter(this::possuiDonoRelatorio)
                 .toList();
         List<Cobranca> criadas = cobrancas.stream().filter(item -> dentroDoMes(item.getCriadoEm(), inicio, fim)).toList();
         List<Cobranca> fechadas = cobrancas.stream().filter(item -> dentroDoMes(item.getFechadoEm(), inicio, fim)).toList();
         List<CobrancaHistorico> movimentos = historicoRepository.findAll().stream()
-                .filter(item -> dentroDoMes(item.getCriadoEm(), inicio, fim)).toList();
+                .filter(item -> dentroDoMes(item.getCriadoEm(), inicio, fim))
+                .filter(item -> item.getCobranca() != null && possuiDonoRelatorio(item.getCobranca()))
+                .toList();
         List<CobrancaHistorico> acordos = movimentos.stream()
                 .filter(item -> contem(item.getStatusNovo(), "PROMESSA") || contem(item.getObservacao(), "ACORDO"))
                 .filter(item -> item.getCobranca() != null && !Boolean.TRUE.equals(item.getCobranca().getExcluida()))
@@ -638,32 +686,130 @@ public class CobrancaService {
         BigDecimal valorAcordos = acordos.stream().map(CobrancaHistorico::getCobranca).map(Cobranca::getValor)
                 .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        Set<Long> cobrancasTrabalhadasIds = movimentos.stream()
+                .map(CobrancaHistorico::getCobranca)
+                .filter(Objects::nonNull)
+                .map(Cobranca::getId)
+                .collect(Collectors.toSet());
+        BigDecimal carteiraTrabalhada = cobrancas.stream()
+                .filter(item -> cobrancasTrabalhadasIds.contains(item.getId()))
+                .map(Cobranca::getValor).filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal percentualRecuperado = carteiraTrabalhada.signum() > 0
+                ? recebido.multiply(BigDecimal.valueOf(100)).divide(carteiraTrabalhada, 2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
+        LocalDate inicioAno = LocalDate.of(inicio.getYear(), 1, 1);
+        LocalDate fimAno = inicioAno.plusYears(1);
+        List<Cobranca> carteiraAnual = cobrancas.stream()
+                .filter(item -> dentroDoMes(item.getCriadoEm(), inicioAno, fimAno))
+                .toList();
+        BigDecimal valorCarteiraAnual = carteiraAnual.stream().map(Cobranca::getValor)
+                .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal saldoInadimplenteAnual = carteiraAnual.stream()
+                .filter(item -> !"Fechada".equalsIgnoreCase(item.getSituacaoAtendimento()))
+                .map(Cobranca::getValor).filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal percentualInadimplente = valorCarteiraAnual.signum() > 0
+                ? saldoInadimplenteAnual.multiply(BigDecimal.valueOf(100))
+                    .divide(valorCarteiraAnual, 2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
         Map<String, Map<String, Object>> produtividade = new LinkedHashMap<>();
-        movimentos.stream().collect(Collectors.groupingBy(item -> fallback(item.getUsuario(), "sistema"))).entrySet().stream()
+        movimentos.stream().collect(Collectors.groupingBy(item -> donoAtendimento(item.getCobranca()))).entrySet().stream()
                 .sorted(Map.Entry.comparingByKey()).forEach(entry -> {
                     List<CobrancaHistorico> itens = entry.getValue();
+                    List<Cobranca> cobrancasDoUsuario = itens.stream()
+                            .map(CobrancaHistorico::getCobranca)
+                            .filter(Objects::nonNull)
+                            .filter(item -> !Boolean.TRUE.equals(item.getExcluida()))
+                            .distinct()
+                            .toList();
+                    List<Cobranca> acordosDoUsuario = itens.stream()
+                            .filter(item -> contem(item.getStatusNovo(), "PROMESSA") || contem(item.getObservacao(), "ACORDO"))
+                            .map(CobrancaHistorico::getCobranca)
+                            .filter(Objects::nonNull)
+                            .filter(item -> !Boolean.TRUE.equals(item.getExcluida()))
+                            .distinct()
+                            .toList();
+                    List<Cobranca> pagamentosDoUsuario = itens.stream()
+                            .filter(item -> contem(item.getStatusNovo(), "PAGO"))
+                            .map(CobrancaHistorico::getCobranca)
+                            .filter(Objects::nonNull)
+                            .filter(item -> !Boolean.TRUE.equals(item.getExcluida()))
+                            .distinct()
+                            .toList();
                     Map<String, Object> linha = new LinkedHashMap<>();
                     linha.put("usuario", entry.getKey());
                     linha.put("acoes", itens.size());
-                    linha.put("clientes", itens.stream().map(item -> item.getCobranca().getCodigoCliente()).filter(Objects::nonNull).distinct().count());
-                    linha.put("acordos", itens.stream().filter(item -> contem(item.getStatusNovo(), "PROMESSA") || contem(item.getObservacao(), "ACORDO")).count());
-                    linha.put("pagamentos", itens.stream().filter(item -> contem(item.getStatusNovo(), "PAGO")).count());
+                    linha.put("clientes", cobrancasDoUsuario.stream().map(Cobranca::getCodigoCliente).filter(Objects::nonNull).distinct().count());
+                    linha.put("carteiraTrabalhada", cobrancasDoUsuario.stream().map(Cobranca::getValor).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add));
+                    List<Cobranca> abertasDoUsuario = criadas.stream().filter(item -> donoAtendimento(item).equals(entry.getKey())).toList();
+                    List<Cobranca> fechadasDoUsuario = fechadas.stream().filter(item -> donoAtendimento(item).equals(entry.getKey())).toList();
+                    linha.put("aberturas", abertasDoUsuario.size());
+                    linha.put("valorAberturas", abertasDoUsuario.stream().map(Cobranca::getValor).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add));
+                    linha.put("encerramentos", fechadasDoUsuario.size());
+                    linha.put("valorEncerramentos", fechadasDoUsuario.stream().map(Cobranca::getValor).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add));
+                    linha.put("acordos", acordosDoUsuario.size());
+                    linha.put("valorAcordos", acordosDoUsuario.stream().map(Cobranca::getValor).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add));
+                    linha.put("pagamentos", pagamentosDoUsuario.size());
+                    linha.put("valorPagamentos", pagamentosDoUsuario.stream()
+                            .map(item -> item.getValorPago() != null ? item.getValorPago() : item.getValor())
+                            .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add));
                     produtividade.put(entry.getKey(), linha);
                 });
 
         Map<String, Object> fechamento = new LinkedHashMap<>();
         fechamento.put("abertasNoMes", criadas.size());
+        fechamento.put("valorAbertasNoMes", criadas.stream().map(Cobranca::getValor).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add));
         fechamento.put("fechadasNoMes", fechadas.size());
+        fechamento.put("valorFechadasNoMes", fechadas.stream().map(Cobranca::getValor).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add));
         fechamento.put("recebidoPelaEquipe", recebido);
         fechamento.put("saldoAtendimentosAbertos", cobrancas.stream().filter(item -> !"Fechada".equalsIgnoreCase(item.getSituacaoAtendimento())).map(Cobranca::getValor).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add));
+
+        Map<String, Object> indicadores = new LinkedHashMap<>();
+        indicadores.put("valorRecuperado", recebido);
+        indicadores.put("carteiraTrabalhada", carteiraTrabalhada);
+        indicadores.put("percentualRecuperado", percentualRecuperado);
+        indicadores.put("saldoInadimplenteAnual", saldoInadimplenteAnual);
+        indicadores.put("valorCarteiraAnual", valorCarteiraAnual);
+        indicadores.put("percentualInadimplente", percentualInadimplente);
+        indicadores.put("ano", inicio.getYear());
+        indicadores.put("acordos", acordos.size());
+        List<Cobranca> aguardandoCaptura = todasCobrancas.stream()
+                .filter(item -> Boolean.TRUE.equals(item.getGeradaAutomaticamente()))
+                .filter(item -> !possuiDonoRelatorio(item))
+                .filter(item -> !"Fechada".equalsIgnoreCase(item.getSituacaoAtendimento()))
+                .toList();
+        indicadores.put("aguardandoCaptura", aguardandoCaptura.size());
+        indicadores.put("valorAguardandoCaptura", aguardandoCaptura.stream().map(Cobranca::getValor)
+                .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add));
 
         return Map.of(
                 "period", inicio.toString().substring(0, 7),
                 "closing", fechamento,
                 "agreements", Map.of("count", acordos.size(), "value", valorAcordos),
+                "indicators", indicadores,
                 "productivity", produtividade.values(),
-                "results", Map.of("actions", movimentos.size(), "opened", criadas.size(), "closed", fechadas.size(), "received", recebido)
+                "results", Map.of(
+                        "actions", movimentos.size(),
+                        "workedValue", carteiraTrabalhada,
+                        "opened", criadas.size(),
+                        "openedValue", fechamento.get("valorAbertasNoMes"),
+                        "closed", fechadas.size(),
+                        "closedValue", fechamento.get("valorFechadasNoMes"),
+                        "received", recebido
+                )
         );
+    }
+
+    private String donoAtendimento(Cobranca cobranca) {
+        if (cobranca == null) return "sistema";
+        return fallback(cobranca.getResponsavel(), fallback(cobranca.getCriadoPor(), "sistema"));
+    }
+
+    private boolean possuiDonoRelatorio(Cobranca cobranca) {
+        return !"sistema".equalsIgnoreCase(donoAtendimento(cobranca));
     }
 
     private boolean dentroDoMes(LocalDateTime data, LocalDate inicio, LocalDate fim) {

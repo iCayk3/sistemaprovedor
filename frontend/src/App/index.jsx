@@ -27,7 +27,7 @@ import EquipesTecnicas from '../Paginas/EquipesTecnicas';
 import SettingsRegistros from '../Paginas/SettingsRegistros';
 import Groups2Icon from '@mui/icons-material/Groups2';
 import PropTypes from 'prop-types';
-import { Alert, Badge, Box, MenuItem, Paper, Snackbar, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Badge, Box, Button, MenuItem, Paper, Snackbar, Stack, TextField, Typography } from '@mui/material';
 import AtividadesComercial from '../Paginas/AtividadesComercial';
 import DashBoardsComercial from '../Paginas/DashBoardsComercial';
 import AccountMenu from '../Componentes/AccountMenu';
@@ -113,6 +113,7 @@ const Menu = () => {
     const [avisoChat, setAvisoChat] = React.useState(false);
     const [cobrancasSemAtualizacao, setCobrancasSemAtualizacao] = React.useState(0);
     const [avisoCobrancas, setAvisoCobrancas] = React.useState(false);
+    const [encerramentosAutomaticos, setEncerramentosAutomaticos] = React.useState([]);
     const naoLidasAnteriores = React.useRef(0);
     const semPermissao = <div>Sem permissao</div>;
 
@@ -186,6 +187,35 @@ const Menu = () => {
         const intervalo = setInterval(atualizarLembretes, 60000);
         return () => clearInterval(intervalo);
     }, [hasRole, user.usuario]);
+
+    React.useEffect(() => {
+        if (!hasRole('charging') || !user.usuario) {
+            setEncerramentosAutomaticos([]);
+            return undefined;
+        }
+        const atualizarEncerramentos = async () => {
+            try {
+                const response = await UseApi('cobrancas/notificacoes/encerramentos');
+                setEncerramentosAutomaticos(Array.isArray(response) ? response : []);
+            } catch {
+                // O aviso não deve interromper o restante do sistema.
+            }
+        };
+        atualizarEncerramentos();
+        const intervalo = setInterval(atualizarEncerramentos, 15000);
+        return () => clearInterval(intervalo);
+    }, [hasRole, user.usuario]);
+
+    const confirmarEncerramentoAutomatico = async () => {
+        const atual = encerramentosAutomaticos[0];
+        if (!atual) return;
+        try {
+            await UseApi(`cobrancas/${atual.cobrancaId}/notificacao-encerramento/lida`, 'PATCH');
+            setEncerramentosAutomaticos((lista) => lista.filter((item) => item.cobrancaId !== atual.cobrancaId));
+        } catch {
+            // Mantém o aviso visível para que o usuário possa tentar confirmar novamente.
+        }
+    };
 
     const cobrancaChildren = [
         {
@@ -576,6 +606,23 @@ const Menu = () => {
             >
                 <Alert severity="warning" variant="filled" onClose={() => setAvisoCobrancas(false)}>
                     {cobrancasSemAtualizacao} cobrança(s) aberta(s) estão há 7 dias ou mais sem atualização.
+                </Alert>
+            </Snackbar>
+            <Snackbar
+                open={encerramentosAutomaticos.length > 0}
+                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+            >
+                <Alert
+                    severity={encerramentosAutomaticos[0]?.statusIntegracaoRbx === 'FECHADO_RBX' ? 'success' : 'warning'}
+                    variant="filled"
+                    action={(
+                        <Button color="inherit" size="small" onClick={confirmarEncerramentoAutomatico}>
+                            Ciente
+                        </Button>
+                    )}
+                >
+                    {encerramentosAutomaticos[0]?.mensagem}
+                    {encerramentosAutomaticos.length > 1 && ` (+${encerramentosAutomaticos.length - 1} aviso(s))`}
                 </Alert>
             </Snackbar>
         </ReactRouterAppProvider>

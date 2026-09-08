@@ -251,6 +251,10 @@ function readClientField(cliente, lowerKey, upperKey) {
     return cliente?.[lowerKey] ?? cliente?.[upperKey] ?? '';
 }
 
+function normalizeClientCode(value) {
+    return String(value ?? '').replace(/\D/g, '');
+}
+
 function formatClientGroup(group) {
     const normalized = String(group || '').trim();
     return clientGroupNames[normalized] || normalized;
@@ -381,6 +385,8 @@ const Cobrancas = ({ readOnly = false, mode }) => {
     const [dashboardMonth, setDashboardMonth] = useState(currentMonthIso());
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(20);
+    const [delinquentPage, setDelinquentPage] = useState(0);
+    const [delinquentRowsPerPage, setDelinquentRowsPerPage] = useState(10);
     const [trackingNote, setTrackingNote] = useState('');
     const [open, setOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
@@ -456,6 +462,10 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         const search = searchFilter.trim().toLowerCase();
         return charges
             .filter((charge) => {
+                if (!isRegister) return true;
+                return !charge.automatic || Boolean(String(charge.responsible || '').trim());
+            })
+            .filter((charge) => {
                 if (!isDashboard) return true;
                 return !charge.excluded && !isClosedStatus(charge.status);
             })
@@ -491,7 +501,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 ].some((value) => String(value || '').toLowerCase().includes(search));
             })
             .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
-    }, [charges, dashboardMonth, isDashboard, statusFilter, searchFilter, userFilter, actionFilter, groupFilter]);
+    }, [charges, dashboardMonth, isDashboard, isRegister, statusFilter, searchFilter, userFilter, actionFilter, groupFilter]);
 
     useEffect(() => {
         setPage(0);
@@ -505,6 +515,19 @@ const Cobrancas = ({ readOnly = false, mode }) => {
     const paginatedCharges = useMemo(
         () => filteredCharges.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
         [filteredCharges, page, rowsPerPage],
+    );
+
+    useEffect(() => {
+        const lastPage = Math.max(0, Math.ceil(delinquentQueue.length / delinquentRowsPerPage) - 1);
+        if (delinquentPage > lastPage) setDelinquentPage(lastPage);
+    }, [delinquentQueue.length, delinquentPage, delinquentRowsPerPage]);
+
+    const paginatedDelinquentQueue = useMemo(
+        () => delinquentQueue.slice(
+            delinquentPage * delinquentRowsPerPage,
+            delinquentPage * delinquentRowsPerPage + delinquentRowsPerPage,
+        ),
+        [delinquentQueue, delinquentPage, delinquentRowsPerPage],
     );
 
     const reminderCount = useMemo(
@@ -673,7 +696,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
 
     const searchRbxClient = async (codeOverride) => {
         const explicitCode = typeof codeOverride === 'string' || typeof codeOverride === 'number' ? codeOverride : null;
-        const code = explicitCode || form.codigoCliente || selected?.clientCode;
+        const code = normalizeClientCode(explicitCode || form.codigoCliente || selected?.clientCode);
         if (!code) {
             setError('Informe o codigo do cliente para buscar no RBX.');
             return;
@@ -687,10 +710,11 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 throw new Error('Codigo de cliente nao encontrado no RBX.');
             }
             setRbxClient(normalizedClient);
-            setValidatedClientCode(String(code).trim());
+            setValidatedClientCode(code);
             if (normalizedClient?.nome || normalizedClient?.grupo) {
                 setForm((current) => ({
                     ...current,
+                    codigoCliente: code,
                     cliente: normalizedClient?.nome || current.cliente,
                     grupoCliente: normalizedClient?.grupo || current.grupoCliente,
                     numeroContrato: '',
@@ -713,7 +737,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         setTrackingNote('');
         setForm({
             ...emptyForm,
-            codigoCliente: item.codigoCliente,
+            codigoCliente: normalizeClientCode(item.codigoCliente),
             cliente: item.cliente || '',
             data: new Date().toISOString().slice(0, 10),
         });
@@ -728,7 +752,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
             if (isTracking && !trackingNote.trim()) {
                 throw new Error('Informe o que foi realizado no acompanhamento.');
             }
-            if (!selected && (!validatedClientCode || String(form.codigoCliente).trim() !== validatedClientCode || !form.cliente)) {
+            if (!selected && (!validatedClientCode || normalizeClientCode(form.codigoCliente) !== validatedClientCode || !form.cliente)) {
                 throw new Error('Busque e valide um codigo de cliente no RBX antes de cadastrar a cobranca.');
             }
             if (!selected && (!form.numeroContrato || !form.boletoSelecionado)) {
@@ -740,7 +764,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
             }
             const payload = {
                 acao: form.acao,
-                codigoCliente: form.codigoCliente ? Number(form.codigoCliente) : null,
+                codigoCliente: form.codigoCliente ? Number(normalizeClientCode(form.codigoCliente)) : null,
                 numeroContrato: form.numeroContrato,
                 documentoTitulo: selectedRbxContract?.boletos.find((item) => item.id === form.boletoSelecionado)?.documento || null,
                 cliente: form.cliente,
@@ -837,7 +861,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
     const selectedRbxContract = rbxClient?.contratos?.find((item) => String(item.numero) === String(form.numeroContrato));
     const saveDisabled = saving
         || (isTracking && canTrackSelected && !trackingNote.trim())
-        || (!selected && isRegister && (!validatedClientCode || String(form.codigoCliente).trim() !== validatedClientCode || !form.cliente))
+        || (!selected && isRegister && (!validatedClientCode || normalizeClientCode(form.codigoCliente) !== validatedClientCode || !form.cliente))
         || (!selected && isRegister && (!form.numeroContrato || !form.boletoSelecionado))
         || (canEditSelected && !form.dataVencimento)
         || (canSaveSelected && isPaidStatus(form.status) && Number(String(form.valorPago || 0).replace(',', '.')) <= 0)
@@ -942,7 +966,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                         <Box>
                             <Typography variant="h6" fontWeight={800}>Fila automática de inadimplentes</Typography>
                             <Typography variant="body2" color="text.secondary">
-                                Clientes identificados pelos boletos importados, vencidos e ainda sem baixa. Selecione um cliente para consultar contratos e iniciar a cobrança.
+                                Clientes com boletos importados, sem baixa e atrasados há pelo menos 7 dias. Selecione um cliente para consultar contratos e iniciar a cobrança.
                             </Typography>
                         </Box>
                         <Chip color={delinquentQueue.length ? 'error' : 'success'} variant="outlined" label={`${delinquentQueue.length} cliente(s)`} />
@@ -960,7 +984,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {delinquentQueue.map((item) => (
+                                {paginatedDelinquentQueue.map((item) => (
                                     <TableRow key={item.codigoCliente} hover>
                                         <TableCell>
                                             <Typography fontWeight={700}>{item.cliente || 'Nome será atualizado pelo RBX'}</Typography>
@@ -980,11 +1004,27 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                     </TableRow>
                                 ))}
                                 {!delinquentQueue.length && (
-                                    <TableRow><TableCell colSpan={6} align="center">Nenhum boleto vencido importado e pendente de baixa.</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={6} align="center">Nenhum boleto importado sem baixa atingiu 7 dias de atraso.</TableCell></TableRow>
                                 )}
                             </TableBody>
                         </Table>
                     </TableContainer>
+                    {delinquentQueue.length > 0 && (
+                        <TablePagination
+                            component="div"
+                            count={delinquentQueue.length}
+                            page={delinquentPage}
+                            onPageChange={(_, nextPage) => setDelinquentPage(nextPage)}
+                            rowsPerPage={delinquentRowsPerPage}
+                            onRowsPerPageChange={(event) => {
+                                setDelinquentRowsPerPage(Number(event.target.value));
+                                setDelinquentPage(0);
+                            }}
+                            rowsPerPageOptions={[10, 20, 50]}
+                            labelRowsPerPage="Clientes por página"
+                            labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+                        />
+                    )}
                 </Paper>
             )}
 
@@ -1446,7 +1486,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                         )}
                                         <TableCell align="right">
                                             {charge.automatic
-                                                && (!charge.responsible || charge.rbxStatus === 'ERRO_ABERTURA_TESTE_RBX')
+                                                && (!charge.responsible || charge.rbxStatus === 'ERRO_ABERTURA_RBX')
                                                 && charge.serviceSituation !== 'Fechada' && (
                                                 <Button
                                                     size="small"
@@ -1514,7 +1554,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                             {error}
                         </Alert>
                     )}
-                    {!selected && isRegister && (!validatedClientCode || String(form.codigoCliente).trim() !== validatedClientCode || !form.cliente) && (
+                    {!selected && isRegister && (!validatedClientCode || normalizeClientCode(form.codigoCliente) !== validatedClientCode || !form.cliente) && (
                         <Alert severity="info" sx={{ mb: 2 }}>
                             Informe o codigo do cliente e clique na lupa para validar no RBX antes de salvar.
                         </Alert>
@@ -1535,11 +1575,11 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                         <Box sx={{ gridColumn: fieldSpan.third }}>
                             <TextField
                                 fullWidth
-                                type="number"
+                                type="text"
                                 label="Codigo cliente"
                                 value={form.codigoCliente}
                                 onChange={(event) => {
-                                    updateForm('codigoCliente', event.target.value);
+                                    updateForm('codigoCliente', normalizeClientCode(event.target.value));
                                     updateForm('cliente', '');
                                     updateForm('grupoCliente', '');
                                     updateForm('numeroContrato', '');
@@ -1550,6 +1590,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                                     setValidatedClientCode('');
                                 }}
                                 disabled={!canEditSelected}
+                                inputProps={{ inputMode: 'numeric', pattern: '[0-9]*' }}
                                 InputProps={{
                                     endAdornment: (
                                         <IconButton size="small" onClick={searchRbxClient} disabled={rbxLoading}>

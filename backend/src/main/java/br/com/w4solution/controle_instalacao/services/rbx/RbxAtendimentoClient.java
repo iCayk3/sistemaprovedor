@@ -23,31 +23,19 @@ public class RbxAtendimentoClient {
     private final String urlV1;
     private final String urlV2;
     private final boolean escritaHabilitada;
-    private final boolean aberturaTesteHabilitada;
 
     public RbxAtendimentoClient(ObjectMapper objectMapper,
                                 @Value("${api.service.integration.rbx}") String urlV1,
                                 @Value("${api.service.integration.rbx.v2:}") String urlV2,
-                                @Value("${api.service.integration.rbx.atendimentos.escrita-habilitada:false}") boolean escritaHabilitada,
-                                @Value("${api.service.integration.rbx.atendimentos.teste-abertura-habilitada:false}") boolean aberturaTesteHabilitada) {
+                                @Value("${api.service.integration.rbx.atendimentos.escrita-habilitada:false}") boolean escritaHabilitada) {
         this.objectMapper = objectMapper;
         this.urlV1 = urlV1;
         this.urlV2 = urlV2 == null || urlV2.isBlank() ? derivarUrlV2(urlV1) : urlV2;
         this.escritaHabilitada = escritaHabilitada;
-        this.aberturaTesteHabilitada = aberturaTesteHabilitada;
     }
 
     public AtendimentoRbxResultadoDTO abrir(AtendimentoAberturaRbxDTO dados, CredenciaisRbx credenciais) {
         validarEscritaAutorizada();
-        return executarAbertura(dados, credenciais);
-    }
-
-    public AtendimentoRbxResultadoDTO abrirTesteCobranca(AtendimentoAberturaRbxDTO dados, CredenciaisRbx credenciais) {
-        if (!aberturaTesteHabilitada) throw new IllegalStateException("A abertura do atendimento de teste não está habilitada.");
-        if (dados == null || !Long.valueOf(911L).equals(dados.cliente()) || !Long.valueOf(187L).equals(dados.topico())
-                || !"A".equals(dados.tipo()) || !"T".equals(dados.modo())) {
-            throw new IllegalArgumentException("O teste está restrito ao cliente 911, tópico 187, tipo A e modo T.");
-        }
         return executarAbertura(dados, credenciais);
     }
 
@@ -84,15 +72,6 @@ public class RbxAtendimentoClient {
     public AtendimentoRbxResultadoDTO encerrar(String atendimentoNumero, AtendimentoEncerramentoRbxDTO dados,
                                                 CredenciaisRbx credenciais) {
         validarEscritaAutorizada();
-        return executarEncerramento(atendimentoNumero, dados, credenciais);
-    }
-
-    public AtendimentoRbxResultadoDTO encerrarTesteCobranca(String atendimentoNumero, AtendimentoEncerramentoRbxDTO dados,
-                                                             CredenciaisRbx credenciais) {
-        if (!aberturaTesteHabilitada) throw new IllegalStateException("O encerramento do atendimento de teste não está habilitado.");
-        if (dados == null || !Long.valueOf(76L).equals(dados.causaId())) {
-            throw new IllegalArgumentException("A causa não está autorizada para o encerramento controlado de teste.");
-        }
         return executarEncerramento(atendimentoNumero, dados, credenciais);
     }
 

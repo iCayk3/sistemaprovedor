@@ -45,6 +45,11 @@ public class Cobranca {
     private Boolean geradaAutomaticamente = false;
     private String responsavel;
     private LocalDateTime capturadoEm;
+    private Boolean notificacaoEncerramentoPendente = false;
+    private LocalDateTime notificacaoEncerramentoEm;
+
+    @Column(length = 2000)
+    private String notificacaoEncerramentoMensagem;
 
     @Column(columnDefinition = "TEXT")
     private String solucaoRbxPreparada;

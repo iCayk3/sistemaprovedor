@@ -1,8 +1,8 @@
 import AssessmentRoundedIcon from '@mui/icons-material/AssessmentRounded';
 import AccountBalanceWalletRoundedIcon from '@mui/icons-material/AccountBalanceWalletRounded';
-import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import FileUploadRoundedIcon from '@mui/icons-material/FileUploadRounded';
 import FlagRoundedIcon from '@mui/icons-material/FlagRounded';
+import PictureAsPdfRoundedIcon from '@mui/icons-material/PictureAsPdfRounded';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import SyncRoundedIcon from '@mui/icons-material/SyncRounded';
 import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded';
@@ -20,7 +20,9 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import Api from '../../Services/Api';
 import {
     dashboardHeaderSx,
@@ -39,8 +41,14 @@ const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', {
     currency: 'BRL',
 }).format(Number(value || 0));
 const formatDate = (value) => value ? new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR') : '—';
+const formatDateTime = (value) => value ? new Date(value).toLocaleString('pt-BR') : '—';
 
 const currentMonth = () => new Date().toISOString().slice(0, 7);
+const previousMonth = (month) => {
+    const [year, number] = month.split('-').map(Number);
+    const date = new Date(year, number - 2, 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+};
 const monthPeriod = (month) => {
     const [year, monthNumber] = month.split('-').map(Number);
     const lastDay = new Date(year, monthNumber, 0).getDate();
@@ -49,12 +57,6 @@ const monthPeriod = (month) => {
         to: `${month}-${String(lastDay).padStart(2, '0')}`,
     };
 };
-const today = () => new Date().toISOString().slice(0, 10);
-const isFinal = (item) => (
-    String(item.situacaoAtendimento || '').toUpperCase() === 'FECHADA'
-    || ['PAGO', 'FECHADO', 'CANCELADO'].includes(String(item.status || '').trim().toUpperCase())
-);
-const isPaid = (item) => String(item.status || '').trim().toUpperCase() === 'PAGO';
 const emptyGoals = {
     metaRecebimento: '',
     metaRecuperacao: '',
@@ -75,30 +77,16 @@ const goalProgress = (actual, target, inverse = false) => {
 
 export default function PainelCobrancaGerencial() {
     const [month, setMonth] = useState(currentMonth());
-    const [charges, setCharges] = useState([]);
     const [financial, setFinancial] = useState(null);
+    const [previousFinancial, setPreviousFinancial] = useState(null);
     const [operational, setOperational] = useState(null);
+    const [previousOperational, setPreviousOperational] = useState(null);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [goals, setGoals] = useState(emptyGoals);
-
-    useEffect(() => {
-        const load = async () => {
-            setLoading(true);
-            setError('');
-            try {
-                const response = await UseApi('cobrancas');
-                setCharges(Array.isArray(response) ? response : []);
-            } catch (requestError) {
-                setError(requestError.message || 'Erro ao carregar os dados da cobrança.');
-            } finally {
-                setLoading(false);
-            }
-        };
-        load();
-    }, []);
+    const [goalAudit, setGoalAudit] = useState({ atualizadoEm: null, atualizadoPor: null });
 
     useEffect(() => {
         let active = true;
@@ -109,20 +97,26 @@ export default function PainelCobrancaGerencial() {
             setFinancial(null);
             try {
                 const period = monthPeriod(month);
-                const [response, savedGoals, operationalResponse] = await Promise.all([
+                const priorPeriod = monthPeriod(previousMonth(month));
+                const [response, savedGoals, operationalResponse, previousOperationalResponse, previousFinancialResponse] = await Promise.all([
                     UseApi(`cobrancas/painel/financeiro?from=${period.from}&to=${period.to}&refresh=${Date.now()}`),
                     UseApi(`cobrancas/painel/metas?mes=${month}-01`),
                     UseApi(`cobrancas/painel/operacional?mes=${month}-01`),
+                    UseApi(`cobrancas/painel/operacional?mes=${previousMonth(month)}-01`),
+                    UseApi(`cobrancas/painel/financeiro?from=${priorPeriod.from}&to=${priorPeriod.to}&refresh=${Date.now()}`),
                 ]);
                 if (active) {
                     setFinancial(response);
                     setOperational(operationalResponse);
+                    setPreviousOperational(previousOperationalResponse);
+                    setPreviousFinancial(previousFinancialResponse);
                     setGoals({
                         metaRecebimento: savedGoals.metaRecebimento ?? '',
                         metaRecuperacao: savedGoals.metaRecuperacao ?? '',
                         limiteInadimplencia: savedGoals.limiteInadimplencia ?? '',
                         metaAcordos: savedGoals.metaAcordos ?? '',
                     });
+                    setGoalAudit({ atualizadoEm: savedGoals.atualizadoEm, atualizadoPor: savedGoals.atualizadoPor });
                 }
             } catch (requestError) {
                 if (active) setError(requestError.message || 'Erro ao carregar o faturamento mensal do RBX.');
@@ -181,6 +175,7 @@ export default function PainelCobrancaGerencial() {
                 limiteInadimplencia: saved.limiteInadimplencia ?? '',
                 metaAcordos: saved.metaAcordos ?? '',
             });
+            setGoalAudit({ atualizadoEm: saved.atualizadoEm, atualizadoPor: saved.atualizadoPor });
             setSuccess(`Metas de ${month.split('-').reverse().join('/')} salvas com sucesso.`);
         } catch (requestError) {
             setError(requestError.message || 'Erro ao salvar as metas mensais.');
@@ -207,68 +202,56 @@ export default function PainelCobrancaGerencial() {
         }
     };
 
-    const summary = useMemo(() => {
-        const monthly = charges.filter((item) => (
-            !item.excluida && String(item.data || '').slice(0, 7) === month
-        ));
-        const paid = monthly.filter(isPaid);
-        const open = monthly.filter((item) => !isFinal(item));
-        const overdue = open.filter((item) => item.dataVencimento && item.dataVencimento < today());
-        const agreements = monthly.filter((item) => (
-            ['acordo', 'promessa', 'negocia'].some((term) => (
-                `${item.acao || ''} ${item.status || ''}`.toLowerCase().includes(term)
-            ))
-        ));
-        const billed = monthly.reduce((total, item) => total + Number(item.valor || 0), 0);
-        const received = paid.reduce((total, item) => total + Number(item.valorPago ?? item.valor ?? 0), 0);
-        const openValue = open.reduce((total, item) => total + Number(item.valor || 0), 0);
-        const overdueValue = overdue.reduce((total, item) => total + Number(item.valor || 0), 0);
-        const agreementValue = agreements.reduce((total, item) => total + Number(item.valor || 0), 0);
-        const recovery = billed > 0 ? (received / billed) * 100 : 0;
-        const dueDates = new Set(monthly.map((item) => item.dataVencimento).filter(Boolean));
-        const users = new Set(monthly.map((item) => item.ultimoUsuario || item.atualizadoPor || item.criadoPor).filter(Boolean));
-
-        return {
-            monthly,
-            paid,
-            open,
-            overdue,
-            agreements,
-            billed,
-            received,
-            openValue,
-            overdueValue,
-            agreementValue,
-            recovery,
-            dueDates,
-            users,
-        };
-    }, [charges, month]);
-
     const billing = financial?.billing?.totals || {};
+    const previousBilling = previousFinancial?.billing?.totals || {};
     const hasImportedBilling = financial?.billing?.source === 'PLANILHA';
     const collectionRate = Number(billing.collectionRate || 0);
     const billingDueDates = financial?.billing?.dueDates || [];
     const closing = operational?.closing || {};
     const agreementsReport = operational?.agreements || {};
     const operationalResults = operational?.results || {};
+    const collectionIndicators = operational?.indicators || {};
+    const previousCollectionIndicators = previousOperational?.indicators || {};
     const productivity = Array.isArray(operational?.productivity) ? operational.productivity : [];
+    const selectedIsCurrentMonth = month === currentMonth();
+    const selectedIsPastMonth = month < currentMonth();
+    const [selectedYear, selectedMonthNumber] = month.split('-').map(Number);
+    const daysInSelectedMonth = new Date(selectedYear, selectedMonthNumber, 0).getDate();
+    const elapsedDays = selectedIsCurrentMonth ? Math.min(new Date().getDate(), daysInSelectedMonth) : (selectedIsPastMonth ? daysInSelectedMonth : 0);
+    const expectedProgress = daysInSelectedMonth > 0 ? (elapsedDays / daysInSelectedMonth) * 100 : 0;
+    const remainingDays = Math.max(0, daysInSelectedMonth - elapsedDays);
+    const projectValue = (actual, inverse = false) => {
+        if (inverse || selectedIsPastMonth || elapsedDays <= 0) return Number(actual || 0);
+        return (Number(actual || 0) / elapsedDays) * daysInSelectedMonth;
+    };
+    const statusForGoal = (actual, target, inverse = false) => {
+        if (target === '' || target === null || target === undefined) return { label: 'Meta não definida', color: 'warning' };
+        const result = Number(actual || 0);
+        const goal = Number(target || 0);
+        if (inverse) return result <= goal ? { label: 'Dentro da meta', color: 'success' } : { label: 'Acima do limite', color: 'error' };
+        if (result >= goal) return { label: 'Meta atingida', color: 'success' };
+        if (selectedIsPastMonth) return { label: 'Abaixo da meta', color: 'error' };
+        const expectedValue = goal * (expectedProgress / 100);
+        return result >= expectedValue * 0.9 ? { label: 'No ritmo', color: 'success' } : { label: 'Em risco', color: 'error' };
+    };
     const goalIndicators = [
         {
             key: 'metaRecebimento',
             label: 'Meta de recebimento',
             unit: 'R$',
-            actual: Number(billing.received || 0),
-            result: formatCurrency(billing.received || 0),
-            detail: 'Valor recebido no mês',
+            actual: Number(collectionIndicators.valorRecuperado || 0),
+            result: formatCurrency(collectionIndicators.valorRecuperado || 0),
+            previous: Number(previousCollectionIndicators.valorRecuperado || 0),
+            detail: 'Valor recuperado em atendimentos de cobrança no mês',
         },
         {
             key: 'metaRecuperacao',
             label: 'Meta de recuperação',
             unit: '%',
-            actual: collectionRate,
-            result: `${collectionRate.toFixed(1).replace('.', ',')}%`,
-            detail: 'Percentual recebido do faturamento',
+            actual: Number(collectionIndicators.percentualRecuperado || 0),
+            result: `${Number(collectionIndicators.percentualRecuperado || 0).toFixed(1).replace('.', ',')}%`,
+            previous: Number(previousCollectionIndicators.percentualRecuperado || 0),
+            detail: `Recuperado sobre ${formatCurrency(collectionIndicators.carteiraTrabalhada || 0)} trabalhados`,
         },
         {
             key: 'limiteInadimplencia',
@@ -277,27 +260,229 @@ export default function PainelCobrancaGerencial() {
             actual: Number(billing.delinquencyRate || 0),
             inverse: true,
             result: `${Number(billing.delinquencyRate || 0).toFixed(1).replace('.', ',')}%`,
-            detail: `Acumulado anual de ${billing.delinquencyYear || month.slice(0, 4)}`,
+            previous: Number(previousBilling.delinquencyRate || 0),
+            detail: `Títulos vencidos em aberto sobre o faturamento de ${billing.delinquencyYear || month.slice(0, 4)}`,
         },
         {
             key: 'metaAcordos',
             label: 'Meta de acordos',
             unit: 'Qtd.',
-            actual: Number(summary.agreements.length),
-            result: Number(summary.agreements.length).toLocaleString('pt-BR'),
-            detail: 'Acordos registrados no mês',
+            actual: Number(collectionIndicators.acordos || 0),
+            result: Number(collectionIndicators.acordos || 0).toLocaleString('pt-BR'),
+            previous: Number(previousCollectionIndicators.acordos || 0),
+            detail: 'Acordos registrados nos atendimentos de cobrança no mês',
         },
     ];
+    const formatGoalMetric = (indicator, value, difference = false) => {
+        if (indicator.unit === 'R$') return formatCurrency(value);
+        if (indicator.unit === '%') return `${Number(value || 0).toFixed(1).replace('.', ',')}${difference ? ' p.p.' : '%'}`;
+        return Number(value || 0).toLocaleString('pt-BR');
+    };
+    const generateManagementReport = () => {
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 36;
+        const contentWidth = pageWidth - margin * 2;
+        const money = (value) => formatCurrency(value).replace(/\u00a0/g, ' ');
+        const metric = (indicator, value) => formatGoalMetric(indicator, value).replace(/\u00a0/g, ' ');
+        const periodLabel = month.split('-').reverse().join('/');
+        const generatedAt = new Date().toLocaleString('pt-BR');
+        const colors = {
+            navy: [19, 38, 66],
+            cyan: [23, 168, 255],
+            red: [226, 76, 76],
+            light: [184, 215, 245],
+            text: [30, 41, 59],
+            muted: [91, 106, 126],
+            border: [213, 222, 232],
+            soft: [246, 249, 252],
+            green: [38, 150, 92],
+        };
+        const addHeader = (section) => {
+            doc.setFillColor(...colors.navy);
+            doc.rect(0, 0, pageWidth, 76, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(17);
+            doc.text('Relatório Gerencial de Cobrança', margin, 31);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.text(`Competência: ${periodLabel}  |  Emitido em: ${generatedAt}`, margin, 49);
+            doc.setTextColor(...colors.cyan);
+            doc.setFont('helvetica', 'bold');
+            doc.text(section, margin, 65);
+            doc.setTextColor(...colors.text);
+        };
+        const addSectionTitle = (title, y) => {
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.setTextColor(...colors.navy);
+            doc.text(title, margin, y);
+            doc.setDrawColor(...colors.cyan);
+            doc.setLineWidth(1.5);
+            doc.line(margin, y + 5, pageWidth - margin, y + 5);
+        };
+        const addSummaryCard = (x, y, width, title, value, detail, accent = colors.cyan) => {
+            doc.setFillColor(...colors.soft);
+            doc.setDrawColor(...colors.border);
+            doc.roundedRect(x, y, width, 78, 5, 5, 'FD');
+            doc.setFillColor(...accent);
+            doc.roundedRect(x, y, 5, 78, 5, 5, 'F');
+            doc.setTextColor(...colors.muted);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8);
+            doc.text(title, x + 13, y + 18, { maxWidth: width - 22 });
+            doc.setTextColor(...colors.text);
+            doc.setFontSize(14);
+            doc.text(String(value), x + 13, y + 40, { maxWidth: width - 22 });
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(...colors.muted);
+            doc.text(String(detail), x + 13, y + 57, { maxWidth: width - 22 });
+        };
+        const addGoalCard = (indicator, x, y, width, height) => {
+            const target = Number(goals[indicator.key] || 0);
+            const current = Number(indicator.actual || 0);
+            const prior = Number(indicator.previous || 0);
+            const maximum = Math.max(target, current, prior, 1);
+            const status = statusForGoal(current, goals[indicator.key], indicator.inverse);
+            doc.setFillColor(255, 255, 255);
+            doc.setDrawColor(...colors.border);
+            doc.roundedRect(x, y, width, height, 6, 6, 'FD');
+            doc.setTextColor(...colors.navy);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(10);
+            doc.text(indicator.label, x + 12, y + 18);
+            doc.setFontSize(15);
+            doc.text(indicator.result, x + 12, y + 40);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(...colors.muted);
+            doc.text(status.label, x + width - 12, y + 18, { align: 'right' });
+            const rows = [
+                ['Meta', target, colors.light],
+                ['Atual', current, colors.cyan],
+                ['Anterior', prior, colors.red],
+            ];
+            rows.forEach(([label, value, color], index) => {
+                const rowY = y + 62 + index * 28;
+                doc.setTextColor(...colors.muted);
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(7.5);
+                doc.text(label, x + 12, rowY);
+                doc.setFillColor(232, 237, 243);
+                doc.roundedRect(x + 62, rowY - 7, width - 132, 8, 3, 3, 'F');
+                doc.setFillColor(...color);
+                doc.roundedRect(x + 62, rowY - 7, Math.max(1, ((width - 132) * Number(value)) / maximum), 8, 3, 3, 'F');
+                doc.setTextColor(...colors.text);
+                doc.setFont('helvetica', 'normal');
+                doc.text(metric(indicator, value), x + width - 12, rowY, { align: 'right' });
+            });
+            doc.setTextColor(...colors.muted);
+            doc.setFontSize(7.2);
+            const note = indicator.inverse
+                ? 'Quanto menor o realizado em relação ao limite, melhor.'
+                : `Projeção: ${metric(indicator, projectValue(current))}`;
+            doc.text(note, x + 12, y + height - 13, { maxWidth: width - 24 });
+        };
 
-    const topics = [
-        ['Fechamento mensal do setor de cobrança', formatCurrency(summary.received), `${summary.paid.length} cobrança(s) concluída(s)`, 'Disponível'],
-        ['Relatório de valores recebidos', formatCurrency(summary.received), `${summary.recovery.toFixed(1).replace('.', ',')}% de recuperação`, 'Disponível'],
-        ['Controle e acompanhamento de títulos em aberto', formatCurrency(summary.openValue), `${summary.open.length} atendimento(s) em aberto`, 'Disponível'],
-        ['Relatório de acordos realizados', summary.agreements.length, formatCurrency(summary.agreementValue), 'Base inicial'],
-        ['Relatório de produtividade da equipe de cobrança', `${summary.users.size} usuário(s)`, `${summary.monthly.length} registro(s) no período`, 'Disponível'],
-        ['Atualização dos indicadores e metas do setor', `${summary.recovery.toFixed(1).replace('.', ',')}%`, 'Indicador atual; metas serão configuráveis', 'Em evolução'],
-        ['Resultados mensais da cobrança', `${summary.paid.length} pagas / ${summary.open.length} abertas`, `${formatCurrency(summary.received)} recebido`, 'Disponível'],
-    ];
+        addHeader('Indicadores e metas');
+        addSectionTitle('Visão executiva das metas', 101);
+        const goalGap = 12;
+        const goalWidth = (contentWidth - goalGap) / 2;
+        goalIndicators.forEach((indicator, index) => {
+            const x = margin + (index % 2) * (goalWidth + goalGap);
+            const y = 118 + Math.floor(index / 2) * 174;
+            addGoalCard(indicator, x, y, goalWidth, 160);
+        });
+        doc.setFillColor(...colors.soft);
+        doc.setDrawColor(...colors.border);
+        doc.roundedRect(margin, 474, contentWidth, 66, 5, 5, 'FD');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(...colors.navy);
+        doc.text('Leitura do período', margin + 12, 493);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(...colors.muted);
+        doc.text(selectedIsCurrentMonth
+            ? `${remainingDays} dia(s) restante(s); ${expectedProgress.toFixed(1).replace('.', ',')}% do período transcorrido.`
+            : selectedIsPastMonth ? 'Competência encerrada.' : 'Competência futura.', margin + 12, 510);
+        doc.text(`Atendimentos aguardando captura e fora dos resultados: ${Number(collectionIndicators.aguardandoCaptura || 0).toLocaleString('pt-BR')} (${money(collectionIndicators.valorAguardandoCaptura)}).`, margin + 12, 526);
+
+        doc.addPage();
+        addHeader('Operação mensal da cobrança');
+        addSectionTitle('Resumo operacional', 101);
+        const summaryGap = 8;
+        const summaryWidth = (contentWidth - summaryGap * 3) / 4;
+        addSummaryCard(margin, 116, summaryWidth, 'Atendimentos encerrados', Number(closing.fechadasNoMes || 0).toLocaleString('pt-BR'), `${money(closing.valorFechadasNoMes)} em títulos`, colors.green);
+        addSummaryCard(margin + (summaryWidth + summaryGap), 116, summaryWidth, 'Valor recuperado', money(closing.recebidoPelaEquipe), `${Number(operationalResults.closed || 0).toLocaleString('pt-BR')} encerramento(s)`, colors.cyan);
+        addSummaryCard(margin + (summaryWidth + summaryGap) * 2, 116, summaryWidth, 'Acordos realizados', Number(agreementsReport.count || 0).toLocaleString('pt-BR'), `${money(agreementsReport.value)} negociados`, [139, 109, 177]);
+        addSummaryCard(margin + (summaryWidth + summaryGap) * 3, 116, summaryWidth, 'Carteira trabalhada', money(operationalResults.workedValue), `${Number(operationalResults.actions || 0).toLocaleString('pt-BR')} ações`, colors.cyan);
+        addSectionTitle('Produtividade por usuário', 222);
+        autoTable(doc, {
+            startY: 234,
+            margin: { left: margin, right: margin },
+            head: [['Usuário', 'Aberturas', 'Encerramentos', 'Ações', 'Carteira', 'Acordos', 'Recebido']],
+            body: productivity.map((row) => [
+                row.usuario,
+                `${Number(row.aberturas || 0).toLocaleString('pt-BR')}\n${money(row.valorAberturas)}`,
+                `${Number(row.encerramentos || 0).toLocaleString('pt-BR')}\n${money(row.valorEncerramentos)}`,
+                Number(row.acoes || 0).toLocaleString('pt-BR'),
+                money(row.carteiraTrabalhada),
+                `${Number(row.acordos || 0).toLocaleString('pt-BR')}\n${money(row.valorAcordos)}`,
+                `${Number(row.pagamentos || 0).toLocaleString('pt-BR')}\n${money(row.valorPagamentos)}`,
+            ]),
+            theme: 'grid',
+            styles: { font: 'helvetica', fontSize: 7, cellPadding: 4, textColor: colors.text, lineColor: colors.border },
+            headStyles: { fillColor: colors.navy, textColor: [255, 255, 255], fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: colors.soft },
+        });
+
+        doc.addPage();
+        addHeader('Faturamento e inadimplência');
+        addSectionTitle('Resumo financeiro da competência', 101);
+        const financialWidth = (contentWidth - 18) / 3;
+        addSummaryCard(margin, 116, financialWidth, 'Faturado', money(billing.billed), `${Number(billing.documents || 0).toLocaleString('pt-BR')} títulos`, [139, 109, 177]);
+        addSummaryCard(margin + financialWidth + 9, 116, financialWidth, 'Recebido', money(billing.received), `${Number(billing.receivedDocuments || 0).toLocaleString('pt-BR')} títulos baixados`, colors.green);
+        addSummaryCard(margin + (financialWidth + 9) * 2, 116, financialWidth, 'Em aberto', money(billing.open), `${Number(billing.openDocuments || 0).toLocaleString('pt-BR')} títulos`, colors.red);
+        addSectionTitle('Valores faturados por vencimento', 222);
+        autoTable(doc, {
+            startY: 234,
+            margin: { left: margin, right: margin },
+            head: [['Vencimento', 'Títulos', 'Faturado', 'Recebido', 'Em aberto']],
+            body: billingDueDates.map((row) => [
+                row.dueDateLabel || formatDate(row.dueDate),
+                Number(row.documents || 0).toLocaleString('pt-BR'),
+                money(row.billed),
+                money(row.received),
+                money(row.open),
+            ]),
+            theme: 'grid',
+            styles: { font: 'helvetica', fontSize: 8, cellPadding: 5, textColor: colors.text, lineColor: colors.border },
+            headStyles: { fillColor: colors.navy, textColor: [255, 255, 255], fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: colors.soft },
+        });
+        const delinquencyY = Math.min((doc.lastAutoTable?.finalY || 280) + 28, 650);
+        addSectionTitle(`Inadimplência acumulada de ${billing.delinquencyYear || selectedYear}`, delinquencyY);
+        addSummaryCard(margin, delinquencyY + 15, financialWidth, 'Índice de inadimplência', `${Number(billing.delinquencyRate || 0).toFixed(1).replace('.', ',')}%`, 'Sobre o faturamento anual', colors.red);
+        addSummaryCard(margin + financialWidth + 9, delinquencyY + 15, financialWidth, 'Valor vencido em aberto', money(billing.delinquent), `${Number(billing.delinquentDocuments || 0).toLocaleString('pt-BR')} boletos`, colors.red);
+        addSummaryCard(margin + (financialWidth + 9) * 2, delinquencyY + 15, financialWidth, 'Fonte dos dados', hasImportedBilling ? 'Planilha importada' : 'Sem importação', `Competência ${periodLabel}`, hasImportedBilling ? colors.green : colors.red);
+
+        const totalPages = doc.getNumberOfPages();
+        for (let page = 1; page <= totalPages; page += 1) {
+            doc.setPage(page);
+            doc.setDrawColor(...colors.border);
+            doc.line(margin, pageHeight - 28, pageWidth - margin, pageHeight - 28);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(...colors.muted);
+            doc.text('Sistema de Gestão do Provedor • Relatório gerado a partir dos dados consolidados do painel', margin, pageHeight - 15);
+            doc.text(`Página ${page} de ${totalPages}`, pageWidth - margin, pageHeight - 15, { align: 'right' });
+        }
+        doc.save(`relatorio-cobranca-${month}.pdf`);
+    };
 
     return (
         <Box sx={{ ...dashboardShellSx, py: 2 }}>
@@ -322,6 +507,15 @@ export default function PainelCobrancaGerencial() {
                             InputLabelProps={{ shrink: true }}
                             sx={{ minWidth: 220, ...dashboardInputSx }}
                         />
+                        <Button
+                            variant="contained"
+                            color="secondary"
+                            startIcon={<PictureAsPdfRoundedIcon />}
+                            onClick={generateManagementReport}
+                            disabled={loading || actionLoading || !financial || !operational}
+                        >
+                            Gerar relatório PDF
+                        </Button>
                         <Button component="label" variant="contained" color="inherit" startIcon={<FileUploadRoundedIcon />} disabled={actionLoading}>
                             Importar Excel
                             <input hidden type="file" accept=".xls,.xlsx" onChange={importSpreadsheet} />
@@ -359,8 +553,13 @@ export default function PainelCobrancaGerencial() {
                                     <Typography variant="h6" fontWeight={900}>Atualização dos indicadores e metas do setor</Typography>
                                 </Stack>
                                 <Typography variant="caption" sx={dashboardMutedTextSx}>
-                                    Estrutura preparada para receber os parâmetros e regras das metas do período
+                                    Metas e acompanhamento gerencial de {month.split('-').reverse().join('/')}
                                 </Typography>
+                                {goalAudit.atualizadoEm && (
+                                    <Typography variant="caption" display="block" sx={dashboardSubtleTextSx}>
+                                        Última alteração: {formatDateTime(goalAudit.atualizadoEm)} por {goalAudit.atualizadoPor || 'usuário não identificado'}
+                                    </Typography>
+                                )}
                             </Box>
                             <Button variant="contained" startIcon={<SaveRoundedIcon />} onClick={saveGoals} disabled={actionLoading}>
                                 Salvar metas do mês
@@ -375,7 +574,7 @@ export default function PainelCobrancaGerencial() {
                                         <TextField
                                             fullWidth
                                             size="small"
-                                            label="Meta do período"
+                                            label={`Meta de ${month.split('-').reverse().join('/')}`}
                                             type="number"
                                             value={goals[indicator.key]}
                                             onChange={(event) => setGoals((current) => ({ ...current, [indicator.key]: event.target.value }))}
@@ -397,17 +596,54 @@ export default function PainelCobrancaGerencial() {
                             ))}
                         </Box>
 
+                        {!hasImportedBilling && (
+                            <Alert severity="warning" variant="outlined" sx={{ mt: 1.5 }}>
+                                O limite de inadimplência está sem uma base de faturamento importada para a competência selecionada.
+                            </Alert>
+                        )}
+                        {Number(collectionIndicators.aguardandoCaptura || 0) > 0 && (
+                            <Alert severity="info" variant="outlined" sx={{ mt: 1.5 }}>
+                                {Number(collectionIndicators.aguardandoCaptura).toLocaleString('pt-BR')} atendimento(s), no valor de {formatCurrency(collectionIndicators.valorAguardandoCaptura)}, aguardam a primeira captura e ainda não entram nos resultados da equipe.
+                            </Alert>
+                        )}
+
                         <Divider sx={{ my: 2 }} />
-                        <Stack direction="row" spacing={1} alignItems="center" mb={1.5}>
-                            <TrendingUpRoundedIcon color="primary" />
-                            <Typography fontWeight={900}>Resultados sobre as metas</Typography>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={1} mb={1.5}>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                <TrendingUpRoundedIcon color="primary" />
+                                <Typography fontWeight={900}>Resultados sobre as metas</Typography>
+                            </Stack>
+                            <Typography variant="caption" sx={dashboardMutedTextSx}>
+                                {selectedIsCurrentMonth ? `${remainingDays} dia(s) restante(s) • ${expectedProgress.toFixed(1).replace('.', ',')}% do período transcorrido` : selectedIsPastMonth ? 'Período encerrado' : 'Período futuro'}
+                            </Typography>
                         </Stack>
                         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', xl: 'repeat(4, 1fr)' }, gap: 1.5 }}>
                             {goalIndicators.map((indicator) => (
-                                <Paper key={`result-${indicator.label}`} variant="outlined" sx={{ p: 1.5, borderRadius: 1.5, bgcolor: 'rgba(255,255,255,0.035)' }}>
+                                <Paper
+                                    key={`result-${indicator.label}`}
+                                    variant="outlined"
+                                    sx={{ p: 1.5, borderRadius: 1.5, bgcolor: 'rgba(255,255,255,0.035)', display: 'flex', flexDirection: 'column', minWidth: 0 }}
+                                >
                                     <Typography variant="caption" sx={dashboardMutedTextSx}>{indicator.label}</Typography>
                                     <Typography variant="h5" fontWeight={900} my={0.5}>{indicator.result}</Typography>
-                                    <Typography variant="caption" sx={dashboardMutedTextSx}>{indicator.detail}</Typography>
+                                    <Stack component="ul" spacing={0.45} sx={{ m: 0, pl: 2.2, minHeight: 82 }}>
+                                        <Typography component="li" variant="caption" sx={dashboardMutedTextSx}>{indicator.detail}</Typography>
+                                        {indicator.previous !== null && (
+                                            <Typography component="li" variant="caption" sx={dashboardSubtleTextSx}>
+                                                Mês anterior: {formatGoalMetric(indicator, indicator.previous)}
+                                            </Typography>
+                                        )}
+                                        {indicator.previous !== null && (
+                                            <Typography component="li" variant="caption" sx={dashboardSubtleTextSx}>
+                                                Variação: {indicator.actual >= indicator.previous ? '+' : ''}{formatGoalMetric(indicator, indicator.actual - indicator.previous, true)}
+                                            </Typography>
+                                        )}
+                                        {!indicator.inverse && selectedIsCurrentMonth && (
+                                            <Typography component="li" variant="caption" sx={dashboardSubtleTextSx}>
+                                                Projeção de fechamento: {formatGoalMetric(indicator, projectValue(indicator.actual))}
+                                            </Typography>
+                                        )}
+                                    </Stack>
                                     {goals[indicator.key] !== '' && (
                                         <LinearProgress
                                             variant="determinate"
@@ -419,23 +655,37 @@ export default function PainelCobrancaGerencial() {
                                         />
                                     )}
                                     <Divider sx={{ my: 1 }} />
-                                    {goals[indicator.key] === '' ? (
-                                        <Chip size="small" variant="outlined" color="warning" label="Meta ainda não definida" />
-                                    ) : indicator.inverse ? (
+                                    <Stack spacing={0.7} alignItems="flex-start">
                                         <Chip
                                             size="small"
                                             variant="outlined"
-                                            color={indicator.actual <= Number(goals[indicator.key]) ? 'success' : 'error'}
-                                            label={`${indicator.actual <= Number(goals[indicator.key]) ? 'Dentro' : 'Acima'} da meta de ${Number(goals[indicator.key]).toFixed(1).replace('.', ',')}%`}
+                                            color={statusForGoal(indicator.actual, goals[indicator.key], indicator.inverse).color}
+                                            label={statusForGoal(indicator.actual, goals[indicator.key], indicator.inverse).label}
                                         />
-                                    ) : (
-                                        <Chip
-                                            size="small"
-                                            variant="outlined"
-                                            color={indicator.actual >= Number(goals[indicator.key]) ? 'success' : 'primary'}
-                                            label={`${Number(goals[indicator.key]) > 0 ? ((indicator.actual / Number(goals[indicator.key])) * 100).toFixed(1).replace('.', ',') : '0,0'}% da meta`}
+                                        {goals[indicator.key] !== '' && !indicator.inverse && (
+                                            <Chip size="small" variant="outlined" label={`${Number(goals[indicator.key]) > 0 ? ((indicator.actual / Number(goals[indicator.key])) * 100).toFixed(1).replace('.', ',') : '0,0'}% da meta`} />
+                                        )}
+                                    </Stack>
+                                    <Box sx={{ mt: 'auto', pt: 0.5 }}>
+                                        <Divider sx={{ my: 1.2 }} />
+                                        <Typography variant="caption" fontWeight={800} display="block" minHeight={20}>
+                                            {indicator.inverse ? 'Comparativo — menor que o limite é melhor' : 'Comparativo do indicador'}
+                                        </Typography>
+                                        <BarChart
+                                            height={210}
+                                            hideLegend
+                                            xAxis={[{ scaleType: 'band', data: ['Meta', 'Atual', 'Anterior'] }]}
+                                            yAxis={[{ min: 0, valueFormatter: (value) => formatGoalMetric(indicator, value) }]}
+                                            series={[
+                                                { data: [Number(goals[indicator.key] || 0), null, null], label: 'Meta', color: '#b8d7f5', valueFormatter: (value) => formatGoalMetric(indicator, value) },
+                                                { data: [null, Number(indicator.actual || 0), null], label: 'Mês atual', color: '#17a8ff', valueFormatter: (value) => formatGoalMetric(indicator, value) },
+                                                { data: [null, null, Number(indicator.previous || 0)], label: 'Mês anterior', color: '#ff5b5b', valueFormatter: (value) => formatGoalMetric(indicator, value) },
+                                            ]}
+                                            grid={{ horizontal: true }}
+                                            margin={{ left: 58, right: 8, top: 12, bottom: 32 }}
+                                            sx={dashboardChartSx}
                                         />
-                                    )}
+                                    </Box>
                                 </Paper>
                             ))}
                         </Box>
@@ -452,10 +702,10 @@ export default function PainelCobrancaGerencial() {
                         </Stack>
                         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', xl: 'repeat(4, 1fr)' }, gap: 1.5 }}>
                             {[
-                                ['Fechamento mensal do setor', `${Number(closing.fechadasNoMes || 0).toLocaleString('pt-BR')} encerradas`, `${Number(closing.abertasNoMes || 0).toLocaleString('pt-BR')} abertas • ${formatCurrency(closing.recebidoPelaEquipe)} recebido`],
+                                ['Fechamento mensal do setor', `${Number(closing.fechadasNoMes || 0).toLocaleString('pt-BR')} encerradas • ${formatCurrency(closing.valorFechadasNoMes)}`, `${Number(closing.abertasNoMes || 0).toLocaleString('pt-BR')} abertas • ${formatCurrency(closing.valorAbertasNoMes)} • ${formatCurrency(closing.recebidoPelaEquipe)} recebido`],
                                 ['Acordos realizados', Number(agreementsReport.count || 0).toLocaleString('pt-BR'), `${formatCurrency(agreementsReport.value)} negociado`],
-                                ['Produtividade da equipe', `${productivity.length.toLocaleString('pt-BR')} usuário(s)`, `${Number(operationalResults.actions || 0).toLocaleString('pt-BR')} ações registradas`],
-                                ['Resultados mensais', formatCurrency(operationalResults.received), `${Number(operationalResults.opened || 0).toLocaleString('pt-BR')} iniciadas • ${Number(operationalResults.closed || 0).toLocaleString('pt-BR')} encerradas`],
+                                ['Produtividade da equipe', `${productivity.length.toLocaleString('pt-BR')} usuário(s)`, `${Number(operationalResults.actions || 0).toLocaleString('pt-BR')} ações • ${formatCurrency(operationalResults.workedValue)} trabalhados`],
+                                ['Resultados mensais', formatCurrency(operationalResults.received), `${Number(operationalResults.opened || 0).toLocaleString('pt-BR')} iniciadas (${formatCurrency(operationalResults.openedValue)}) • ${Number(operationalResults.closed || 0).toLocaleString('pt-BR')} encerradas (${formatCurrency(operationalResults.closedValue)})`],
                             ].map(([label, value, detail]) => (
                                 <Paper key={label} variant="outlined" sx={{ p: 1.5, borderRadius: 1.5, bgcolor: 'rgba(255,255,255,0.03)' }}>
                                     <Typography variant="caption" sx={dashboardMutedTextSx}>{label}</Typography>
@@ -471,9 +721,15 @@ export default function PainelCobrancaGerencial() {
                                     {productivity.map((row) => (
                                         <Paper key={row.usuario} variant="outlined" sx={{ p: 1.25, borderRadius: 1.5 }}>
                                             <Typography fontWeight={800}>{row.usuario}</Typography>
-                                            <Typography variant="caption" sx={dashboardMutedTextSx}>
-                                                {row.acoes} ações • {row.clientes} clientes • {row.acordos} acordos • {row.pagamentos} pagamentos
-                                            </Typography>
+                                            <Stack component="ul" spacing={0.35} sx={{ m: 0, mt: 0.7, pl: 2.2 }}>
+                                                <Typography component="li" variant="body2"><strong>Aberturas:</strong> {Number(row.aberturas || 0).toLocaleString('pt-BR')} • {formatCurrency(row.valorAberturas)}</Typography>
+                                                <Typography component="li" variant="body2"><strong>Encerramentos:</strong> {Number(row.encerramentos || 0).toLocaleString('pt-BR')} • {formatCurrency(row.valorEncerramentos)}</Typography>
+                                                <Typography component="li" variant="body2"><strong>Ações:</strong> {Number(row.acoes || 0).toLocaleString('pt-BR')}</Typography>
+                                                <Typography component="li" variant="body2"><strong>Clientes:</strong> {Number(row.clientes || 0).toLocaleString('pt-BR')}</Typography>
+                                                <Typography component="li" variant="body2"><strong>Carteira trabalhada:</strong> {formatCurrency(row.carteiraTrabalhada)}</Typography>
+                                                <Typography component="li" variant="body2"><strong>Acordos:</strong> {Number(row.acordos || 0).toLocaleString('pt-BR')} • {formatCurrency(row.valorAcordos)}</Typography>
+                                                <Typography component="li" variant="body2"><strong>Pagamentos:</strong> {Number(row.pagamentos || 0).toLocaleString('pt-BR')} • {formatCurrency(row.valorPagamentos)}</Typography>
+                                            </Stack>
                                         </Paper>
                                     ))}
                                 </Box>
@@ -490,6 +746,11 @@ export default function PainelCobrancaGerencial() {
                                     margin={{ left: 45, right: 10, top: 30, bottom: 35 }}
                                     sx={dashboardChartSx}
                                 />
+                                <Stack spacing={0.35} mt={-1}>
+                                    <Typography variant="caption" sx={dashboardMutedTextSx}>Abertas: {formatCurrency(closing.valorAbertasNoMes)}</Typography>
+                                    <Typography variant="caption" sx={dashboardMutedTextSx}>Encerradas: {formatCurrency(closing.valorFechadasNoMes)}</Typography>
+                                    <Typography variant="caption" sx={dashboardMutedTextSx}>Acordos: {formatCurrency(agreementsReport.value)}</Typography>
+                                </Stack>
                             </Paper>
                             <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 1.5, minWidth: 0 }}>
                                 <Typography fontWeight={850}>Abertas x encerradas</Typography>
@@ -511,18 +772,22 @@ export default function PainelCobrancaGerencial() {
                                 ) : (
                                     <Stack height={260} alignItems="center" justifyContent="center"><Typography sx={dashboardMutedTextSx}>Sem movimentações no período.</Typography></Stack>
                                 )}
+                                <Stack spacing={0.35} mt={-1}>
+                                    <Typography variant="caption" sx={dashboardMutedTextSx}>Abertas: {formatCurrency(closing.valorAbertasNoMes)}</Typography>
+                                    <Typography variant="caption" sx={dashboardMutedTextSx}>Encerradas: {formatCurrency(closing.valorFechadasNoMes)}</Typography>
+                                </Stack>
                             </Paper>
                             <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 1.5, minWidth: 0 }}>
                                 <Typography fontWeight={850}>Produtividade por usuário</Typography>
-                                <Typography variant="caption" sx={dashboardMutedTextSx}>Ações, acordos e pagamentos registrados</Typography>
+                                <Typography variant="caption" sx={dashboardMutedTextSx}>Resultados atribuídos ao usuário que abriu/assumiu o atendimento</Typography>
                                 {productivity.length > 0 ? (
                                     <BarChart
                                         height={260}
                                         xAxis={[{ scaleType: 'band', data: productivity.map((row) => row.usuario) }]}
                                         series={[
-                                            { data: productivity.map((row) => Number(row.acoes || 0)), label: 'Ações', color: '#17e2e8' },
-                                            { data: productivity.map((row) => Number(row.acordos || 0)), label: 'Acordos', color: '#a98bd0' },
-                                            { data: productivity.map((row) => Number(row.pagamentos || 0)), label: 'Pagamentos', color: '#39d98a' },
+                                            { data: productivity.map((row) => Number(row.carteiraTrabalhada || 0)), label: 'Carteira', color: '#17e2e8', valueFormatter: (value) => formatCurrency(value) },
+                                            { data: productivity.map((row) => Number(row.valorAcordos || 0)), label: 'Acordos', color: '#a98bd0', valueFormatter: (value) => formatCurrency(value) },
+                                            { data: productivity.map((row) => Number(row.valorPagamentos || 0)), label: 'Recebido', color: '#39d98a', valueFormatter: (value) => formatCurrency(value) },
                                         ]}
                                         margin={{ left: 45, right: 10, top: 40, bottom: 55 }}
                                         sx={dashboardChartSx}
@@ -680,62 +945,6 @@ export default function PainelCobrancaGerencial() {
                             </Stack>
                         </Stack>
                     </Paper>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={1} mb={2}>
-                        <Box>
-                            <Typography variant="h6" fontWeight={900}>Estrutura do painel</Typography>
-                            <Typography sx={dashboardSubtleTextSx} variant="body2">
-                                Primeira versão para validarmos cada tópico, fonte de dados e regra de cálculo.
-                            </Typography>
-                        </Box>
-                        <Chip icon={<CalendarMonthRoundedIcon />} label={`${topics.length + 3} tópicos`} color="primary" />
-                    </Stack>
-                    <Box
-                        sx={{
-                            display: 'grid',
-                            gap: 1.5,
-                            gridTemplateColumns: {
-                                xs: '1fr',
-                                sm: 'repeat(2, minmax(0, 1fr))',
-                                lg: 'repeat(3, minmax(0, 1fr))',
-                                xl: 'repeat(5, minmax(0, 1fr))',
-                            },
-                        }}
-                    >
-                        {topics.map(([title, value, detail, status], index) => (
-                            <Paper
-                                key={title}
-                                variant="outlined"
-                                sx={{
-                                    p: 1.7,
-                                    minHeight: 195,
-                                    borderRadius: 1.5,
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    justifyContent: 'space-between',
-                                    bgcolor: 'rgba(255,255,255,0.03)',
-                                }}
-                            >
-                                <Box>
-                                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={1}>
-                                        <Typography color="primary" fontWeight={900} variant="caption">
-                                            {String(index + 1).padStart(2, '0')}
-                                        </Typography>
-                                        <Chip
-                                            size="small"
-                                            label={status}
-                                            color={status === 'Disponível' ? 'success' : 'warning'}
-                                            variant="outlined"
-                                        />
-                                    </Stack>
-                                    <Typography fontWeight={850} sx={{ mt: 1, lineHeight: 1.25 }}>{title}</Typography>
-                                </Box>
-                                <Box sx={{ mt: 2 }}>
-                                    <Typography variant="h6" fontWeight={900}>{value}</Typography>
-                                    <Typography sx={dashboardMutedTextSx} variant="caption">{detail}</Typography>
-                                </Box>
-                            </Paper>
-                        ))}
-                    </Box>
                 </Paper>
             )}
         </Box>

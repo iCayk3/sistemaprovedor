@@ -79,6 +79,20 @@ public class CobrancaController {
         return ResponseEntity.ok(service.lembretesPendentes(nomeUsuario(usuario), podeVerGeral(usuario)));
     }
 
+    @GetMapping("/notificacoes/encerramentos")
+    @PreAuthorize(CHARGING_ACCESS)
+    public ResponseEntity<?> notificacoesEncerramento(@AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(service.notificacoesEncerramento(nomeUsuario(usuario)));
+    }
+
+    @PatchMapping("/{id}/notificacao-encerramento/lida")
+    @PreAuthorize(CHARGING_ACCESS)
+    public ResponseEntity<Void> confirmarNotificacaoEncerramento(@PathVariable Long id,
+                                                                  @AuthenticationPrincipal Usuario usuario) {
+        service.confirmarNotificacaoEncerramento(id, nomeUsuario(usuario));
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/painel/financeiro")
     @PreAuthorize(CHARGING_ACCESS)
     public ResponseEntity<?> resumoFinanceiroPainel(@RequestParam LocalDate from, @RequestParam LocalDate to) throws Exception {
@@ -188,8 +202,12 @@ public class CobrancaController {
 
     @GetMapping("/rbx/clientes/{codigo}")
     @PreAuthorize(CHARGING_ACCESS)
-    public ResponseEntity<?> buscarClienteRbx(@PathVariable Long codigo) {
-        return ResponseEntity.ok(service.buscarClienteRbx(codigo));
+    public ResponseEntity<?> buscarClienteRbx(@PathVariable String codigo) {
+        String normalizado = String.valueOf(codigo).replaceAll("\\D", "");
+        if (normalizado.isBlank()) {
+            throw new IllegalArgumentException("Informe um código de cliente válido.");
+        }
+        return ResponseEntity.ok(service.buscarClienteRbx(Long.valueOf(normalizado)));
     }
 
     private String nomeUsuario(Usuario usuario) {
