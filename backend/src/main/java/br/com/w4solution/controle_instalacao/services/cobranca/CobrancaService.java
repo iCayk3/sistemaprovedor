@@ -196,7 +196,9 @@ public class CobrancaService {
         return cobranca.getAtualizadoEm() != null ? cobranca.getAtualizadoEm() : cobranca.getCriadoEm();
     }
 
+    @Transactional
     public CobrancaDTO cadastrar(CobrancaCadastroDTO dto, String usuario) {
+        repository.bloquearGeracaoCobrancas();
         CobrancaClienteRbxDTO dadosRbx = buscarClienteRbx(dto.codigoCliente() == null ? null : dto.codigoCliente().longValue());
         ClienteFiltradoDTO clienteRbx = dadosRbx.cliente();
         validarContratoEBoleto(dto, dadosRbx);
@@ -361,6 +363,7 @@ public class CobrancaService {
 
     @Transactional
     public void reconciliarTitulosImportados(List<FaturamentoMensalTitulo> titulos) {
+        repository.bloquearGeracaoCobrancas();
         LocalDate hoje = LocalDate.now();
         for (FaturamentoMensalTitulo titulo : titulos) {
             if (titulo.isBaixado()) finalizarAutomaticamentePorPagamento(titulo);
@@ -405,6 +408,70 @@ public class CobrancaService {
         titulo.setCobrancaId(salva.getId());
         faturamentoRepository.save(titulo);
         salvarHistorico(salva, null, salva.getStatus(), null, salva.getValor(), cobranca.getObservacao(), "sistema");
+    }
+
+    @Transactional
+    public int removerAutomaticasNaoCapturadas(List<FaturamentoMensalTitulo> titulos) {
+        int removidas = 0;
+        for (FaturamentoMensalTitulo titulo : titulos) {
+            if (titulo.getCobrancaId() == null) continue;
+            Cobranca cobranca = repository.findById(titulo.getCobrancaId()).orElse(null);
+            if (cobranca == null
+                    || !Boolean.TRUE.equals(cobranca.getGeradaAutomaticamente())
+                    || (cobranca.getResponsavel() != null && !cobranca.getResponsavel().isBlank())
+                    || (cobranca.getAtendimentoRbxNumero() != null && !cobranca.getAtendimentoRbxNumero().isBlank())) {
+                continue;
+            }
+            historicoRepository.deleteAllByCobrancaId(cobranca.getId());
+            repository.delete(cobranca);
+            removidas++;
+        }
+        return removidas;
+    }
+
+    @Transactional
+    public int corrigirDuplicidadesAutomaticas() {
+        repository.bloquearGeracaoCobrancas();
+        Map<String, List<Cobranca>> grupos = repository.findAll().stream()
+                .filter(item -> Boolean.TRUE.equals(item.getGeradaAutomaticamente()))
+                .filter(item -> !Boolean.TRUE.equals(item.getExcluida()))
+                .filter(item -> item.getCodigoCliente() != null)
+                .filter(item -> item.getDocumentoTitulo() != null && !item.getDocumentoTitulo().isBlank())
+                .collect(Collectors.groupingBy(item -> item.getCodigoCliente() + "|" + normalizarNumero(item.getDocumentoTitulo())));
+        int corrigidas = 0;
+        for (List<Cobranca> duplicadas : grupos.values()) {
+            if (duplicadas.size() < 2) continue;
+            duplicadas.sort(Comparator
+                    .comparing((Cobranca item) -> item.getResponsavel() != null && !item.getResponsavel().isBlank()).reversed()
+                    .thenComparing(item -> item.getAtendimentoRbxNumero() != null && !item.getAtendimentoRbxNumero().isBlank(), Comparator.reverseOrder())
+                    .thenComparing(Cobranca::getId));
+            Cobranca principal = duplicadas.get(0);
+            Set<Long> idsDuplicados = duplicadas.stream().skip(1).map(Cobranca::getId).collect(Collectors.toSet());
+            faturamentoRepository.findAll().stream()
+                    .filter(titulo -> titulo.getCobrancaId() != null && idsDuplicados.contains(titulo.getCobrancaId()))
+                    .forEach(titulo -> titulo.setCobrancaId(principal.getId()));
+            for (Cobranca duplicada : duplicadas.subList(1, duplicadas.size())) {
+                if ((duplicada.getResponsavel() == null || duplicada.getResponsavel().isBlank())
+                        && (duplicada.getAtendimentoRbxNumero() == null || duplicada.getAtendimentoRbxNumero().isBlank())) {
+                    historicoRepository.deleteAllByCobrancaId(duplicada.getId());
+                    repository.delete(duplicada);
+                } else {
+                    duplicada.setExcluida(true);
+                    duplicada.setExcluidoEm(LocalDateTime.now());
+                    duplicada.setExcluidoPor("sistema");
+                    duplicada.setMotivoExclusao("Duplicidade automática corrigida pelo sistema; registro principal " + principal.getProtocolo() + ".");
+                    repository.save(duplicada);
+                }
+                corrigidas++;
+            }
+        }
+        return corrigidas;
+    }
+
+    @Transactional
+    @EventListener(ApplicationReadyEvent.class)
+    public void corrigirDuplicidadesAutomaticasAoIniciar() {
+        corrigirDuplicidadesAutomaticas();
     }
 
     private void finalizarAutomaticamentePorPagamento(FaturamentoMensalTitulo titulo) {

@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface CobrancaHistoricoRepository extends JpaRepository<CobrancaHistorico, Long> {
     List<CobrancaHistorico> findAllByCobrancaIdOrderByCriadoEmDesc(Long cobrancaId);
+    void deleteAllByCobrancaId(Long cobrancaId);
 }

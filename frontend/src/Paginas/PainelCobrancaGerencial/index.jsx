@@ -1,6 +1,7 @@
 import AssessmentRoundedIcon from '@mui/icons-material/AssessmentRounded';
 import AccountBalanceWalletRoundedIcon from '@mui/icons-material/AccountBalanceWalletRounded';
 import FileUploadRoundedIcon from '@mui/icons-material/FileUploadRounded';
+import DeleteForeverRoundedIcon from '@mui/icons-material/DeleteForeverRounded';
 import FlagRoundedIcon from '@mui/icons-material/FlagRounded';
 import PictureAsPdfRoundedIcon from '@mui/icons-material/PictureAsPdfRounded';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
@@ -87,6 +88,14 @@ export default function PainelCobrancaGerencial() {
     const [success, setSuccess] = useState('');
     const [goals, setGoals] = useState(emptyGoals);
     const [goalAudit, setGoalAudit] = useState({ atualizadoEm: null, atualizadoPor: null });
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [reloadKey, setReloadKey] = useState(0);
+
+    useEffect(() => {
+        UseApi('usuario/me')
+            .then((usuario) => setIsAdmin(usuario?.role === 'ADMIN'))
+            .catch(() => setIsAdmin(false));
+    }, []);
 
     useEffect(() => {
         let active = true;
@@ -129,7 +138,7 @@ export default function PainelCobrancaGerencial() {
         return () => {
             active = false;
         };
-    }, [month]);
+    }, [month, reloadKey]);
 
     const importSpreadsheet = async (event) => {
         const file = event.target.files?.[0];
@@ -149,9 +158,29 @@ export default function PainelCobrancaGerencial() {
             setFinancial(response);
             const imported = response?.imported || {};
             const ignored = Number(imported.ignoredFromOtherMonths || 0);
-            setSuccess(`Faturamento de ${month} importado: ${Number(imported.documents || 0).toLocaleString('pt-BR')} título(s). A primeira verificação das baixas está sendo executada em segundo plano.${ignored ? ` ${ignored.toLocaleString('pt-BR')} linha(s) de outros meses foram ignoradas.` : ''}`);
+            const existing = Number(imported.existingDocuments || 0);
+            setSuccess(`Faturamento de ${month} atualizado: ${Number(imported.documents || 0).toLocaleString('pt-BR')} novo(s) título(s) incluído(s).${existing ? ` ${existing.toLocaleString('pt-BR')} título(s) já existente(s) foram mantidos sem duplicar.` : ''} A verificação das baixas está sendo executada em segundo plano.${ignored ? ` ${ignored.toLocaleString('pt-BR')} linha(s) de outros meses foram ignoradas.` : ''}`);
         } catch (requestError) {
             setError(requestError.message || 'Erro ao importar a planilha de faturamento.');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const resetBillingMonth = async () => {
+        const reference = month.split('-').reverse().join('/');
+        if (!window.confirm(`Zerar somente o faturamento de ${reference}? Títulos importados e cobranças automáticas ainda não capturadas dessa competência serão removidos.`)) return;
+        setActionLoading(true);
+        setError('');
+        setSuccess('');
+        try {
+            const response = await UseApi(`cobrancas/painel/faturamento?mes=${month}-01`, 'DELETE');
+            const reset = response?.reset || {};
+            setFinancial(response);
+            setSuccess(`Faturamento de ${reference} zerado: ${Number(reset.documents || 0).toLocaleString('pt-BR')} título(s) e ${Number(reset.automaticCharges || 0).toLocaleString('pt-BR')} cobrança(s) automática(s) não capturada(s) removidos.`);
+            setReloadKey((value) => value + 1);
+        } catch (requestError) {
+            setError(requestError.message || 'Erro ao zerar o faturamento do mês.');
         } finally {
             setActionLoading(false);
         }
@@ -520,6 +549,11 @@ export default function PainelCobrancaGerencial() {
                             Importar Excel
                             <input hidden type="file" accept=".xls,.xlsx" onChange={importSpreadsheet} />
                         </Button>
+                        {isAdmin && (
+                            <Button variant="outlined" color="error" startIcon={<DeleteForeverRoundedIcon />} onClick={resetBillingMonth} disabled={actionLoading || financial?.billing?.source !== 'PLANILHA'}>
+                                Zerar mês
+                            </Button>
+                        )}
                         <Button variant="outlined" color="inherit" startIcon={<SyncRoundedIcon />} onClick={syncSpreadsheet} disabled={actionLoading || financial?.billing?.source !== 'PLANILHA'}>
                             Sincronizar
                         </Button>

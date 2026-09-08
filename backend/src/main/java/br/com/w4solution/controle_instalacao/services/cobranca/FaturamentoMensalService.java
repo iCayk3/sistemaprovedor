@@ -52,7 +52,11 @@ public class FaturamentoMensalService {
         LocalDate referenciaInformada = mes.withDayOfMonth(1);
         List<FaturamentoMensalTitulo> titulos = new ArrayList<>();
         Set<String> documentos = new HashSet<>();
+        Set<String> documentosExistentes = repository.findByMesReferencia(referenciaInformada).stream()
+                .map(item -> normalizeDocument(item.getDocumento()))
+                .collect(Collectors.toSet());
         int titulosDeOutraReferencia = 0;
+        int titulosJaExistentes = 0;
 
         try (Workbook workbook = WorkbookFactory.create(arquivo.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
@@ -69,7 +73,12 @@ public class FaturamentoMensalService {
                     titulosDeOutraReferencia++;
                     continue;
                 }
-                if (!documentos.add(normalizeDocument(documento))) continue;
+                String documentoNormalizado = normalizeDocument(documento);
+                if (!documentos.add(documentoNormalizado)) continue;
+                if (documentosExistentes.contains(documentoNormalizado)) {
+                    titulosJaExistentes++;
+                    continue;
+                }
                 BigDecimal valor = decimal(row.getCell(columns.get("valor")));
                 if (valor.signum() <= 0) continue;
 
@@ -90,14 +99,32 @@ public class FaturamentoMensalService {
                 titulos.add(titulo);
             }
         }
-        if (titulos.isEmpty()) throw new IllegalArgumentException("A planilha não possui títulos com vencimento no mês de referência informado.");
-        repository.deleteByMesReferencia(referenciaInformada);
-        repository.saveAll(titulos);
+        if (titulos.isEmpty() && titulosJaExistentes == 0) {
+            throw new IllegalArgumentException("A planilha não possui títulos com vencimento no mês de referência informado.");
+        }
+        if (!titulos.isEmpty()) repository.saveAll(titulos);
         Map<String, Object> response = new LinkedHashMap<>(resumo(referenciaInformada));
         response.put("imported", Map.of(
                 "referenceMonth", referenciaInformada.toString().substring(0, 7),
                 "documents", titulos.size(),
+                "existingDocuments", titulosJaExistentes,
                 "ignoredFromOtherMonths", titulosDeOutraReferencia
+        ));
+        return response;
+    }
+
+    @Transactional
+    public Map<String, Object> zerar(LocalDate mes) {
+        LocalDate referencia = mes.withDayOfMonth(1);
+        List<FaturamentoMensalTitulo> titulos = repository.findByMesReferencia(referencia);
+        int cobrancasAutomaticasRemovidas = cobrancaService.removerAutomaticasNaoCapturadas(titulos);
+        int documentosRemovidos = titulos.size();
+        repository.deleteAll(titulos);
+        Map<String, Object> response = new LinkedHashMap<>(resumo(referencia));
+        response.put("reset", Map.of(
+                "referenceMonth", referencia.toString().substring(0, 7),
+                "documents", documentosRemovidos,
+                "automaticCharges", cobrancasAutomaticasRemovidas
         ));
         return response;
     }
@@ -186,7 +213,7 @@ public class FaturamentoMensalService {
         LocalDate hoje = LocalDate.now();
         long elegiveis = titulos.stream()
                 .filter(titulo -> !titulo.isBaixado())
-                .filter(titulo -> titulo.getVencimento() != null && titulo.getVencimento().isBefore(hoje))
+                .filter(titulo -> titulo.getVencimento() != null && !titulo.getVencimento().isAfter(hoje.minusDays(7)))
                 .count();
         long vinculadosAntes = titulos.stream().filter(titulo -> titulo.getCobrancaId() != null).count();
         cobrancaService.reconciliarTitulosImportados(titulos);
