@@ -129,6 +129,10 @@ function isSameYear(value, reference) {
     return new Date(value).getFullYear() === new Date(`${reference}T00:00:00`).getFullYear();
 }
 
+function salesDate(item) {
+    return item?.convertidoEm || item?.data || item?.efetivadoEm;
+}
+
 const planByValue = [
     { value: 74.99, label: '250MB' },
     { value: 109.99, label: '500MB' },
@@ -290,14 +294,14 @@ const DashBoardsComercial = ({
         color: chartColors[index % chartColors.length],
     }));
     const leadMetrics = React.useMemo(() => {
-        const convertidos = registrosMensais.filter((item) => item.status === 'CONVERTIDO' && isSameMonth(item.efetivadoEm, dataMensal));
+        const convertidos = registrosMensais.filter((item) => item.status === 'CONVERTIDO' && isSameMonth(salesDate(item), dataMensal));
         const abertos = registrosMensais.filter((item) => (item.status || 'ABERTO') === 'ABERTO');
         const aguardando = registrosMensais.filter((item) => item.status === 'AGUARDANDO_INSTALACAO');
         const naoConcluidos = registrosMensais.filter((item) => isSameMonth(item.naoConcluidoEm, dataMensal));
         const leadsCriados = registrosMensais.filter((item) => isSameMonth(item.data, dataMensal));
         const valorConvertido = convertidos.reduce((total, item) => total + Number(item.valorPlano || item.valor || 0), 0);
         const grupos = new Set(convertidos.map((item) => item.grupoCliente).filter(Boolean));
-        const convertidosAnuais = registrosAnuais.filter((item) => item.status === 'CONVERTIDO' && isSameYear(item.efetivadoEm, dataMensal));
+        const convertidosAnuais = registrosAnuais.filter((item) => item.status === 'CONVERTIDO' && isSameYear(salesDate(item), dataMensal));
         const valorAnual = convertidosAnuais.reduce((total, item) => total + Number(item.valorPlano || item.valor || 0), 0);
         return { convertidos: convertidos.length, abertos: abertos.length, aguardando: aguardando.length, naoConcluidos: naoConcluidos.length, leadsCriados: leadsCriados.length, valorConvertido, grupos: grupos.size, vendasAnuais: convertidosAnuais.length, valorAnual };
     }, [dataMensal, registrosAnuais, registrosMensais]);
@@ -309,9 +313,9 @@ const DashBoardsComercial = ({
         const totals = monthNames.map((label) => ({ mes: label, vendas: 0 }));
 
         registrosAnuais
-            .filter((item) => item.status === 'CONVERTIDO' && item.efetivadoEm && isSameYear(item.efetivadoEm, dataMensal))
+            .filter((item) => item.status === 'CONVERTIDO' && salesDate(item) && isSameYear(salesDate(item), dataMensal))
             .forEach((item) => {
-                const monthIndex = new Date(item.efetivadoEm).getMonth();
+                const monthIndex = new Date(salesDate(item)).getMonth();
                 if (totals[monthIndex]) {
                     totals[monthIndex].vendas += 1;
                 }
@@ -354,12 +358,12 @@ const DashBoardsComercial = ({
     ];
 
     const convertedMonth = React.useMemo(
-        () => registrosMensais.filter((item) => item.status === 'CONVERTIDO' && isSameMonth(item.efetivadoEm, dataMensal)),
+        () => registrosMensais.filter((item) => item.status === 'CONVERTIDO' && isSameMonth(salesDate(item), dataMensal)),
         [dataMensal, registrosMensais],
     );
 
     const convertedYear = React.useMemo(
-        () => registrosAnuais.filter((item) => item.status === 'CONVERTIDO' && isSameYear(item.efetivadoEm, dataMensal)),
+        () => registrosAnuais.filter((item) => item.status === 'CONVERTIDO' && isSameYear(salesDate(item), dataMensal)),
         [dataMensal, registrosAnuais],
     );
 
