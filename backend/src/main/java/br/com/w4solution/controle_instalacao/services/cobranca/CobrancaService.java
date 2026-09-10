@@ -378,11 +378,14 @@ public class CobrancaService {
     private void gerarAtendimentoAutomatico(FaturamentoMensalTitulo titulo) {
         Integer codigo = inteiro(titulo.getCodigoCliente());
         if (codigo == null) return;
-        if (titulo.getCobrancaId() != null) return;
-        var existente = repository.findFirstByDocumentoTituloAndCodigoClienteAndExcluidaFalseOrderByIdDesc(
-                titulo.getDocumento(), codigo);
-        if (existente.isPresent()) {
-            titulo.setCobrancaId(existente.get().getId());
+        if (titulo.getCobrancaId() != null) {
+            Cobranca vinculada = repository.findById(titulo.getCobrancaId()).orElse(null);
+            if (atendimentoAberto(vinculada)) return;
+            titulo.setCobrancaId(null);
+        }
+        boolean clienteJaTemAtendimentoAberto = repository.findAllByCodigoCliente(codigo).stream()
+                .anyMatch(this::atendimentoAberto);
+        if (clienteJaTemAtendimentoAberto) {
             faturamentoRepository.save(titulo);
             return;
         }
@@ -408,6 +411,13 @@ public class CobrancaService {
         titulo.setCobrancaId(salva.getId());
         faturamentoRepository.save(titulo);
         salvarHistorico(salva, null, salva.getStatus(), null, salva.getValor(), cobranca.getObservacao(), "sistema");
+    }
+
+    private boolean atendimentoAberto(Cobranca cobranca) {
+        return cobranca != null
+                && !Boolean.TRUE.equals(cobranca.getExcluida())
+                && !"Fechada".equalsIgnoreCase(cobranca.getSituacaoAtendimento())
+                && !isStatusPagoOuFechado(cobranca.getStatus());
     }
 
     @Transactional
