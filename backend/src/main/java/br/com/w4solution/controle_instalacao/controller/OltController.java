@@ -20,8 +20,11 @@ import static br.com.w4solution.controle_instalacao.infra.configuration.security
 @PreAuthorize(TECHNICAL_ACCESS)
 public class OltController {
 
-    @Autowired
-    OltService oltService;
+    private final OltService oltService;
+
+    public OltController(OltService oltService) {
+        this.oltService = oltService;
+    }
 
     @GetMapping
     public ResponseEntity<List<OltDTO>> listarOlts() {

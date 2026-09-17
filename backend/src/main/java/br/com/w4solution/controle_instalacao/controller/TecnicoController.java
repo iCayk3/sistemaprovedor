@@ -24,8 +24,11 @@ import static br.com.w4solution.controle_instalacao.infra.configuration.security
 @PreAuthorize(TECHNICAL_ACCESS)
 public class TecnicoController {
 
-    @Autowired
-    TecnicoService service;
+    private final TecnicoService service;
+
+    public TecnicoController(TecnicoService service) {
+        this.service = service;
+    }
 
     @GetMapping("/equipes")
     public ResponseEntity<List<EquipeDTO>> listarEquipe(){

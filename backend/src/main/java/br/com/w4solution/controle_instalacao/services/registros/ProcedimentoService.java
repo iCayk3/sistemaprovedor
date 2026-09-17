@@ -13,8 +13,11 @@ import java.util.List;
 @Service
 public class ProcedimentoService {
 
-    @Autowired
-    ProcedimentoRepository repository;
+    private final ProcedimentoRepository repository;
+
+    public ProcedimentoService(ProcedimentoRepository repository) {
+        this.repository = repository;
+    }
 
     public void cadastrarProcedimento(CadastroProcedimentoDTO dados) {
         var procedimento = new Procedimentos(dados);

@@ -6,7 +6,6 @@ import br.com.w4solution.controle_instalacao.domain.olt.Olt;
 import br.com.w4solution.controle_instalacao.domain.olt.Porta;
 import br.com.w4solution.controle_instalacao.dto.olt.*;
 import br.com.w4solution.controle_instalacao.dto.rbx.ClienteFiltradoDTO;
-import br.com.w4solution.controle_instalacao.infra.configuration.exceptions.CtoValidacaoExcepetion;
 import br.com.w4solution.controle_instalacao.repository.cliente.ClienteRepository;
 import br.com.w4solution.controle_instalacao.repository.olt.CtoRepository;
 import br.com.w4solution.controle_instalacao.repository.olt.OltRepository;
@@ -22,16 +21,19 @@ import java.util.List;
 @Service
 public class OltService {
 
-    @Autowired
-    OltRepository repository;
-    @Autowired
-    PortaRepository repositoryPorta;
-    @Autowired
-    CtoRepository repositoryCto;
-    @Autowired
-    ClienteRepository clienteRepository;
-    @Autowired
-    ServiceRbx rbx;
+    private final OltRepository repository;
+    private final PortaRepository repositoryPorta;
+    private final CtoRepository repositoryCto;
+    private final ClienteRepository clienteRepository;
+    private final ServiceRbx rbx;
+
+    public OltService(OltRepository repository, PortaRepository repositoryPorta, CtoRepository repositoryCto, ClienteRepository clienteRepository, ServiceRbx rbx) {
+        this.repository = repository;
+        this.repositoryPorta = repositoryPorta;
+        this.repositoryCto = repositoryCto;
+        this.clienteRepository = clienteRepository;
+        this.rbx = rbx;
+    }
 
     public List<OltDTO> listarOlts() {
         return repository.findAll().stream().map(OltDTO::new).toList();
@@ -49,7 +51,7 @@ public class OltService {
         var portas = repositoryPorta.findPortasByCtoIdWithClientes(id);
 
         if (portas.isEmpty()) {
-            throw new CtoValidacaoExcepetion("CTO não encontrada");
+            throw new ValidacaoCtoException("CTO não encontrada");
         }
         return portas.stream().map(p -> {
             if (p.getCliente() != null) {

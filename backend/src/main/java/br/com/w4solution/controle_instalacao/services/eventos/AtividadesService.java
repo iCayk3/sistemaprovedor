@@ -36,23 +36,21 @@ public class AtividadesService {
             "SEM_CONTATO", "PENDENCIA_DOCUMENTAL", "DIVERGENCIA_COMERCIAL", "OUTRO"
     );
 
-    @Autowired
-    AtividadeRepository repository;
+    private final AtividadeRepository repository;
+    private final UsuarioRepository usuarioRepository;
+    private final EventoRepository eventoRepository;
+    private final TokenService token;
+    private final ExtratorToken extrator;
+    private final ServiceRbx serviceRbx;
 
-    @Autowired
-    UsuarioRepository usuarioRepository;
-
-    @Autowired
-    EventoRepository eventoRepository;
-
-    @Autowired
-    TokenService token;
-
-    @Autowired
-    ExtratorToken extrator;
-
-    @Autowired
-    ServiceRbx serviceRbx;
+    public AtividadesService(AtividadeRepository repository, UsuarioRepository usuarioRepository, EventoRepository eventoRepository, TokenService token, ExtratorToken extrator, ServiceRbx serviceRbx) {
+        this.repository = repository;
+        this.usuarioRepository = usuarioRepository;
+        this.eventoRepository = eventoRepository;
+        this.token = token;
+        this.extrator = extrator;
+        this.serviceRbx = serviceRbx;
+    }
 
 
     public List<AtividadesDTO> cadastrarAtividade(List<CadastrarAtividadesDTO> dados, HttpServletRequest request) {

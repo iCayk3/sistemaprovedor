@@ -20,8 +20,11 @@ import static br.com.w4solution.controle_instalacao.infra.configuration.security
 @PreAuthorize(COMMERCIAL_OR_FINANCIAL_ACCESS)
 public class AtividadesController {
 
-    @Autowired
-    AtividadesService service;
+    private final AtividadesService service;
+
+    public AtividadesController(AtividadesService service) {
+        this.service = service;
+    }
 
     @GetMapping
     public ResponseEntity<List<AtividadesDTO>> listarAtividades(@AuthenticationPrincipal Usuario usuario){

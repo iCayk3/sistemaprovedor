@@ -9,8 +9,11 @@ import org.springframework.stereotype.Service;
 @Service
 public class ExtratorToken {
 
-    @Autowired
-    TokenService token;
+    private final TokenService token;
+
+    public ExtratorToken(TokenService token) {
+        this.token = token;
+    }
 
     private String recuperarTokenDoCookie(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();

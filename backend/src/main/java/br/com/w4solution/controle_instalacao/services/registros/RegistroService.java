@@ -18,14 +18,17 @@ import java.util.List;
 @Service
 public class RegistroService {
 
-    @Autowired
-    RegistroRepository registroRepository;
-    @Autowired
-    EquipeTecnicaRepository equipeTecnicaRepository;
-    @Autowired
-    ValidacoesRegistro validacoesRegistro;
-    @Autowired
-    ProcedimentoRepository procedimentoRepository;
+    private final RegistroRepository registroRepository;
+    private final EquipeTecnicaRepository equipeTecnicaRepository;
+    private final ValidacoesRegistro validacoesRegistro;
+    private final ProcedimentoRepository procedimentoRepository;
+
+    public RegistroService(RegistroRepository registroRepository, EquipeTecnicaRepository equipeTecnicaRepository, ValidacoesRegistro validacoesRegistro, ProcedimentoRepository procedimentoRepository) {
+        this.registroRepository = registroRepository;
+        this.equipeTecnicaRepository = equipeTecnicaRepository;
+        this.validacoesRegistro = validacoesRegistro;
+        this.procedimentoRepository = procedimentoRepository;
+    }
 
     public List<RegistroDTO2> listarTodosRegistros(String equipe, String filtro){
         if(filtro != null){

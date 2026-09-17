@@ -1,14 +1,27 @@
+# Ambientes e Segredos
+.env
+.env.*
+!.env.example
+!.env.portainer.example
+frontend/.env
+backend/.env
+
+# Dumps e Backups de Banco de Dados
+*.dump
+*.sql.bak
+*.bak
+
 # Node (React)
 frontend/node_modules/
 frontend/dist/
-frontend/.env
 
 # Java (Spring Boot)
 backend/target/
-backend/.env
 *.log
 
-# Geral
+# IDEs e Sistema
 .DS_Store
 *.iml
 .idea/
+.vscode/
+

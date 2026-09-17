@@ -19,8 +19,11 @@ import static br.com.w4solution.controle_instalacao.infra.configuration.security
 @PreAuthorize(TECHNICAL_ACCESS)
 public class ProcedimentoController {
 
-    @Autowired
-    ProcedimentoService service;
+    private final ProcedimentoService service;
+
+    public ProcedimentoController(ProcedimentoService service) {
+        this.service = service;
+    }
 
     @GetMapping
     public ResponseEntity<List<ProcedimentoDTO>> listarProcedimentos(){

@@ -24,11 +24,13 @@ import org.springframework.web.cors.CorsUtils;
 @EnableMethodSecurity
 public class SecurityConfiguration {
 
-    @Autowired
-    SecurityFilter filter;
+    private final SecurityFilter filter;
+    private final CorsConfigurationSource corsConfigurationSource;
 
-    @Autowired
-    CorsConfigurationSource corsConfigurationSource;
+    public SecurityConfiguration(SecurityFilter filter, CorsConfigurationSource corsConfigurationSource) {
+        this.filter = filter;
+        this.corsConfigurationSource = corsConfigurationSource;
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {

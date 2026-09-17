@@ -13,11 +13,13 @@ import org.springframework.stereotype.Service;
 @Service
 public class ClienteService {
 
-    @Autowired
-    ClienteRepository repository;
+    private final ClienteRepository repository;
+    private final PortaRepository portaRepository;
 
-    @Autowired
-    PortaRepository portaRepository;
+    public ClienteService(ClienteRepository repository, PortaRepository portaRepository) {
+        this.repository = repository;
+        this.portaRepository = portaRepository;
+    }
 
     public Cliente cadastrarCliente(ClienteCadastroDTO dados){
         var clienteExist = repository.findByCodigo(dados.codigo());

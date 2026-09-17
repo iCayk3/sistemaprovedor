@@ -19,8 +19,11 @@ import static br.com.w4solution.controle_instalacao.infra.configuration.security
 @PreAuthorize(COMMERCIAL_OR_FINANCIAL_ACCESS)
 public class EventoController {
 
-    @Autowired
-    EventoService service;
+    private final EventoService service;
+
+    public EventoController(EventoService service) {
+        this.service = service;
+    }
 
     @GetMapping
     public ResponseEntity<List<EventoDTO>> listarEventos(@RequestParam(required = false) String segmento){

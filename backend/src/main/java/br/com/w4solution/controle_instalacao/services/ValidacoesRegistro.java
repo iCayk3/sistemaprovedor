@@ -22,16 +22,19 @@ import java.util.stream.Collectors;
 @Transactional
 public class ValidacoesRegistro {
 
-    @Autowired
-    EquipeTecnicaRepository equipeTecnicaRepository;
-    @Autowired
-    ClienteRepository clienteRepository;
-    @Autowired
-    PortaRepository portaRepository;
-    @Autowired
-    OltRepository oltRepository;
-    @Autowired
-    CtoRepository ctoRepository;
+    private final EquipeTecnicaRepository equipeTecnicaRepository;
+    private final ClienteRepository clienteRepository;
+    private final PortaRepository portaRepository;
+    private final OltRepository oltRepository;
+    private final CtoRepository ctoRepository;
+
+    public ValidacoesRegistro(EquipeTecnicaRepository equipeTecnicaRepository, ClienteRepository clienteRepository, PortaRepository portaRepository, OltRepository oltRepository, CtoRepository ctoRepository) {
+        this.equipeTecnicaRepository = equipeTecnicaRepository;
+        this.clienteRepository = clienteRepository;
+        this.portaRepository = portaRepository;
+        this.oltRepository = oltRepository;
+        this.ctoRepository = ctoRepository;
+    }
 
 
     public Registro validacoesRegistro(CadastroRegistroDTO dados) {

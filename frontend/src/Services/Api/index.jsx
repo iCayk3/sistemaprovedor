@@ -1,6 +1,12 @@
 const apiUrl = import.meta.env.VITE_API_URL
     ?? `${window.location.protocol}//${window.location.hostname}:8080/`;
 
+function buildUrl(base, endpoint) {
+    const cleanBase = (base || "").replace(/\/+$/, "");
+    const cleanEndpoint = (endpoint || "").replace(/^\/+/, "");
+    return `${cleanBase}/${cleanEndpoint}`;
+}
+
 export default function Api() {
     return async (endpoint, method = "GET", body = null) => {
         const isFormData = body instanceof FormData;
@@ -15,7 +21,7 @@ export default function Api() {
 
         if (body) options.body = isFormData ? body : JSON.stringify(body);
 
-        const response = await fetch(`${apiUrl}${endpoint}`, options);
+        const response = await fetch(buildUrl(apiUrl, endpoint), options);
 
         if (!response.ok) {
             const errorText = await response.text();

@@ -2,7 +2,6 @@ package br.com.w4solution.controle_instalacao.controller;
 
 import br.com.w4solution.controle_instalacao.dto.cliente.BoletosBaixadosRbxDTO;
 import br.com.w4solution.controle_instalacao.dto.rbx.ClienteFiltradoDTO;
-import br.com.w4solution.controle_instalacao.infra.configuration.exceptions.ValidacaoCnsultaRBX;
 import br.com.w4solution.controle_instalacao.services.rbx.ServiceRbx;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -19,8 +18,11 @@ import static br.com.w4solution.controle_instalacao.infra.configuration.security
 @PreAuthorize(CHARGING_ACCESS)
 public class RbxController {
 
-    @Autowired
-    ServiceRbx service;
+    private final ServiceRbx service;
+
+    public RbxController(ServiceRbx service) {
+        this.service = service;
+    }
 
     /*
         resultado são boletos baixados por cidade exibindo cidade e valor, label e value respectivamente

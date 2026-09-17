@@ -20,10 +20,13 @@ import java.util.stream.Collectors;
 @Service
 public class ServiceRbx {
 
-    @Autowired
-    private IntegracaoRbx integracaoRbx;
-    @Value("${api.service.integration.rbx.chave}")
-    private String chaveApi;
+    private final IntegracaoRbx integracaoRbx;
+    private final String chaveApi;
+
+    public ServiceRbx(IntegracaoRbx integracaoRbx, @Value("${api.service.integration.rbx.chave}") String chaveApi) {
+        this.integracaoRbx = integracaoRbx;
+        this.chaveApi = chaveApi;
+    }
 
     public List<ResponsePieReact> boletosBaixadosPorCidade(LocalDate data) {
         LocalDate dataFiltro = (data != null) ? data : LocalDate.now();

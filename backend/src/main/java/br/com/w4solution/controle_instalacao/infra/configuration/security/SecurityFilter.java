@@ -1,5 +1,6 @@
 package br.com.w4solution.controle_instalacao.infra.configuration.security;
 
+import br.com.w4solution.controle_instalacao.domain.usuarios.Status;
 import br.com.w4solution.controle_instalacao.repository.usuarios.UsuarioRepository;
 import br.com.w4solution.controle_instalacao.services.usuarios.TokenService;
 import jakarta.servlet.FilterChain;
@@ -26,11 +27,13 @@ public class SecurityFilter extends OncePerRequestFilter {
             "/usuario/solicitaredefinirsenha"
     );
 
-    @Autowired
-    TokenService service;
+    private final TokenService service;
+    private final UsuarioRepository repository;
 
-    @Autowired
-    UsuarioRepository repository;
+    public SecurityFilter(TokenService service, UsuarioRepository repository) {
+        this.service = service;
+        this.repository = repository;
+    }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -51,12 +54,21 @@ public class SecurityFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         String tokenJWT = recuperarTokenDoCookie(request);
+        if (tokenJWT == null) {
+            tokenJWT = recuperarToken(request);
+        }
 
         if (tokenJWT != null) {
             try {
                 var subject = service.getSubject(tokenJWT);
                 var usuario = repository.findByUsuario(subject)
                         .orElseThrow(() -> new RuntimeException("Usuario nao encontrado no filtro de seguranca"));
+
+                if (usuario.getStatus() != Status.ATIVO) {
+                    SecurityContextHolder.clearContext();
+                    response.sendError(HttpServletResponse.SC_FORBIDDEN, "Usuario inativo ou bloqueado");
+                    return;
+                }
 
                 var authentication = new UsernamePasswordAuthenticationToken(
                         usuario, null, usuario.getAuthorities());

@@ -20,8 +20,11 @@ import static br.com.w4solution.controle_instalacao.infra.configuration.security
 @PreAuthorize(TECHNICAL_ACCESS)
 public class RegistroController {
 
-    @Autowired
-    RegistroService service;
+    private final RegistroService service;
+
+    public RegistroController(RegistroService service) {
+        this.service = service;
+    }
 
     @GetMapping
     public ResponseEntity<List<RegistroDTO2>> listarRegistro(@RequestParam(required = false) String equipe, @RequestParam(required = false) String filtro){

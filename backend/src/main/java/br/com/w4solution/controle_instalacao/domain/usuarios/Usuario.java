@@ -2,7 +2,7 @@ package br.com.w4solution.controle_instalacao.domain.usuarios;
 
 import br.com.w4solution.controle_instalacao.dto.usuarios.TrocaSenhaDTO;
 import br.com.w4solution.controle_instalacao.dto.usuarios.UsuarioCadastroDTO;
-import br.com.w4solution.controle_instalacao.infra.configuration.exceptions.SenhaValidacaoExcepetion;
+import br.com.w4solution.controle_instalacao.infra.configuration.exceptions.SenhaValidacaoException;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
@@ -105,18 +105,18 @@ public class Usuario implements UserDetails {
 
     public void trocarSenha(TrocaSenhaDTO senhas) {
         if (senhas.novaSenha().length() < 8) {
-            throw new SenhaValidacaoExcepetion("Senha menor que 8");
+            throw new SenhaValidacaoException("Senha menor que 8");
         }
 
         if (!senhas.novaSenha().equals(senhas.confirmaSenha())) {
-            throw new SenhaValidacaoExcepetion("Nova senha e confirmação não coincidem");
+            throw new SenhaValidacaoException("Nova senha e confirmação não coincidem");
         }
 
         BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
         // Verifica se a senha atual fornecida bate com a armazenada
         if (!encoder.matches(senhas.senhaAtual(), this.senha)) {
-            throw new SenhaValidacaoExcepetion("Senha atual incorreta!");
+            throw new SenhaValidacaoException("Senha atual incorreta!");
         }
 
         // Atualiza a senha

@@ -26,23 +26,21 @@ import java.util.List;
 @Service
 public class UsuarioService {
 
-    @Autowired
-    private UsuarioRepository repository;
+    private final UsuarioRepository repository;
+    private final AuthenticationManager manager;
+    private final TokenService service;
+    private final RedefinirSenhaRepository redefinirSenhaRepository;
+    private final LogRepository logRepository;
+    private final CriptografiaChaveRbxService criptografiaChaveRbxService;
 
-    @Autowired
-    private AuthenticationManager manager;
-
-    @Autowired
-    private TokenService service;
-
-    @Autowired
-    private RedefinirSenhaRepository redefinirSenhaRepository;
-
-    @Autowired
-    LogRepository logRepository;
-
-    @Autowired
-    private CriptografiaChaveRbxService criptografiaChaveRbxService;
+    public UsuarioService(UsuarioRepository repository, AuthenticationManager manager, TokenService service, RedefinirSenhaRepository redefinirSenhaRepository, LogRepository logRepository, CriptografiaChaveRbxService criptografiaChaveRbxService) {
+        this.repository = repository;
+        this.manager = manager;
+        this.service = service;
+        this.redefinirSenhaRepository = redefinirSenhaRepository;
+        this.logRepository = logRepository;
+        this.criptografiaChaveRbxService = criptografiaChaveRbxService;
+    }
 
     public UsuarioDTO cadastrarUsuario(UsuarioCadastroDTO dados) {
         var usuario = new Usuario(dados);

@@ -39,8 +39,11 @@ import static br.com.w4solution.controle_instalacao.infra.configuration.security
 @RequestMapping("usuario")
 public class UsuarioController {
 
-    @Autowired
-    private UsuarioService service;
+    private final UsuarioService service;
+
+    public UsuarioController(UsuarioService service) {
+        this.service = service;
+    }
 
     @PostMapping
     @Transactional
@@ -67,11 +70,13 @@ public class UsuarioController {
     @PostMapping("/logout")
     @PreAuthorize(AUTHENTICATED)
     public ResponseEntity<Void> logout(HttpServletResponse response) {
-        Cookie cookie = new Cookie("token", null);
-        cookie.setMaxAge(0);
-        cookie.setPath("/");
-        cookie.setHttpOnly(true);
-        response.addCookie(cookie);
+        var cookie = org.springframework.http.ResponseCookie.from("token", "")
+                .httpOnly(true)
+                .path("/")
+                .sameSite("Lax")
+                .maxAge(0)
+                .build();
+        response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, cookie.toString());
         return ResponseEntity.ok().build();
     }
 

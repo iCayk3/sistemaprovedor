@@ -20,8 +20,11 @@ public class EventoService {
             "COBRANCA_STATUS", List.of("COBRANÇA EMITIDA", "PROMESSA DE PAGAMENTO", "SEM RETORNO", "PAGO", "CANCELADO")
     );
 
-    @Autowired
-    EventoRepository repository;
+    private final EventoRepository repository;
+
+    public EventoService(EventoRepository repository) {
+        this.repository = repository;
+    }
 
     public Evento cadastrarEvento(cadastrarEventoDTO dados) {
         var evento = new Evento(null, dados.evento(), normalizarSegmento(dados.segmento()), Boolean.TRUE.equals(dados.encerraAtendimento()));

@@ -23,8 +23,11 @@ import static br.com.w4solution.controle_instalacao.infra.configuration.security
 @PreAuthorize(TECHNICAL_ACCESS)
 public class ClienteController {
 
-    @Autowired
-    ClienteService service;
+    private final ClienteService service;
+
+    public ClienteController(ClienteService service) {
+        this.service = service;
+    }
 
     @PostMapping
     @Transactional

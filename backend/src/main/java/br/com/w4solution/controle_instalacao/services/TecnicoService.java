@@ -21,11 +21,13 @@ import java.util.stream.Collectors;
 @Service
 public class TecnicoService {
 
-    @Autowired
-    EquipeTecnicaRepository equipeTecnicaRepository;
+    private final EquipeTecnicaRepository equipeTecnicaRepository;
+    private final TecnicoRepository tecnicoRepository;
 
-    @Autowired
-    TecnicoRepository tecnicoRepository;
+    public TecnicoService(EquipeTecnicaRepository equipeTecnicaRepository, TecnicoRepository tecnicoRepository) {
+        this.equipeTecnicaRepository = equipeTecnicaRepository;
+        this.tecnicoRepository = tecnicoRepository;
+    }
 
     @PersistenceContext
     private EntityManager entityManager;

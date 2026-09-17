@@ -80,20 +80,16 @@ public class TratadorDeErros {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuario não está ativo");
     }
 
-    @ExceptionHandler(SenhaValidacaoExcepetion.class)
-    public ResponseEntity<?> erroTrocaSenha(SenhaValidacaoExcepetion ex) {
+    @ExceptionHandler(SenhaValidacaoException.class)
+    public ResponseEntity<?> erroTrocaSenha(SenhaValidacaoException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
     }
 
     @ExceptionHandler(ValidacaoCtoException.class)
-    public ResponseEntity<?> oltNaoEncontrada(ValidacaoCtoException ex) {
+    public ResponseEntity<?> ctoNaoEncontrada(ValidacaoCtoException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
     }
 
-    @ExceptionHandler(CtoValidacaoExcepetion.class)
-    public ResponseEntity<?> ctoNaoEncontrada(CtoValidacaoExcepetion ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
-    }
     @ExceptionHandler(ProcedimentoException.class)
     public ResponseEntity<?> procedimentoNaoEncontrado(ProcedimentoException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
