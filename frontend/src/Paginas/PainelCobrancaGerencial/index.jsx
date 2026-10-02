@@ -12,7 +12,6 @@ import {
     Alert,
     Box,
     Button,
-    Chip,
     CircularProgress,
     Divider,
     LinearProgress,
@@ -689,15 +688,24 @@ export default function PainelCobrancaGerencial() {
                                         />
                                     )}
                                     <Divider sx={{ my: 1 }} />
-                                    <Stack spacing={0.7} alignItems="flex-start">
-                                        <Chip
-                                            size="small"
-                                            variant="outlined"
-                                            color={statusForGoal(indicator.actual, goals[indicator.key], indicator.inverse).color}
-                                            label={statusForGoal(indicator.actual, goals[indicator.key], indicator.inverse).label}
-                                        />
+                                    <Stack spacing={0.3} alignItems="flex-start">
+                                        <Typography
+                                            variant="body2"
+                                            fontWeight={800}
+                                            color={
+                                                statusForGoal(indicator.actual, goals[indicator.key], indicator.inverse).color === 'success'
+                                                    ? 'success.main'
+                                                    : statusForGoal(indicator.actual, goals[indicator.key], indicator.inverse).color === 'error'
+                                                    ? 'error.main'
+                                                    : 'warning.main'
+                                            }
+                                        >
+                                            {statusForGoal(indicator.actual, goals[indicator.key], indicator.inverse).label}
+                                        </Typography>
                                         {goals[indicator.key] !== '' && !indicator.inverse && (
-                                            <Chip size="small" variant="outlined" label={`${Number(goals[indicator.key]) > 0 ? ((indicator.actual / Number(goals[indicator.key])) * 100).toFixed(1).replace('.', ',') : '0,0'}% da meta`} />
+                                            <Typography variant="caption" sx={dashboardMutedTextSx} fontWeight={600}>
+                                                {`${Number(goals[indicator.key]) > 0 ? ((indicator.actual / Number(goals[indicator.key])) * 100).toFixed(1).replace('.', ',') : '0,0'}% da meta`}
+                                            </Typography>
                                         )}
                                     </Stack>
                                     <Box sx={{ mt: 'auto', pt: 0.5 }}>
@@ -732,7 +740,7 @@ export default function PainelCobrancaGerencial() {
                                     Consolidação dos atendimentos e históricos registrados em {month.split('-').reverse().join('/')}
                                 </Typography>
                             </Box>
-                            <Chip size="small" color="success" variant="outlined" label="Dados do sistema" />
+                            <Typography variant="caption" fontWeight={800} color="success.main">• Dados do sistema</Typography>
                         </Stack>
                         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', xl: 'repeat(4, 1fr)' }, gap: 1.5 }}>
                             {[
@@ -851,12 +859,13 @@ export default function PainelCobrancaGerencial() {
                                     <Box>
                                         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                                             <Typography variant="h6" fontWeight={900}>Relatório de faturamento mensal</Typography>
-                                            <Chip
-                                                size="small"
-                                                color={hasImportedBilling ? 'success' : 'warning'}
-                                                variant="outlined"
-                                                label={hasImportedBilling ? `${collectionRate.toFixed(1).replace('.', ',')}% recebido` : 'Aguardando importação'}
-                                            />
+                                            <Typography
+                                                variant="caption"
+                                                fontWeight={800}
+                                                color={hasImportedBilling ? 'success.main' : 'warning.main'}
+                                            >
+                                                • {hasImportedBilling ? `${collectionRate.toFixed(1).replace('.', ',')}% recebido` : 'Aguardando importação'}
+                                            </Typography>
                                         </Stack>
                                         <Typography variant="caption" sx={dashboardMutedTextSx}>
                                             Competência {month.split('-').reverse().join('/')} • Fonte: {hasImportedBilling ? 'planilha importada' : 'nenhuma importação'}
@@ -908,12 +917,13 @@ export default function PainelCobrancaGerencial() {
                                     Distribuição da competência {month.split('-').reverse().join('/')} conforme a data de vencimento da planilha
                                 </Typography>
                             </Box>
-                            <Chip
-                                size="small"
-                                color={hasImportedBilling ? 'success' : 'warning'}
-                                variant="outlined"
-                                label={hasImportedBilling ? `${billingDueDates.length} vencimento(s)` : 'Aguardando importação'}
-                            />
+                            <Typography
+                                variant="caption"
+                                fontWeight={800}
+                                color={hasImportedBilling ? 'success.main' : 'warning.main'}
+                            >
+                                • {hasImportedBilling ? `${billingDueDates.length} vencimento(s)` : 'Aguardando importação'}
+                            </Typography>
                         </Stack>
                         {billingDueDates.length === 0 ? (
                             <Typography sx={dashboardMutedTextSx}>Importe o faturamento deste mês para visualizar os vencimentos.</Typography>
@@ -934,7 +944,7 @@ export default function PainelCobrancaGerencial() {
                                             <Box><Typography variant="caption" sx={{ ...dashboardMutedTextSx, display: { md: 'none' } }}>Faturado</Typography><Typography fontWeight={800}>{formatCurrency(row.billed)}</Typography></Box>
                                             <Box><Typography variant="caption" sx={{ ...dashboardMutedTextSx, display: { md: 'none' } }}>Recebido</Typography><Typography fontWeight={800} color="primary.main">{formatCurrency(row.received)}</Typography></Box>
                                             <Box><Typography variant="caption" sx={{ ...dashboardMutedTextSx, display: { md: 'none' } }}>Falta receber</Typography><Typography fontWeight={800}>{formatCurrency(row.open)}</Typography></Box>
-                                            <Chip size="small" variant="outlined" color="success" label={`${Number(row.collectionRate || 0).toFixed(1).replace('.', ',')}%`} />
+                                            <Typography variant="body2" fontWeight={800} color="success.main">{`${Number(row.collectionRate || 0).toFixed(1).replace('.', ',')}%`}</Typography>
                                         </Box>
                                     </Paper>
                                 ))}
@@ -955,12 +965,13 @@ export default function PainelCobrancaGerencial() {
                             <Box>
                                 <Stack direction="row" spacing={1} alignItems="center" mb={0.5}>
                                     <Typography variant="h6" fontWeight={900}>Relatório de inadimplência atualizado</Typography>
-                                    <Chip
-                                        size="small"
-                                        color={Number(billing.delinquentDocuments || 0) > 0 ? 'error' : 'success'}
-                                        variant="outlined"
-                                        label={`${Number(billing.delinquencyRate || 0).toFixed(1).replace('.', ',')}% do faturamento`}
-                                    />
+                                    <Typography
+                                        variant="caption"
+                                        fontWeight={800}
+                                        color={Number(billing.delinquentDocuments || 0) > 0 ? 'error.main' : 'success.main'}
+                                    >
+                                        • {`${Number(billing.delinquencyRate || 0).toFixed(1).replace('.', ',')}% do faturamento`}
+                                    </Typography>
                                 </Stack>
                                 <Typography variant="caption" sx={dashboardMutedTextSx}>
                                     Todos os títulos importados de {billing.delinquencyYear || month.slice(0, 4)} que venceram e continuam sem baixa

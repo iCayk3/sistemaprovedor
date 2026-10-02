@@ -1,79 +1,86 @@
-import { Box, Paper, Stack, Typography } from '@mui/material';
+import { useState } from 'react';
+import { Box, CircularProgress, Paper, Stack, Typography } from '@mui/material';
+import { useQuery } from '@tanstack/react-query';
 import MixedBarChart from '../../Componentes/MixedBarChart';
 import BasicLineChart from '../../Componentes/BasicLineChart';
 import FieldAutoComplet from '../../Componentes/FieldAutoComplet';
-import { useEffect, useState } from 'react';
 import Api from '../../Services/Api';
 import ExportDashboardPdfButton from '../../Componentes/ExportDashboardPdfButton';
 import { dashboardHeaderSx, dashboardInputSx, dashboardPanelSx, dashboardShellSx, dashboardSubtleTextSx } from '../../Utils/DashboardTheme';
 
+const UseApi = Api();
+
 const DashboardPrincipal = () => {
     const [procedimento, setProcedimento] = useState(null);
-    const [procedimentos, setProcedimentos] = useState(null);
     const [inputProcedimento, setInputProcedimento] = useState('');
     const [procedimentoService, setProcedimentoService] = useState(null);
     const [inputProcedimentoService, setInputProcedimentoService] = useState('');
-    const [data, setData] = useState([]);
-    const [label, setLabel] = useState([]);
-    const [dataEquipe, setDataEquipe] = useState([]);
-    const [labelEquipe, setLabelEquipe] = useState([]);
-    const UseApi = Api();
 
-    useEffect(() => {
-        const fetchData = async () => {
+    // Carrega a lista de procedimentos com cache de 10 minutos
+    const { data: procedimentos = [] } = useQuery({
+        queryKey: ['procedimentos'],
+        queryFn: async () => {
+            const response = await UseApi('procedimento');
+            return Array.isArray(response) ? response : [];
+        },
+        staleTime: 1000 * 60 * 10,
+    });
+
+    // Carrega serviços por mês com cache inteligente
+    const endpointMes = procedimento?.label
+        ? `registros/totalpormes?servico=${encodeURIComponent(procedimento.label.toUpperCase())}`
+        : 'registros/totalpormes';
+
+    const { data: dadosMesResp = [], isLoading: loadingMes } = useQuery({
+        queryKey: ['dashboard', 'totalPorMes', procedimento?.label || 'ALL'],
+        queryFn: async () => {
             try {
-                const endpoint = procedimento?.label
-                    ? `registros/totalpormes?servico=${procedimento.label.toUpperCase()}`
-                    : 'registros/totalpormes';
-                const response = await UseApi(endpoint);
-
-                setLabel(Array.isArray(response) ? response.map((dados) => dados.mes) : []);
-                setData(Array.isArray(response) ? response.map((dados) => dados.valor) : []);
+                const response = await UseApi(endpointMes);
+                return Array.isArray(response) ? response : [];
             } catch (error) {
-                console.error('Erro ao buscar dados:', error);
-                setLabel([]);
-                setData([]);
+                console.error('Erro ao buscar dados mensais:', error);
+                return [];
             }
-        };
+        },
+    });
 
-        fetchData();
-    }, [procedimento]);
+    const label = dadosMesResp.map((dados) => dados.mes);
+    const data = dadosMesResp.map((dados) => dados.valor);
 
-    useEffect(() => {
-        const fetchData = async () => {
+    // Carrega serviços por equipe com cache inteligente
+    const endpointEquipe = procedimentoService?.label
+        ? `registros/servicos/tecnico/mensal?servico=${encodeURIComponent(procedimentoService.label.toUpperCase())}`
+        : 'registros/servicos/tecnico/mensal';
+
+    const { data: dadosEquipeResp = [], isLoading: loadingEquipe } = useQuery({
+        queryKey: ['dashboard', 'servicosEquipe', procedimentoService?.label || 'ALL'],
+        queryFn: async () => {
             try {
-                const endpoint = procedimentoService?.label
-                    ? `registros/servicos/tecnico/mensal?servico=${procedimentoService.label.toUpperCase()}`
-                    : 'registros/servicos/tecnico/mensal';
-                const response = await UseApi(endpoint);
-                const response2 = await UseApi('procedimento');
-
-                setProcedimentos(response2);
-                setLabelEquipe(Array.isArray(response) ? response.map((dados) => dados.equipe) : []);
-                setDataEquipe(Array.isArray(response) ? response.map((dados) => dados.valor) : []);
+                const response = await UseApi(endpointEquipe);
+                return Array.isArray(response) ? response : [];
             } catch (error) {
-                console.error('Erro ao buscar dados:', error);
-                setLabelEquipe([]);
-                setDataEquipe([]);
+                console.error('Erro ao buscar dados de equipe:', error);
+                return [];
             }
-        };
+        },
+    });
 
-        fetchData();
-    }, [procedimentoService]);
+    const labelEquipe = dadosEquipeResp.map((dados) => dados.equipe);
+    const dataEquipe = dadosEquipeResp.map((dados) => dados.valor);
 
     return (
         <Box id="dashboard-registros-tecnicos-export" sx={{ display: 'grid', gap: 2, ...dashboardShellSx }}>
             <Paper variant="outlined" sx={dashboardHeaderSx}>
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2} alignItems={{ xs: 'stretch', md: 'center' }}>
                     <Box>
-                        <Typography variant="h5" fontWeight={800}>Registros tecnicos</Typography>
+                        <Typography variant="h5" fontWeight={800}>Registros técnicos</Typography>
                         <Typography color="#e8f8ff">
-                            Evolucao mensal dos servicos e distribuicao por equipe tecnica.
+                            Evolução mensal dos serviços e distribuição por equipe técnica.
                         </Typography>
                     </Box>
                     <ExportDashboardPdfButton
                         targetId="dashboard-registros-tecnicos-export"
-                        title="Dashboard de registros tecnicos"
+                        title="Dashboard de registros técnicos"
                         fileName="dashboard-registros-tecnicos"
                     />
                 </Stack>
@@ -83,8 +90,8 @@ const DashboardPrincipal = () => {
                 <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2.5, minWidth: 0 }}>
                     <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} gap={2} mb={2}>
                         <Box>
-                            <Typography variant="h6" fontWeight={800}>Servicos por mes</Typography>
-                            <Typography sx={dashboardSubtleTextSx} variant="body2">Volume historico por procedimento.</Typography>
+                            <Typography variant="h6" fontWeight={800}>Serviços por mês</Typography>
+                            <Typography sx={dashboardSubtleTextSx} variant="body2">Volume histórico por procedimento.</Typography>
                         </Box>
                         <Box sx={{ width: { xs: '100%', md: 280 } }}>
                             <FieldAutoComplet
@@ -98,13 +105,19 @@ const DashboardPrincipal = () => {
                             />
                         </Box>
                     </Stack>
-                    <BasicLineChart xLabels={label} data={data} dark />
+                    {loadingMes ? (
+                        <Box sx={{ height: 320, display: 'grid', placeItems: 'center' }}>
+                            <CircularProgress />
+                        </Box>
+                    ) : (
+                        <BasicLineChart xLabels={label} data={data} dark />
+                    )}
                 </Paper>
 
                 <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2.5, minWidth: 0 }}>
                     <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} gap={2} mb={2}>
                         <Box>
-                            <Typography variant="h6" fontWeight={800}>Servicos por equipe</Typography>
+                            <Typography variant="h6" fontWeight={800}>Serviços por equipe</Typography>
                             <Typography sx={dashboardSubtleTextSx} variant="body2">Total mensal filtrado por procedimento.</Typography>
                         </Box>
                         <Box sx={{ width: { xs: '100%', md: 280 } }}>
@@ -119,7 +132,13 @@ const DashboardPrincipal = () => {
                             />
                         </Box>
                     </Stack>
-                    <MixedBarChart xLabels={labelEquipe} uData={dataEquipe} dark />
+                    {loadingEquipe ? (
+                        <Box sx={{ height: 320, display: 'grid', placeItems: 'center' }}>
+                            <CircularProgress />
+                        </Box>
+                    ) : (
+                        <MixedBarChart xLabels={labelEquipe} uData={dataEquipe} dark />
+                    )}
                 </Paper>
             </Box>
         </Box>

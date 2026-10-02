@@ -167,13 +167,28 @@ function FinancePanel({ financial, selectedMonth, onMonthChange, onRefresh }) {
             </Stack>
             <Grid container spacing={1.5} mb={2}>
                 <Grid item xs={12} md={4}>
-                    <Chip icon={<CalendarMonthRoundedIcon />} label={`Faturado: ${money.format(billing.billed || 0)}`} variant="outlined" sx={{ width: '100%', justifyContent: 'flex-start', color: '#0f2630', borderColor: '#0f4c81', '.dark &': { color: '#f8fbff', borderColor: '#17e2e8' } }} />
+                    <Paper variant="outlined" sx={{ p: 1.5, ...dashboardMetricSx }}>
+                        <Typography variant="caption" sx={dashboardMutedTextSx}>Faturado</Typography>
+                        <Typography variant="h6" fontWeight={800} sx={{ color: 'primary.main' }}>
+                            {money.format(billing.billed || 0)}
+                        </Typography>
+                    </Paper>
                 </Grid>
                 <Grid item xs={12} md={4}>
-                    <Chip color="success" label={`Recebido: ${money.format(billing.received || 0)}`} sx={{ width: '100%', justifyContent: 'flex-start' }} />
+                    <Paper variant="outlined" sx={{ p: 1.5, ...dashboardMetricSx }}>
+                        <Typography variant="caption" sx={dashboardMutedTextSx}>Recebido</Typography>
+                        <Typography variant="h6" fontWeight={800} sx={{ color: 'success.main' }}>
+                            {money.format(billing.received || 0)}
+                        </Typography>
+                    </Paper>
                 </Grid>
                 <Grid item xs={12} md={4}>
-                    <Chip color="error" variant="outlined" label={`Aberto: ${money.format(billing.open || 0)}`} sx={{ width: '100%', justifyContent: 'flex-start' }} />
+                    <Paper variant="outlined" sx={{ p: 1.5, ...dashboardMetricSx }}>
+                        <Typography variant="caption" sx={dashboardMutedTextSx}>Aberto</Typography>
+                        <Typography variant="h6" fontWeight={800} sx={{ color: 'error.main' }}>
+                            {money.format(billing.open || 0)}
+                        </Typography>
+                    </Paper>
                 </Grid>
             </Grid>
             {financial.loading && !data ? (
@@ -263,7 +278,9 @@ function AttendancePanel({ attendance }) {
                                         <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.openedAt}</TableCell>
                                         <TableCell>{row.typeName}</TableCell>
                                         <TableCell>
-                                            <Chip size="small" variant="outlined" label={row.statusName || 'Nao informado'} />
+                                            <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                                                {row.statusName || 'Nao informado'}
+                                            </Typography>
                                         </TableCell>
                                         <TableCell sx={{ minWidth: 220 }}>{row.topic || 'Sem topico'}</TableCell>
                                     </TableRow>

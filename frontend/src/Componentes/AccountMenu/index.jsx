@@ -9,19 +9,23 @@ import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import Settings from '@mui/icons-material/Settings';
 import Logout from '@mui/icons-material/Logout';
+import DarkMode from '@mui/icons-material/DarkMode';
+import LightMode from '@mui/icons-material/LightMode';
 import { useNavigate } from 'react-router-dom';
 import Api from '../../Services/Api';
 import { useAuth } from '../AuthProvider';
+import { useThemeMode } from '../ThemeModeProvider';
 
-const UseApi = Api()
+const UseApi = Api();
 
 export default function AccountMenu() {
-
     const navigate = useNavigate();
     const [anchorEl, setAnchorEl] = React.useState(null);
-    const [userLogado, setUserLogado] = React.useState({})
+    const [userLogado, setUserLogado] = React.useState({});
     const { logout } = useAuth();
+    const { isDark, toggleTheme } = useThemeMode();
     const open = Boolean(anchorEl);
+
     const handleClick = (event) => {
         setAnchorEl(event.currentTarget);
     };
@@ -38,7 +42,6 @@ export default function AccountMenu() {
         }
     }, []);
 
-
     const sair = async () => {
         console.log("Iniciando processo de logout completo...");
 
@@ -48,15 +51,27 @@ export default function AccountMenu() {
         } catch (error) {
             console.error('Falha ao contatar o servidor para logout:', error);
         } finally {
-            // 2. ATUALIZA O ESTADO GLOBAL DO FRONT-END!
-            //    Esta é a etapa que faltava.
+            // 2. Preserva a preferência de tema do usuário ao deslogar
+            const savedTheme = localStorage.getItem('app-theme-mode') 
+                || localStorage.getItem('toolpad-mode') 
+                || localStorage.getItem('mui-mode');
+
+            // 3. ATUALIZA O ESTADO GLOBAL DO FRONT-END
             logout();
 
-            // 3. Limpa qualquer outra coisa que possa ter sobrado
+            // 4. Limpa storage de sessão e usuário
             localStorage.clear();
             sessionStorage.clear();
 
-            // 4. Redireciona o usuário para a página de login
+            if (savedTheme) {
+                localStorage.setItem('app-theme-mode', savedTheme);
+                localStorage.setItem('toolpad-mode', savedTheme);
+                localStorage.setItem('mui-mode', savedTheme);
+                localStorage.setItem('toolpad-color-scheme', savedTheme);
+                localStorage.setItem('mui-color-scheme', savedTheme);
+            }
+
+            // 5. Redireciona o usuário para a página de login
             navigate('/login', { replace: true });
         }
     };
@@ -114,8 +129,19 @@ export default function AccountMenu() {
                 transformOrigin={{ horizontal: 'right', vertical: 'top' }}
                 anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
             >
-                <MenuItem onClick={handleClose} sx={{justifyContent : 'center', alignItems : 'center', m : 'auto', alignContent : 'center'}}>
-                    <Avatar >{userLogado.usuario}</Avatar> 
+                <MenuItem onClick={handleClose} sx={{ justifyContent: 'center', alignItems: 'center', m: 'auto', alignContent: 'center' }}>
+                    <Avatar>{userLogado.usuario}</Avatar> 
+                </MenuItem>
+                <Divider />
+                <MenuItem onClick={() => { handleClose(); toggleTheme(); }}>
+                    <ListItemIcon>
+                        {isDark ? (
+                            <LightMode fontSize="small" sx={{ color: '#facc15' }} />
+                        ) : (
+                            <DarkMode fontSize="small" sx={{ color: '#0f4c81' }} />
+                        )}
+                    </ListItemIcon>
+                    {isDark ? 'Tema Claro' : 'Tema Escuro'}
                 </MenuItem>
                 <Divider />
                 <MenuItem onClick={() => navigate("/perfil/settings")}>

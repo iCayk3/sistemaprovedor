@@ -24,7 +24,8 @@ public class SecurityFilter extends OncePerRequestFilter {
     private static final List<String> PUBLIC_PATHS = List.of(
             "/usuario/logar",
             "/usuario/userchek",
-            "/usuario/solicitaredefinirsenha"
+            "/usuario/solicitaredefinirsenha",
+            "/usuario/token/refresh"
     );
 
     private final TokenService service;

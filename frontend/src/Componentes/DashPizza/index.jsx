@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { PieChart } from '@mui/x-charts/PieChart';
+import { useQuery } from '@tanstack/react-query';
 import Api from '../../Services/Api';
 import { Box, CircularProgress, Paper, Typography } from '@mui/material';
 import ChartValueList from '../ChartValueList';
@@ -38,34 +39,23 @@ function formatMoney(value) {
 }
 
 const DashPizza = ({ filtro, uri, financeiro, sx, metodo = 'GET' }) => {
-  const [data, setData] = React.useState();
-  const [loading, setLoading] = React.useState(true);
   const UseApi = React.useMemo(() => Api(), []);
 
-  React.useEffect(() => {
-    let ativo = true;
-
-    const fetchData = async () => {
-      setLoading(true);
+  const { data, isLoading } = useQuery({
+    queryKey: ['dashPizza', uri, metodo, filtro || ''],
+    queryFn: async () => {
       try {
         const response = await UseApi(uri, metodo);
-        if (ativo) setData(response);
+        return response;
       } catch (error) {
-        console.error('Erro ao buscar dados:', error);
-        if (ativo) setData([]);
-      } finally {
-        if (ativo) setLoading(false);
+        console.error('Erro ao buscar dados do gráfico pizza:', error);
+        return [];
       }
-    };
+    },
+    enabled: Boolean(uri),
+  });
 
-    fetchData();
-
-    return () => {
-      ativo = false;
-    };
-  }, [uri, filtro, metodo, UseApi]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <Box sx={{ minHeight: 280, display: 'grid', placeItems: 'center' }}>
         <CircularProgress />

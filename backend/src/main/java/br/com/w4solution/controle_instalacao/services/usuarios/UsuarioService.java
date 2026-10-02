@@ -32,6 +32,10 @@ public class UsuarioService {
     private final RedefinirSenhaRepository redefinirSenhaRepository;
     private final LogRepository logRepository;
     private final CriptografiaChaveRbxService criptografiaChaveRbxService;
+    @org.springframework.beans.factory.annotation.Value("${api.security.cookie.secure:#{null}}")
+    private Boolean cookieSecureConfig;
+    @org.springframework.beans.factory.annotation.Value("${api.service.integration.frontend:}")
+    private String frontendUrl;
 
     public UsuarioService(UsuarioRepository repository, AuthenticationManager manager, TokenService service, RedefinirSenhaRepository redefinirSenhaRepository, LogRepository logRepository, CriptografiaChaveRbxService criptografiaChaveRbxService) {
         this.repository = repository;
@@ -40,6 +44,23 @@ public class UsuarioService {
         this.redefinirSenhaRepository = redefinirSenhaRepository;
         this.logRepository = logRepository;
         this.criptografiaChaveRbxService = criptografiaChaveRbxService;
+    }
+
+    public boolean isCookieSecure() {
+        if (cookieSecureConfig != null) {
+            return cookieSecureConfig;
+        }
+        return frontendUrl != null && frontendUrl.trim().toLowerCase().startsWith("https");
+    }
+
+    public ResponseCookie criarCookieToken(String token, Duration maxAge) {
+        return ResponseCookie.from("token", token)
+                .httpOnly(true)
+                .secure(isCookieSecure())
+                .path("/")
+                .sameSite("Lax")
+                .maxAge(maxAge)
+                .build();
     }
 
     public UsuarioDTO cadastrarUsuario(UsuarioCadastroDTO dados) {
@@ -68,17 +89,66 @@ public class UsuarioService {
         String token = service.gerarToken(user);
 
         // Cookie seguro com SameSite e HttpOnly
-        var cookie = ResponseCookie.from("token", token)
-                .httpOnly(true)
-//                .secure(true) // use true se o app estiver em HTTPS
-                .path("/")
-                .sameSite("Lax") // ou "Strict" para mais segurança
-                .maxAge(Duration.ofHours(4))
-                .build();
+        var cookie = criarCookieToken(token, Duration.ofHours(4));
 
-        response.addHeader("Set-Cookie", cookie.toString());
 
-        return new DadosToken(new UsuarioDTO(user), null); // não precisa retornar o token mais
+
+
+
+
+
+
+        response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, cookie.toString());
+
+        return new DadosToken(new UsuarioDTO(user), null);
+    }
+
+    public DadosToken renovarToken(HttpServletRequest request, HttpServletResponse response) {
+        String tokenJWT = recuperarToken(request);
+        if (tokenJWT == null || tokenJWT.isBlank()) {
+            throw new ValidacaoAutenticacaoException("Token não fornecido para renovação");
+        }
+
+        // Janela de tolerância estrita de 5 minutos (300s) para mitigar reaproveitamento de tokens expirados
+        String subject = service.getSubjectComTolerancia(tokenJWT, 300L);
+        var optionalUsuario = repository.findByUsuario(subject);
+        if (optionalUsuario.isEmpty()) {
+            throw new UsuarioNaoEncontradoException("Usuário não encontrado");
+        }
+
+        var usuario = optionalUsuario.get();
+        if (usuario.getStatus() != Status.ATIVO) {
+            throw new ValidacaoAutenticacaoException("Usuário não está ativo");
+        }
+
+        String novoToken = service.gerarToken(usuario);
+
+        var cookie = criarCookieToken(novoToken, Duration.ofHours(4));
+
+
+
+
+
+
+        response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, cookie.toString());
+
+        return new DadosToken(new UsuarioDTO(usuario), null);
+    }
+
+    private String recuperarToken(HttpServletRequest request) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if ("token".equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
+            }
+        }
+        var authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.replace("Bearer ", "");
+        }
+        return null;
     }
 
     public List<UsuarioDTO> buscarPendentes() {

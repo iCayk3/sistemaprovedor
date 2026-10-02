@@ -1,28 +1,30 @@
 import { NavLink } from "react-router-dom";
-import styled from "styled-components";
+import { styled } from "@mui/material/styles";
 
-const MenuStyled = styled(NavLink)`
-    text-decoration: none;
-    color: black;
-    padding: 8px 16px;
-    transition: background 0.2s;    
-  &.active {
-    background-color: #4a2512;
-    font-weight: bold;
-    color: #f4ddb4;
-  }
-  &:hover{
-    text-decoration: underline ;
-  }
-  &.active:hover{
-    text-decoration: none ;
-  }
-`
+const MenuStyled = styled(NavLink)(({ theme }) => ({
+    textDecoration: 'none',
+    color: theme.palette.text.primary,
+    padding: '8px 16px',
+    transition: 'background 0.2s',
+    '&.active': {
+        backgroundColor: theme.palette.primary.main,
+        fontWeight: 'bold',
+        color: theme.palette.primary.contrastText,
+    },
+    '&:hover': {
+        textDecoration: 'underline',
+    },
+    '&.active:hover': {
+        textDecoration: 'none',
+    },
+}));
 
 const ItemMenu = ({ to, children }) => {
-    return <MenuStyled to={to} end className={({ isActive }) => (isActive ? "active" : "")}>
-        {children}
-    </MenuStyled>
-}
+    return (
+        <MenuStyled to={to} end>
+            {children}
+        </MenuStyled>
+    );
+};
 
-export default ItemMenu
+export default ItemMenu;

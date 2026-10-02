@@ -1,4 +1,6 @@
 package br.com.w4solution.controle_instalacao.dto.evento;
 
-public record IdDTO(Long id) {
+import jakarta.validation.constraints.NotNull;
+
+public record IdDTO(@NotNull(message = "ID é obrigatório") Long id) {
 }

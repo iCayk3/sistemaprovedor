@@ -1,13 +1,8 @@
 import * as React from 'react';
 import { DataGrid } from '@mui/x-data-grid';
-import Paper from '@mui/material/Paper';
+import { Box, Paper } from '@mui/material';
 import Filtros from '../Filtros';
-import styled from 'styled-components';
 import Api from '../../Services/Api';
-
-const DivEstilizada = styled.div`
-  position: relative;
-`
 
 const columns = [
     { field: 'codigo', headerName: 'CODIGO', width: 80 },
@@ -23,108 +18,73 @@ const columns = [
 ];
 
 const paginationModel = { page: 0, pageSize: 10 };
+const UseApi = Api();
 
 const DataTable = ({ filtro }) => {
-
     const [dataFiltro, setDataFiltro] = React.useState('');
     const [tecnico, setTecnico] = React.useState('');
     const [tecnicoLabel, setTecnicoLabel] = React.useState('');
-    const [cliente, setCliente] = React.useState('')
-    const [data, setData] = React.useState()
-    const UseApi = Api()
+    const [cliente, setCliente] = React.useState('');
+    const [data, setData] = React.useState([]);
+    const [loading, setLoading] = React.useState(true);
 
-
-    const aoAlteradoData = (dataFiltro) => {
-        if (dataFiltro === null) {
-            setDataFiltro('')
-        } else {
-            setDataFiltro(dataFiltro)
-        }
-    }
+    const aoAlteradoData = (valorData) => {
+        setDataFiltro(valorData || '');
+    };
 
     const aoAlteradoCliente = (clienteFiltro) => {
-        if (clienteFiltro === null) {
-            setCliente('')
-        } else {
-            setCliente(clienteFiltro.target.value)
-        }
-    }
+        setCliente(clienteFiltro?.target?.value || '');
+    };
 
     React.useEffect(() => {
         const fetchData = async () => {
+            setLoading(true);
             try {
-                const response = await UseApi(`registros?filtro=${filtro}`);
-                setData(response);
+                const response = await UseApi(`registros?filtro=${filtro || ''}`);
+                setData(Array.isArray(response) ? response : []);
             } catch (error) {
                 console.error('Erro ao buscar dados:', error);
-            } 
+                setData([]);
+            } finally {
+                setLoading(false);
+            }
         };
 
         fetchData();
     }, [filtro]);
 
+    const filteredRows = React.useMemo(() => {
+        if (!Array.isArray(data)) return [];
+        return data.filter((item) => {
+            if (tecnico?.label && item.nomeEquipeTecnica !== tecnico.label) return false;
+            if (dataFiltro && item.data !== dataFiltro) return false;
+            if (cliente && item.codigo !== parseInt(cliente, 10)) return false;
+            return true;
+        });
+    }, [data, tecnico, dataFiltro, cliente]);
+
     return (
-        <DivEstilizada>
+        <Box sx={{ position: 'relative' }}>
             <Filtros
                 aoAlteradoTecnico={setTecnico}
                 valor={tecnico}
                 valorInput={tecnicoLabel}
                 aoAlteradoTecnicoLabel={setTecnicoLabel}
-                aoAlteradoData={(data) => aoAlteradoData(data)}
-                aoAlteradoCliente={(cliente) => aoAlteradoCliente(cliente)}
+                aoAlteradoData={aoAlteradoData}
+                aoAlteradoCliente={aoAlteradoCliente}
             />
-            <Paper sx={{ height: 400, width: '100%' }}>
-
-                {!cliente && !dataFiltro && tecnico && <DataGrid
-                    key={data.id}
-                    rows={data.filter((item) => item.nomeEquipeTecnica === tecnico.label)}
+            <Paper sx={{ height: 440, width: '100%' }}>
+                <DataGrid
+                    rows={filteredRows}
                     columns={columns}
+                    loading={loading}
                     initialState={{ pagination: { paginationModel } }}
-                    pageSizeOptions={[10, 15]}
+                    pageSizeOptions={[10, 15, 25]}
                     sx={{ border: 0 }}
-
-                />}
-                {!cliente && !tecnico && dataFiltro && <DataGrid
-                    key={data.id}
-                    rows={data.filter((item) => item.data === dataFiltro)}
-                    columns={columns}
-                    initialState={{ pagination: { paginationModel } }}
-                    pageSizeOptions={[10, 15]}
-                    sx={{ border: 0 }}
-
-                />}
-                {!cliente && !tecnico && !dataFiltro && data &&
-                    <DataGrid
-                        key={data.id}
-                        rows={data}
-                        columns={columns}
-                        initialState={{ pagination: { paginationModel } }}
-                        pageSizeOptions={[10, 15]}
-                        sx={{ border: 0 }}
-
-                    />}
-                {tecnico && dataFiltro && <DataGrid
-                    key={data.id}
-                    rows={data.filter((item) => { return item.data === dataFiltro && item.nomeEquipeTecnica === tecnico.label })}
-                    columns={columns}
-                    initialState={{ pagination: { paginationModel } }}
-                    pageSizeOptions={[10, 15]}
-                    sx={{ border: 0 }}
-
-                />}
-                {!tecnico && !dataFiltro && cliente && <DataGrid
-                    key={data.id}
-                    rows={data.filter((item) => { return item.codigo === parseInt(cliente) })}
-                    columns={columns}
-                    initialState={{ pagination: { paginationModel } }}
-                    pageSizeOptions={[10, 15]}
-                    sx={{ border: 0 }}
-
-                />}
+                />
             </Paper>
-        </DivEstilizada >
-
+        </Box>
     );
-}
+};
 
-export default DataTable
+export default DataTable;

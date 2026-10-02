@@ -1,6 +1,7 @@
 import * as React from 'react';
 import TextField from '@mui/material/TextField';
 import Autocomplete from '@mui/material/Autocomplete';
+import { useQuery } from '@tanstack/react-query';
 import Api from '../../Services/Api';
 
 const UseApi = Api();
@@ -18,24 +19,22 @@ const FieldAutoComplet = ({
     onInputValueChange,
     sx
 }) => {
-
-    const [data, setData] = React.useState([]);
-
-    React.useEffect(() => {
-        const fetchData = async () => {
-            if (!endpoint) return;
-
+    const { data: rawData = [] } = useQuery({
+        queryKey: ['fieldAutocomplete', endpoint],
+        queryFn: async () => {
             try {
                 const response = await UseApi(`${endpoint}`);
-                setData(response);
+                return Array.isArray(response) ? response : [];
             } catch (error) {
-                console.error('Erro ao buscar dados:', error);
+                console.error('Erro ao buscar dados do autocomplete:', error);
+                return [];
             }
-        };
+        },
+        enabled: Boolean(endpoint),
+        staleTime: 1000 * 60 * 5,
+    });
 
-        fetchData();
-    }, [endpoint, UseApi]); // Dependências adequadas
-
+    const data = Array.isArray(rawData) ? rawData : [];
 
     return (
         <>
@@ -114,6 +113,6 @@ const FieldAutoComplet = ({
             }
         </>
     );
-}
+};
 
-export default FieldAutoComplet
+export default FieldAutoComplet;

@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Fab, FormControl, IconButton, InputAdornment, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material"
+import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Fab, FormControl, IconButton, InputAdornment, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material"
 import FieldAutoComplet from "../../Componentes/FieldAutoComplet"
 import TextoInput from "../../Componentes/TextoInput"
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -485,13 +485,24 @@ const AtividadesComercial = ({ segmento = 'ATIVIDADE', mode = 'cadastro' }) => {
                 field: 'status',
                 headerName: 'Status',
                 width: 140,
-                renderCell: (params) => (
-                    <Chip
-                        size="small"
-                        color={params.row.requerAtencao ? 'error' : (statusPresentation[params.value]?.color || 'default')}
-                        label={params.row.requerAtencao ? 'Revisar situacao' : (statusPresentation[params.value]?.label || params.value || 'Lead aberto')}
-                    />
-                ),
+                renderCell: (params) => {
+                    const isAttention = params.row.requerAtencao;
+                    const colorKey = statusPresentation[params.value]?.color;
+                    const color = isAttention
+                        ? 'error.main'
+                        : colorKey === 'success'
+                        ? 'success.main'
+                        : colorKey === 'warning'
+                        ? 'warning.main'
+                        : colorKey === 'error'
+                        ? 'error.main'
+                        : 'text.primary';
+                    return (
+                        <Typography variant="body2" fontWeight={700} sx={{ color }}>
+                            {isAttention ? 'Revisar situacao' : (statusPresentation[params.value]?.label || params.value || 'Lead aberto')}
+                        </Typography>
+                    );
+                },
             },
             { field: 'codigoCliente', headerName: 'Codigo cliente', width: 130 },
             { field: 'numeroContratoRbx', headerName: 'Contrato RBX', width: 140 },

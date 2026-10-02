@@ -1,18 +1,9 @@
-import { useState } from "react"
-import FieldAutoComplet from "../../../Componentes/FieldAutoComplet"
-import { Button, Typography } from "@mui/material"
-import TextoInput from "../../../Componentes/TextoInput"
-import styled from "styled-components"
-import Api from "../../../Services/Api"
-
-const FormularioStyled = styled.form`
-    .sub-area{
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 32px;
-        margin-top: 32px;
-    }
-`
+import { useState } from "react";
+import FieldAutoComplet from "../../../Componentes/FieldAutoComplet";
+import { Box, Button, Typography } from "@mui/material";
+import TextoInput from "../../../Componentes/TextoInput";
+import Api from "../../../Services/Api";
+import { useNotification } from "../../../Componentes/NotificationProvider";
 
 const portas = [
     { id: 1, label: "1" },
@@ -44,110 +35,126 @@ const portas = [
 const UseApi = Api();
 
 const CadastroCto = () => {
-
-    const [olt, setOlt] = useState('')
-    const [oltInput, setOltInput] = useState('')
-    const [nomeCto, setNomeCto] = useState('')
-    const [latidude, setLatidude] = useState('')
-    const [longitude, setLongitude] = useState('')
-    const [porta, setPorta] = useState('')
-    const [portaInput, setPortaInput] = useState('')
+    const { showSuccess, showError, showWarning } = useNotification();
+    const [olt, setOlt] = useState('');
+    const [oltInput, setOltInput] = useState('');
+    const [nomeCto, setNomeCto] = useState('');
+    const [latidude, setLatidude] = useState('');
+    const [longitude, setLongitude] = useState('');
+    const [porta, setPorta] = useState('');
+    const [portaInput, setPortaInput] = useState('');
 
     const cadastrarCto = async (e) => {
-        e.preventDefault()
+        e.preventDefault();
+        if (!olt?.id) {
+            showWarning('Por favor, selecione uma OLT.');
+            return;
+        }
+        if (!porta?.id) {
+            showWarning('Por favor, selecione a quantidade de portas.');
+            return;
+        }
+
         const form = {
             idOlt: olt.id,
             nomeCto,
             portas: porta.id,
             latidude,
-            longitude
-        }
+            longitude,
+        };
 
         try {
             const response = await UseApi(`olt/cto`, 'POST', form);
-            console.log(response)
             if (!response) {
                 throw new Error('Erro ao enviar o formulário');
             }
 
-            setLatidude('')
-            setLongitude('')
-            setNomeCto('')
-            setPorta('')
-            setPortaInput('')
-
-        }
-        catch (error) {
+            showSuccess(`CTO "${nomeCto}" cadastrada com sucesso!`);
+            setLatidude('');
+            setLongitude('');
+            setNomeCto('');
+            setPorta('');
+            setPortaInput('');
+        } catch (error) {
             console.error('Erro na requisição:', error);
-
+            showError(error.message || 'Erro ao cadastrar CTO.');
         }
-    }
+    };
 
-    return <FormularioStyled onSubmit={(e) => cadastrarCto(e)}>
-        <Typography component={"h1"}>
-            Selecione a OLT
-        </Typography>
-        <FieldAutoComplet
-            endpoint={'olt'}
-            label={"OLT"}
-            aoAlterado={setOlt}
-            onInputValueChange={setOltInput}
-            valor={olt}
-            inputValue={oltInput}
-        />
-        <div className="sub-area">
-            <div>
-                <Typography component={"h3"}>
-                    Informe o nome da CTO
-                </Typography>
-                <TextoInput
-                    labelProp={"Nome da CTO"}
-                    aoAlterado={(e) => setNomeCto(e.target.value)}
-                    valor={nomeCto}
-                    obrigatorio
-                    sx={{width : '100%'}}
-                />
-            </div>
-            <div>
-                <Typography component={"h3"}>
-                    Quantas portas?
-                </Typography>
-                <FieldAutoComplet
-                    dadosProcedimento={portas}
-                    label={"Selecione a quantidade de portas"}
-                    aoAlterado={setPorta}
-                    onInputValueChange={setPortaInput}
-                    valor={porta}
-                    inputValue={portaInput}
-                />
-            </div>
-            <div>
-                <Typography component={"h3"}>
-                    Informe Latitude
-                </Typography>
-                <TextoInput
-                    labelProp={"Latidude"}
-                    aoAlterado={(e) => setLatidude(e.target.value)}
-                    valor={latidude}
-                    sx={{width : '100%'}}
-                />
-            </div>
-            <div>
-                <Typography component={"h3"}>
-                    Informe a Longitude
-                </Typography>
-                <TextoInput
-                    labelProp={"Longitude"}
-                    aoAlterado={(e) => setLongitude(e.target.value)}
-                    valor={longitude}
-                    sx={{width : '100%'}}
-                />
-            </div>
-        </div>
-        <Button type="submit" variant="outlined" sx={{ marginTop: 4 }}>
-            Cadastrar
-        </Button>
-    </FormularioStyled>
-}
+    return (
+        <Box component="form" onSubmit={cadastrarCto}>
+            <Typography variant="h6" fontWeight={700} gutterBottom>
+                Selecione a OLT
+            </Typography>
+            <FieldAutoComplet
+                endpoint="olt"
+                label="OLT"
+                aoAlterado={setOlt}
+                onInputValueChange={setOltInput}
+                valor={olt}
+                inputValue={oltInput}
+            />
+            <Box
+                sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+                    gap: 3,
+                    mt: 3,
+                }}
+            >
+                <Box>
+                    <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                        Informe o nome da CTO
+                    </Typography>
+                    <TextoInput
+                        labelProp="Nome da CTO"
+                        aoAlterado={(e) => setNomeCto(e.target.value)}
+                        valor={nomeCto}
+                        obrigatorio
+                        sx={{ width: '100%' }}
+                    />
+                </Box>
+                <Box>
+                    <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                        Quantas portas?
+                    </Typography>
+                    <FieldAutoComplet
+                        dadosProcedimento={portas}
+                        label="Selecione a quantidade de portas"
+                        aoAlterado={setPorta}
+                        onInputValueChange={setPortaInput}
+                        valor={porta}
+                        inputValue={portaInput}
+                    />
+                </Box>
+                <Box>
+                    <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                        Informe Latitude
+                    </Typography>
+                    <TextoInput
+                        labelProp="Latitude"
+                        aoAlterado={(e) => setLatidude(e.target.value)}
+                        valor={latidude}
+                        sx={{ width: '100%' }}
+                    />
+                </Box>
+                <Box>
+                    <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                        Informe a Longitude
+                    </Typography>
+                    <TextoInput
+                        labelProp="Longitude"
+                        aoAlterado={(e) => setLongitude(e.target.value)}
+                        valor={longitude}
+                        sx={{ width: '100%' }}
+                    />
+                </Box>
+            </Box>
+            <Button type="submit" variant="contained" sx={{ mt: 3 }}>
+                Cadastrar
+            </Button>
+        </Box>
+    );
+};
 
-export default CadastroCto
+export default CadastroCto;

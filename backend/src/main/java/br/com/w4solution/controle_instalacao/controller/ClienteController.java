@@ -39,7 +39,7 @@ public class ClienteController {
 
     @PutMapping
     @Transactional
-    ResponseEntity<ClienteDTO> atualizarCliente(@RequestBody AtualizarClienteDTO dados){
+    ResponseEntity<ClienteDTO> atualizarCliente(@RequestBody @Valid AtualizarClienteDTO dados){
         try {
             var cliente = service.atualizarCliente(dados);
             return ResponseEntity.ok().body(cliente);

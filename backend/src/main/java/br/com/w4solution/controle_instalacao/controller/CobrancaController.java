@@ -10,6 +10,7 @@ import br.com.w4solution.controle_instalacao.domain.usuarios.UserRole;
 import br.com.w4solution.controle_instalacao.services.cobranca.CobrancaService;
 import br.com.w4solution.controle_instalacao.services.cobranca.FaturamentoMensalService;
 import br.com.w4solution.controle_instalacao.services.cobranca.MetaCobrancaMensalService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -148,14 +149,14 @@ public class CobrancaController {
 
     @PutMapping("/painel/metas")
     @PreAuthorize(CHARGING_ACCESS)
-    public ResponseEntity<?> salvarMetas(@RequestParam LocalDate mes, @RequestBody MetaCobrancaMensalDTO dto,
+    public ResponseEntity<?> salvarMetas(@RequestParam LocalDate mes, @Valid @RequestBody MetaCobrancaMensalDTO dto,
                                          @AuthenticationPrincipal Usuario usuario) {
         return ResponseEntity.ok(metaCobrancaMensalService.salvar(mes, dto, nomeUsuario(usuario)));
     }
 
     @PostMapping
     @PreAuthorize(CHARGING_ACCESS)
-    public ResponseEntity<?> cadastrar(@RequestBody CobrancaCadastroDTO dto, @AuthenticationPrincipal Usuario usuario) {
+    public ResponseEntity<?> cadastrar(@Valid @RequestBody CobrancaCadastroDTO dto, @AuthenticationPrincipal Usuario usuario) {
         return ResponseEntity.ok(service.cadastrar(dto, nomeUsuario(usuario)));
     }
 
@@ -163,7 +164,7 @@ public class CobrancaController {
     @PreAuthorize(CHARGING_ACCESS)
     public ResponseEntity<?> atualizar(
             @PathVariable Long id,
-            @RequestBody CobrancaCadastroDTO dto,
+            @Valid @RequestBody CobrancaCadastroDTO dto,
             @AuthenticationPrincipal Usuario usuario
     ) {
         return ResponseEntity.ok(service.atualizar(id, dto, nomeUsuario(usuario), isAdmin(usuario), podeVerGeral(usuario)));
@@ -173,7 +174,7 @@ public class CobrancaController {
     @PreAuthorize(CHARGING_ACCESS)
     public ResponseEntity<?> acompanhar(
             @PathVariable Long id,
-            @RequestBody CobrancaAcompanhamentoDTO dto,
+            @Valid @RequestBody CobrancaAcompanhamentoDTO dto,
             @AuthenticationPrincipal Usuario usuario
     ) {
         return ResponseEntity.ok(service.acompanhar(id, dto, nomeUsuario(usuario), isAdmin(usuario), podeVerGeral(usuario)));
@@ -193,7 +194,7 @@ public class CobrancaController {
 
     @PutMapping("/configuracao")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> atualizarConfiguracao(@RequestBody CobrancaConfiguracaoDTO dto) {
+    public ResponseEntity<?> atualizarConfiguracao(@Valid @RequestBody CobrancaConfiguracaoDTO dto) {
         return ResponseEntity.ok(service.atualizarConfiguracao(dto));
     }
 
@@ -201,7 +202,7 @@ public class CobrancaController {
     @PreAuthorize(CHARGING_ACCESS)
     public ResponseEntity<?> excluir(
             @PathVariable Long id,
-            @RequestBody CobrancaExclusaoDTO dto,
+            @Valid @RequestBody CobrancaExclusaoDTO dto,
             @AuthenticationPrincipal Usuario usuario
     ) {
         return ResponseEntity.ok(service.excluir(id, dto, nomeUsuario(usuario), podeVerGeral(usuario)));

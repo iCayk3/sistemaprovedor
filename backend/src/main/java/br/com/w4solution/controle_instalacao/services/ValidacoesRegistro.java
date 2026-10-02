@@ -116,8 +116,6 @@ public class ValidacoesRegistro {
                     dados.observacao(),
                     dados.login(),
                     dados.mac());
-
-            System.out.println(registro + "else");
         }
 
         return registro;

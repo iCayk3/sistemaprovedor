@@ -6,7 +6,6 @@ import {
     Alert,
     Box,
     Button,
-    Chip,
     CircularProgress,
     IconButton,
     MenuItem,
@@ -40,13 +39,6 @@ const rolesDisponiveis = [
     "COBRANCA",
     "GUEST",
 ];
-
-const statusColors = {
-    ATIVO: "success",
-    PENDENTE: "warning",
-    BLOQUEADO: "error",
-    INATIVO: "default",
-};
 
 const ManagementUser = () => {
     const [usuarios, setUsuarios] = useState([]);
@@ -332,7 +324,9 @@ const ManagementUser = () => {
                                             </Stack>
                                         ) : (
                                             <Stack direction="row" alignItems="center" spacing={1}>
-                                                <Chip size="small" variant="outlined" label={user.role || "GUEST"} />
+                                                <Typography variant="body2" fontWeight={700} color="text.secondary">
+                                                    {user.role || "GUEST"}
+                                                </Typography>
                                                 <IconButton size="small" onClick={() => startRoleEdit(user)}>
                                                     <EditRoundedIcon fontSize="small" />
                                                 </IconButton>
@@ -340,7 +334,17 @@ const ManagementUser = () => {
                                         )}
                                     </TableCell>
                                     <TableCell>
-                                        <Chip size="small" color={statusColors[user.status] || "default"} label={user.status} />
+                                        <Typography
+                                            variant="body2"
+                                            fontWeight={700}
+                                            color={
+                                                user.status === 'ATIVO' ? 'success.main' :
+                                                user.status === 'PENDENTE' ? 'warning.main' :
+                                                user.status === 'BLOQUEADO' ? 'error.main' : 'text.secondary'
+                                            }
+                                        >
+                                            {user.status}
+                                        </Typography>
                                     </TableCell>
                                     <TableCell align="center">
                                         <Switch
@@ -389,12 +393,13 @@ const ManagementUser = () => {
                                             </Stack>
                                         ) : (
                                             <Stack direction="row" alignItems="center" spacing={1}>
-                                                <Chip
-                                                    size="small"
-                                                    color={user.chaveApiRbxConfigurada && user.usuarioRbx ? "success" : "warning"}
-                                                    variant="outlined"
-                                                    label={user.chaveApiRbxConfigurada && user.usuarioRbx ? `Configurada • ${user.usuarioRbx}` : "Não configurada"}
-                                                />
+                                                <Typography
+                                                    variant="body2"
+                                                    fontWeight={600}
+                                                    color={user.chaveApiRbxConfigurada && user.usuarioRbx ? "success.main" : "warning.main"}
+                                                >
+                                                    {user.chaveApiRbxConfigurada && user.usuarioRbx ? `Configurada • ${user.usuarioRbx}` : "Não configurada"}
+                                                </Typography>
                                                 <IconButton size="small" color="primary" onClick={() => startRbxEdit(user)} aria-label={`Configurar RBX de ${user.usuario}`}>
                                                     <VpnKeyRoundedIcon fontSize="small" />
                                                 </IconButton>

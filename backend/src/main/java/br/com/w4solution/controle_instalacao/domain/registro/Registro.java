@@ -17,7 +17,11 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 @Entity
-@Table(name = "registros")
+@Table(name = "registros", indexes = {
+        @Index(name = "idx_registros_data_registro", columnList = "dataRegistro"),
+        @Index(name = "idx_registros_equipe_tecnica", columnList = "equipeTecnicaRegistro"),
+        @Index(name = "idx_registros_login", columnList = "login")
+})
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter

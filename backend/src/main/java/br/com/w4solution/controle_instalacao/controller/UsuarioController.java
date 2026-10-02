@@ -14,12 +14,10 @@ import br.com.w4solution.controle_instalacao.dto.usuarios.UsuarioCadastroDTO;
 import br.com.w4solution.controle_instalacao.dto.usuarios.UsuarioCheckDTO;
 import br.com.w4solution.controle_instalacao.dto.usuarios.UsuarioDTO;
 import br.com.w4solution.controle_instalacao.services.usuarios.UsuarioService;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -47,7 +45,7 @@ public class UsuarioController {
 
     @PostMapping
     @Transactional
-    public ResponseEntity<?> cadastrarUsuario(@RequestBody UsuarioCadastroDTO dados, UriComponentsBuilder uri) {
+    public ResponseEntity<?> cadastrarUsuario(@Valid @RequestBody UsuarioCadastroDTO dados, UriComponentsBuilder uri) {
         var usuario = service.cadastrarUsuario(dados);
         var path = uri.path("/{id}").buildAndExpand(usuario.id()).toUri();
         return ResponseEntity.created(path).body(usuario);
@@ -62,7 +60,7 @@ public class UsuarioController {
     }
 
     @PostMapping("/logar")
-    public ResponseEntity<DadosToken> logar(@RequestBody DadosAutenticao dados, HttpServletResponse response) {
+    public ResponseEntity<DadosToken> logar(@Valid @RequestBody DadosAutenticao dados, HttpServletResponse response) {
         var token = service.logar(dados, response);
         return ResponseEntity.ok(token);
     }
@@ -70,18 +68,13 @@ public class UsuarioController {
     @PostMapping("/logout")
     @PreAuthorize(AUTHENTICATED)
     public ResponseEntity<Void> logout(HttpServletResponse response) {
-        var cookie = org.springframework.http.ResponseCookie.from("token", "")
-                .httpOnly(true)
-                .path("/")
-                .sameSite("Lax")
-                .maxAge(0)
-                .build();
+        var cookie = service.criarCookieToken("", java.time.Duration.ZERO);
         response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, cookie.toString());
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/userchek")
-    public ResponseEntity<?> validarUsuario(@RequestBody UsuarioCheckDTO dados) {
+    public ResponseEntity<?> validarUsuario(@Valid @RequestBody UsuarioCheckDTO dados) {
         var ativado = service.checarUsuarioExistente(dados.usuario());
         return ResponseEntity.ok().body(ativado);
     }
@@ -90,6 +83,12 @@ public class UsuarioController {
     @PreAuthorize(AUTHENTICATED)
     public ResponseEntity<Void> validarToken() {
         return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/token/refresh")
+    public ResponseEntity<DadosToken> refreshToken(HttpServletRequest request, HttpServletResponse response) {
+        var dadosToken = service.renovarToken(request, response);
+        return ResponseEntity.ok(dadosToken);
     }
 
     @GetMapping("/me")
@@ -127,7 +126,7 @@ public class UsuarioController {
     }
 
     @PostMapping("/solicitaredefinirsenha")
-    public ResponseEntity<?> solicitarRedefinirSenha(@RequestBody RedefinirSenhaDTO dados) {
+    public ResponseEntity<?> solicitarRedefinirSenha(@Valid @RequestBody RedefinirSenhaDTO dados) {
         service.solicitarRedefinirSenha(dados);
         return ResponseEntity.ok().build();
     }
@@ -135,7 +134,7 @@ public class UsuarioController {
     @PutMapping("/redefinirsenha")
     @Transactional
     @PreAuthorize(ADMIN_ONLY)
-    public ResponseEntity<?> redefinirSenha(@RequestBody RedefinirSenhaDTO dados, HttpServletRequest request) {
+    public ResponseEntity<?> redefinirSenha(@Valid @RequestBody RedefinirSenhaDTO dados, HttpServletRequest request) {
         service.redefinirSenha(dados, request);
         return ResponseEntity.ok().build();
     }
@@ -143,7 +142,7 @@ public class UsuarioController {
     @PutMapping("/senha")
     @Transactional
     @PreAuthorize(AUTHENTICATED)
-    public ResponseEntity<?> trocarSenha(@RequestBody TrocaSenhaDTO senhas, HttpServletRequest request) {
+    public ResponseEntity<?> trocarSenha(@Valid @RequestBody TrocaSenhaDTO senhas, HttpServletRequest request) {
         service.trocarSenha(senhas, request);
         return ResponseEntity.ok().build();
     }
@@ -151,7 +150,7 @@ public class UsuarioController {
     @PutMapping("/statuschange")
     @Transactional
     @PreAuthorize(ADMIN_ONLY)
-    public ResponseEntity<?> alterarStatus(@RequestBody AlterarStatusDTO dados) {
+    public ResponseEntity<?> alterarStatus(@Valid @RequestBody AlterarStatusDTO dados) {
         service.alterarStatus(dados);
         return ResponseEntity.ok().build();
     }
@@ -159,7 +158,7 @@ public class UsuarioController {
     @PutMapping("/levelchange")
     @Transactional
     @PreAuthorize(ADMIN_ONLY)
-    public ResponseEntity<?> alterarPermissao(@RequestBody AlterarPermissao dados) {
+    public ResponseEntity<?> alterarPermissao(@Valid @RequestBody AlterarPermissao dados) {
         service.alterarPermissao(dados);
         return ResponseEntity.ok().build();
     }
@@ -175,14 +174,14 @@ public class UsuarioController {
     @PutMapping("/supervisor")
     @Transactional
     @PreAuthorize(ADMIN_ONLY)
-    public ResponseEntity<Void> alterarSupervisor(@RequestBody AlterarSupervisorDTO dados) {
+    public ResponseEntity<Void> alterarSupervisor(@Valid @RequestBody AlterarSupervisorDTO dados) {
         service.alterarSupervisor(dados);
         return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/integracao-rbx")
     @PreAuthorize(ADMIN_ONLY)
-    public ResponseEntity<UsuarioDTO> configurarIntegracaoRbx(@RequestBody ConfigurarIntegracaoRbxDTO dados) {
+    public ResponseEntity<UsuarioDTO> configurarIntegracaoRbx(@Valid @RequestBody ConfigurarIntegracaoRbxDTO dados) {
         return ResponseEntity.ok(service.configurarIntegracaoRbx(dados));
     }
 }

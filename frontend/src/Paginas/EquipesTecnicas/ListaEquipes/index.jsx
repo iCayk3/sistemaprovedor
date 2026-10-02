@@ -1,46 +1,48 @@
-import { Typography } from "@mui/material";
+import { Box, Paper, Stack, Typography } from "@mui/material";
 import Person4Icon from "@mui/icons-material/Person4";
-import styled from "styled-components";
 import Groups3Icon from '@mui/icons-material/Groups3';
-
-// Container para colocar as equipes lado a lado
-const EquipesContainer = styled.div`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 32px; /* Espaçamento entre as equipes */
-`;
-
-// Cada equipe com seus técnicos
-const EquipeBox = styled.div`
-    padding: 16px;
-    border-radius: 8px;
-    min-width: 200px;
-`;
-
-const TecnicoBox = styled.div`
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 8px;
-`;
 
 const ListaEquipe = ({ rows }) => {
     return (
-        <EquipesContainer>
+        <Box
+            sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
+                gap: 3,
+            }}
+        >
             {rows && rows.map((dados) => (
-                <EquipeBox key={dados.id}>
-                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        <Groups3Icon sx={{marginRight : 1}}/> {dados.label}
+                <Paper
+                    variant="outlined"
+                    key={dados.id}
+                    sx={{ p: 2, borderRadius: 2 }}
+                >
+                    <Typography
+                        variant="h6"
+                        fontWeight={700}
+                        sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}
+                    >
+                        <Groups3Icon sx={{ mr: 1, color: 'primary.main' }} /> {dados.label}
                     </Typography>
-                    {dados.tecnicos && dados.tecnicos.map((t) => (
-                        <TecnicoBox key={t.id}>
-                            <Person4Icon />
-                            <Typography variant="body1">{t.nome}</Typography>
-                        </TecnicoBox>
-                    ))}
-                </EquipeBox>
+                    <Stack spacing={1}>
+                        {dados.tecnicos && dados.tecnicos.map((t) => (
+                            <Box
+                                key={t.id}
+                                sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 1,
+                                    py: 0.5,
+                                }}
+                            >
+                                <Person4Icon fontSize="small" color="action" />
+                                <Typography variant="body2">{t.nome}</Typography>
+                            </Box>
+                        ))}
+                    </Stack>
+                </Paper>
             ))}
-        </EquipesContainer>
+        </Box>
     );
 };
 

@@ -3,11 +3,12 @@ import FieldAutoComplet from '../FieldAutoComplet';
 import BasicDatePicker from '../BasicDatePicker';
 import dayjs from 'dayjs';
 import TextoInput from '../TextoInput';
+import { Button } from '@mui/material';
 import { styled } from '@mui/material/styles';
-import AlertAppAutoHide from '../AlertAppAutoHide';
+import { useNotification } from '../NotificationProvider';
 import Api from '../../Services/Api';
 
-const DivFormEstilizada = styled('div')(({ theme }) => ({
+const DivFormEstilizada = styled('div')(() => ({
   width: '100%',
   // padding: '10px',
   borderRadius: '8px',
@@ -94,23 +95,21 @@ const FormularioRegistro = ({ onFormSubmit, procedimentos }) => {
   const [localidade, setLocalidade] = useState('');
   const [observacao, setObservacao] = useState('');
   const [dataregistro, setData] = useState('');
-  const [registroOk, setRegistroOk] = useState(false)
-  const [registroBad, setRegistroBad] = useState(false)
+  const { showSuccess, showError } = useNotification();
 
   const today = new Date();
 
   const selectData = (value) => {
     if (value === null) {
-      setData(dataregistro)
+      setData(dataregistro);
     } else {
       try {
-        setData(value.toISOString().slice(0, 10))
-      } catch (e) {
-        setData(dataregistro)
+        setData(value.toISOString().slice(0, 10));
+      } catch {
+        setData(dataregistro);
       }
-
     }
-  }
+  };
 
   useEffect(() => {
     const today = new Date();
@@ -142,10 +141,10 @@ const FormularioRegistro = ({ onFormSubmit, procedimentos }) => {
         throw new Error('Erro ao enviar o formulário');
       }
 
-
-      setCodigo('')
-      setLogin('')
-      setMac('')
+      showSuccess('Registro cadastrado com sucesso!');
+      setCodigo('');
+      setLogin('');
+      setMac('');
       setOlt('');
       setCto('');
       setPorta('');
@@ -155,17 +154,11 @@ const FormularioRegistro = ({ onFormSubmit, procedimentos }) => {
       setCtoAntiga('');
       setLocalidade('');
       setObservacao('');
-      setRegistroOk(true)
     } catch (error) {
-      setRegistroBad(true)
       console.error('Erro na requisição:', error);
+      showError(error.message || 'Algo deu errado no cadastro!');
     }
   };
-
-  const fecharAlerta = () => {
-    setRegistroOk(false)
-    setRegistroBad(false)
-  }
 
   return (
     <DivFormEstilizada>
@@ -282,9 +275,15 @@ const FormularioRegistro = ({ onFormSubmit, procedimentos }) => {
             <BasicDatePicker aoAlterado={(value) => selectData(value)} label={"Selecione a data"} valor={dayjs(dataregistro)} />
           </div>
         </div>
-        <button type="submit" className="submit-button">Cadastrar</button>
-        {registroOk && <AlertAppAutoHide color={"success"} texto={"Registro realizado com sucesso"} onclose={() => fecharAlerta()} animationDuration={200} />}
-        {registroBad && <AlertAppAutoHide color={"danger"} texto={"Algo deu errado!"} onclose={() => fecharAlerta()} animationDuration={200} />}
+        <Button
+          type="submit"
+          variant="contained"
+          fullWidth
+          size="large"
+          sx={{ mt: 3, py: 1.2, fontWeight: 700, borderRadius: 2 }}
+        >
+          Cadastrar Registro
+        </Button>
       </form>
     </DivFormEstilizada>
   );

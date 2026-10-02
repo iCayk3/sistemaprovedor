@@ -13,10 +13,12 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import AccountCircle from '@mui/icons-material/AccountCircle';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import Api from '../../Services/Api';
+import { useAuth } from '../../Componentes/AuthProvider';
 
 const sxInputs = {
   mb: 2,
@@ -89,6 +91,8 @@ const CustomPasswordField = React.memo(({ value, onChange, codigoErro }) => {
 const UseApi = Api();
 
 const Login = () => {
+  const navigate = useNavigate();
+  const { login } = useAuth();
   const [usuario, setUsuario] = React.useState('');
   const [senha, setSenha] = React.useState('');
   const [erroCode, setErrorCode] = React.useState(200);
@@ -121,7 +125,8 @@ const Login = () => {
     try {
       const response = await UseApi('usuario/logar', 'POST', { usuario, senha });
       localStorage.setItem('user', JSON.stringify(response.user));
-      window.location.href = '/';
+      login();
+      navigate('/', { replace: true });
     } catch (error) {
       const status = error?.status ? `Erro ${error.status}: ` : '';
       const message = error?.message || 'Nao foi possivel conectar ao backend.';
@@ -200,10 +205,10 @@ const Login = () => {
             {loading ? 'Entrando...' : 'Entrar'}
           </Button>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
-            <Link href="/register" variant="body2" sx={{ color: '#00e5ff' }}>
+            <Link component={RouterLink} to="/register" variant="body2" sx={{ color: '#00e5ff' }}>
               Cadastre-se
             </Link>
-            <Link href="/forgotpass" variant="body2" sx={{ color: '#00e5ff' }}>
+            <Link component={RouterLink} to="/forgotpass" variant="body2" sx={{ color: '#00e5ff' }}>
               Esqueceu sua senha?
             </Link>
           </Box>

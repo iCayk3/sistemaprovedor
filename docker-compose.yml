@@ -32,12 +32,19 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    extra_hosts:
+      - "sistema.solprovedor.com.br:45.166.31.202"
     environment:
       POSTGRES_HOST: db
       POSTGRES_DB: ${POSTGRES_DB:-controle_instalacao}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD obrigatorio}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET obrigatorio}
+      RBX_ENCRYPTION_KEY: ${RBX_ENCRYPTION_KEY:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-}
       LINK_RBX: ${LINK_RBX:?LINK_RBX obrigatorio}
       API_FRONTEND: ${API_FRONTEND:-http://localhost}
       API_KEY: ${API_KEY:?API_KEY obrigatorio}

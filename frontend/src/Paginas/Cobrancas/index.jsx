@@ -1,376 +1,68 @@
-import AddCircleRoundedIcon from '@mui/icons-material/AddCircleRounded';
-import DeleteRoundedIcon from '@mui/icons-material/DeleteRounded';
-import EditRoundedIcon from '@mui/icons-material/EditRounded';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
-import TimelineRoundedIcon from '@mui/icons-material/TimelineRounded';
-import { BarChart, PieChart } from '@mui/x-charts';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
-    Alert,
     Box,
     Button,
-    Chip,
-    CircularProgress,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    Divider,
-    IconButton,
-    MenuItem,
     Paper,
     Stack,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TablePagination,
-    TableRow,
     TextField,
     Typography,
 } from '@mui/material';
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import ChartValueList from '../../Componentes/ChartValueList';
-import ExportDashboardPdfButton from '../../Componentes/ExportDashboardPdfButton';
+import AddCircleRoundedIcon from '@mui/icons-material/AddCircleRounded';
 import Api from '../../Services/Api';
+import ExportDashboardPdfButton from '../../Componentes/ExportDashboardPdfButton';
+import { useNotification } from '../../Componentes/NotificationProvider';
 import {
-    dashboardChartSx,
     dashboardHeaderSx,
     dashboardInputSx,
-    dashboardMetricSx,
-    dashboardMutedTextSx,
     dashboardPalette,
-    dashboardPanelSx,
     dashboardShellSx,
-    dashboardSubtleTextSx,
 } from '../../Utils/DashboardTheme';
+import {
+    allowsOriginalValueChange,
+    compactChartEntries,
+    countBy,
+    currentMonthIso,
+    defaultActionOptions,
+    defaultStatusOptions,
+    emptyForm,
+    formatConfiguredOption,
+    isClosedStatus,
+    isFinalStatus,
+    isPaidStatus,
+    isPromiseStatus,
+    isSameMonth,
+    needsSevenDayReminder,
+    normalizeCharge,
+    normalizeClientCode,
+    normalizeLabel,
+    normalizeRbxClient,
+    sumBy,
+    todayIso,
+    toForm,
+} from './cobrancasUtils';
+import CobrancaDeleteDialog from './CobrancaDeleteDialog';
+import CobrancaFormDialog from './CobrancaFormDialog';
+import CobrancasDashboardCharts from './CobrancasDashboardCharts';
+import CobrancasTable from './CobrancasTable';
+import FilaInadimplentesTable from './FilaInadimplentesTable';
 
 const UseApi = Api();
 
-const defaultStatusOptions = ['Cobrança emitida', 'Promessa de pagamento', 'Sem retorno', 'Pago', 'Cancelado'];
-const defaultActionOptions = [
-    'Contato',
-    'Sem retorno',
-    'Promessa de pagamento',
-    'Acordo',
-    'Segunda via enviada',
-    'Contestacao',
-    'Negativacao',
-    'Pago',
-];
-const clientGroupNames = {
-    9: 'PADRAO',
-    10: 'SJP',
-    11: 'PMV',
-    13: 'STN',
-    15: 'QT',
-    16: 'BV',
-    17: 'SEM COBRANCA',
-    26: 'MB',
-    32: 'MRC',
-    33: 'MRP',
-    34: 'SAL',
-    36: 'RADIO - PIRABAS',
-    40: 'TESTE',
-    41: 'PRE',
-    42: 'CON',
-    43: 'SOL',
-};
-
-const emptyForm = {
-    acao: 'Contato',
-    codigoCliente: '',
-    numeroContrato: '',
-    boletoSelecionado: '',
-    cliente: '',
-    grupoCliente: '',
-    data: new Date().toISOString().slice(0, 10),
-    dataVencimento: '',
-    dataPromessa: '',
-    valor: '',
-    valorPago: '',
-    status: 'Cobrança emitida',
-    observacao: '',
-};
-
-const pageGridSx = {
-    display: 'grid',
-    gap: 2,
-    gridTemplateColumns: {
-        xs: '1fr',
-        md: 'repeat(2, minmax(0, 1fr))',
-        lg: 'repeat(4, minmax(0, 1fr))',
-    },
-};
-
-const formGridSx = {
-    display: 'grid',
-    gap: 2,
-    gridTemplateColumns: {
-        xs: '1fr',
-        sm: 'repeat(2, minmax(0, 1fr))',
-        md: 'repeat(6, minmax(0, 1fr))',
-    },
-};
-
-const fieldSpan = {
-    third: { xs: 'span 1', sm: 'span 1', md: 'span 2' },
-    half: { xs: 'span 1', sm: 'span 1', md: 'span 3' },
-    full: { xs: 'span 1', sm: 'span 2', md: 'span 6' },
-};
-
-function normalizeCharge(charge) {
-    return {
-        id: charge.id,
-        protocol: charge.protocolo,
-        action: charge.acao,
-        clientCode: charge.codigoCliente,
-        contractNumber: charge.numeroContrato,
-        documentNumber: charge.documentoTitulo,
-        client: charge.cliente,
-        clientGroup: formatClientGroup(charge.grupoCliente),
-        date: charge.data,
-        dueDate: charge.dataVencimento,
-        promiseDate: charge.dataPromessa,
-        value: Number(charge.valor || 0),
-        paidValue: charge.valorPago == null ? null : Number(charge.valorPago),
-        status: charge.status || 'Cobrança emitida',
-        serviceSituation: charge.situacaoAtendimento || (isFinalStatus(charge.status) ? 'Fechada' : 'Aberta'),
-        notes: charge.observacao,
-        createdAt: charge.criadoEm,
-        updatedAt: charge.atualizadoEm,
-        closedAt: charge.fechadoEm,
-        createdBy: charge.criadoPor,
-        updatedBy: charge.atualizadoPor,
-        lastUser: charge.ultimoUsuario || charge.atualizadoPor || charge.criadoPor || '',
-        automatic: Boolean(charge.geradaAutomaticamente),
-        responsible: charge.responsavel || '',
-        capturedAt: charge.capturadoEm,
-        rbxStatus: charge.statusIntegracaoRbx || '',
-        rbxTicket: charge.atendimentoRbxNumero || '',
-        editable: charge.editavel !== false,
-        excluded: Boolean(charge.excluida),
-        excludedAt: charge.excluidoEm,
-        excludedBy: charge.excluidoPor,
-        exclusionReason: charge.motivoExclusao,
-        history: Array.isArray(charge.historico)
-            ? charge.historico.map((item) => ({
-                id: item.id,
-                previousStatus: item.statusAnterior,
-                nextStatus: item.statusNovo,
-                previousValue: Number(item.valorAnterior || 0),
-                nextValue: Number(item.valorNovo || 0),
-                notes: item.observacao,
-                user: item.usuario,
-                createdAt: item.criadoEm,
-            }))
-            : [],
-    };
-}
-
-function toForm(charge) {
-    return {
-        acao: charge?.action || 'Contato',
-        codigoCliente: charge?.clientCode || '',
-        numeroContrato: charge?.contractNumber || '',
-        boletoSelecionado: charge?.documentNumber || '',
-        cliente: charge?.client || '',
-        grupoCliente: charge?.clientGroup || '',
-        data: charge?.date || new Date().toISOString().slice(0, 10),
-        dataVencimento: charge?.dueDate || '',
-        dataPromessa: charge?.promiseDate || '',
-        valor: charge?.value ? String(charge.value) : '',
-        valorPago: charge?.paidValue != null ? String(charge.paidValue) : '',
-        status: charge?.status || 'Cobrança emitida',
-        observacao: charge?.notes || '',
-    };
-}
-
-function formatCurrency(value) {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
-}
-
-function formatConfiguredOption(value, defaults) {
-    const text = String(value || '').trim();
-    const known = defaults.find((item) => item.localeCompare(text, 'pt-BR', { sensitivity: 'base' }) === 0);
-    if (known) return known;
-    return text ? `${text.charAt(0).toUpperCase()}${text.slice(1).toLowerCase()}` : '';
-}
-
-function formatDate(value) {
-    if (!value) return 'Nao informado';
-    return new Date(`${value}T00:00:00`).toLocaleDateString('pt-BR');
-}
-
-function isFinalStatus(status) {
-    return ['PAGO', 'FECHADO', 'CANCELADO'].includes(String(status || '').trim().toUpperCase());
-}
-
-function isClosedStatus(status) {
-    return String(status || '').trim().toUpperCase() === 'FECHADO';
-}
-
-function isPromiseStatus(status) {
-    return String(status || '').trim().toUpperCase() === 'PROMESSA DE PAGAMENTO';
-}
-
-function isPaidStatus(status) {
-    return String(status || '').trim().toUpperCase() === 'PAGO';
-}
-
-function allowsOriginalValueChange(status) {
-    return ['NEGOCIACAO', 'NEGOCIAÇÃO', 'EM NEGOCIACAO', 'EM NEGOCIAÇÃO', 'PROMESSA DE PAGAMENTO']
-        .includes(String(status || '').trim().toUpperCase());
-}
-
-function todayIso() {
-    return new Date().toISOString().slice(0, 10);
-}
-
-function currentMonthIso() {
-    return new Date().toISOString().slice(0, 7);
-}
-
-function isSameMonth(value, month) {
-    if (!value || !month) return false;
-    return String(value).slice(0, 7) === month;
-}
-
-function needsSevenDayReminder(charge) {
-    if (charge.excluded || charge.serviceSituation === 'Fechada') return false;
-    const lastMovement = charge.updatedAt || charge.createdAt;
-    if (!lastMovement) return false;
-    const limit = new Date();
-    limit.setDate(limit.getDate() - 7);
-    return new Date(lastMovement) <= limit;
-}
-
-function readClientField(cliente, lowerKey, upperKey) {
-    return cliente?.[lowerKey] ?? cliente?.[upperKey] ?? '';
-}
-
-function normalizeClientCode(value) {
-    return String(value ?? '').replace(/\D/g, '');
-}
-
-function formatClientGroup(group) {
-    const normalized = String(group || '').trim();
-    return clientGroupNames[normalized] || normalized;
-}
-
-function normalizeRbxClient(response) {
-    const payload = response?.data || response;
-    const client = Array.isArray(payload) ? payload[0] : payload?.cliente || payload;
-    const contratosPayload = Array.isArray(payload?.contratos) ? payload.contratos : [];
-
-    if (!client || typeof client !== 'object') {
-        return null;
-    }
-
-    return {
-        codigo: readClientField(client, 'codigo', 'Codigo'),
-        nome: readClientField(client, 'nome', 'Nome'),
-        cpfCnpj: readClientField(client, 'cpfCnpj', 'CNPJ_CNPF'),
-        sigla: readClientField(client, 'sigla', 'Sigla'),
-        grupo: formatClientGroup(readClientField(client, 'grupoNome', 'Grupo_Nome') || readClientField(client, 'grupo', 'Grupo')),
-        situacao: readClientField(client, 'situacao', 'Situacao'),
-        contratos: contratosPayload.map((contrato) => ({
-            numero: readClientField(contrato, 'numero', 'Numero'),
-            plano: readClientField(contrato, 'plano', 'Plano'),
-            situacao: readClientField(contrato, 'situacao', 'Situacao'),
-            boletos: (Array.isArray(contrato.boletos) ? contrato.boletos : []).map((boleto, index) => ({
-                id: readClientField(boleto, 'documento', 'Documento') || `${readClientField(boleto, 'vencimento', 'Vencimento')}-${index}`,
-                documento: readClientField(boleto, 'documento', 'Documento'),
-                valor: Number(readClientField(boleto, 'valor', 'Valor') || 0),
-                vencimento: readClientField(boleto, 'vencimento', 'Vencimento'),
-            })),
-        })),
-    };
-}
-
-function formatClientStatus(status) {
-    const normalized = String(status || '').trim().toUpperCase();
-    const statuses = {
-        A: 'Ativo',
-        B: 'Bloqueado',
-        N: 'Inativo',
-        S: 'Suspenso',
-    };
-
-    return statuses[normalized] || status || '';
-}
-
-function normalizeLabel(value, fallback = 'Nao informado') {
-    return String(value || '').trim() || fallback;
-}
-
-function countBy(items, selector) {
-    return items.reduce((acc, item) => {
-        const key = normalizeLabel(selector(item));
-        acc[key] = (acc[key] || 0) + 1;
-        return acc;
-    }, {});
-}
-
-function sumBy(items, selector, valueSelector) {
-    return items.reduce((acc, item) => {
-        const key = normalizeLabel(selector(item));
-        acc[key] = (acc[key] || 0) + Number(valueSelector(item) || 0);
-        return acc;
-    }, {});
-}
-
-function compactChartEntries(entries, limit = 8) {
-    if (entries.length <= limit) return entries;
-    const visible = entries.slice(0, limit - 1);
-    const othersTotal = entries.slice(limit - 1).reduce((total, [, value]) => total + Number(value || 0), 0);
-    return [...visible, ['Outros', othersTotal]];
-}
-
-const ClienteRbxPanel = ({ cliente }) => {
-    if (!cliente) return null;
-
-    return (
-        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, mt: 2 }}>
-            <Typography variant="subtitle1" fontWeight={800}>Dados do cliente RBX</Typography>
-            <Box
-                sx={{
-                    display: 'grid',
-                    gap: 1,
-                    gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', md: 'repeat(6, minmax(0, 1fr))' },
-                    mt: 1,
-                }}
-            >
-                {[
-                    ['Codigo', cliente.codigo],
-                    ['Nome', cliente.nome],
-                    ['CPF/CNPJ', cliente.cpfCnpj],
-                    ['Sigla', cliente.sigla],
-                    ['Grupo', cliente.grupo],
-                    ['Situacao', formatClientStatus(cliente.situacao)],
-                ].map(([label, value]) => (
-                    <Box key={label}>
-                        <Typography variant="caption" color="text.secondary">{label}</Typography>
-                        <Typography fontWeight={700}>{value || '-'}</Typography>
-                    </Box>
-                ))}
-            </Box>
-        </Paper>
-    );
-};
-
 const Cobrancas = ({ readOnly = false, mode }) => {
     const navigate = useNavigate();
+    const location = useLocation();
+    const { showSuccess, showError, showWarning } = useNotification();
+
     const [statusOptions, setStatusOptions] = useState(defaultStatusOptions);
     const [actionOptions, setActionOptions] = useState(defaultActionOptions);
     const viewMode = mode || (readOnly ? 'dashboard' : 'cadastro');
     const isDashboard = viewMode === 'dashboard';
     const isTracking = viewMode === 'acompanhamento';
-    const isAutomaticQueue = viewMode === 'automaticas';
+    const isAutomaticQueue = viewMode === 'automaticas' || location.pathname.includes('/fila-automatica');
     const isRegister = viewMode === 'cadastro';
     const isPaidList = viewMode === 'pagas';
+
     const [charges, setCharges] = useState([]);
     const [delinquentQueue, setDelinquentQueue] = useState([]);
     const [form, setForm] = useState(emptyForm);
@@ -397,7 +89,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
     const [rbxLoading, setRbxLoading] = useState(false);
     const [error, setError] = useState('');
 
-    const loadCharges = async () => {
+    const loadCharges = useCallback(async () => {
         setLoading(true);
         setError('');
         try {
@@ -414,15 +106,15 @@ const Cobrancas = ({ readOnly = false, mode }) => {
             setCharges(Array.isArray(response) ? response.map(normalizeCharge) : []);
             setDelinquentQueue(Array.isArray(queue) ? queue : []);
         } catch (requestError) {
-            setError(requestError.message || 'Erro ao carregar cobrancas.');
+            setError(requestError.message || 'Erro ao carregar cobranças.');
         } finally {
             setLoading(false);
         }
-    };
+    }, [isPaidList, isTracking, isAutomaticQueue, isRegister]);
 
     useEffect(() => {
         loadCharges();
-    }, [isPaidList, isTracking, isAutomaticQueue]);
+    }, [loadCharges]);
 
     useEffect(() => {
         const loadConfiguredOptions = async () => {
@@ -440,7 +132,7 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 setActionOptions(actions.length ? actions : defaultActionOptions);
                 setStatusOptions(statuses.length ? statuses : defaultStatusOptions);
             } catch (requestError) {
-                console.error('Erro ao carregar configuracoes de cobranca:', requestError);
+                console.error('Erro ao carregar configurações de cobrança:', requestError);
             }
         };
         loadConfiguredOptions();
@@ -450,255 +142,231 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         return Array.from(new Set(charges.map((charge) => normalizeLabel(charge.lastUser)).filter(Boolean))).sort();
     }, [charges]);
 
-    const actionFilterOptions = useMemo(() => {
-        return Array.from(new Set(charges.map((charge) => normalizeLabel(charge.action)).filter(Boolean))).sort();
-    }, [charges]);
-
     const groupOptions = useMemo(() => {
         return Array.from(new Set(charges.map((charge) => normalizeLabel(charge.clientGroup)).filter(Boolean))).sort();
     }, [charges]);
 
+    const actionFilterOptions = useMemo(() => {
+        return Array.from(new Set([...actionOptions, ...charges.map((c) => normalizeLabel(c.action)).filter(Boolean)])).sort();
+    }, [actionOptions, charges]);
+
+    const findChargeInProgressByContract = (clientCode, contractNumber, currentChargeId) => {
+        const normalizedCode = normalizeClientCode(clientCode);
+        const normalizedContract = String(contractNumber || '').trim();
+        if (!normalizedCode || !normalizedContract) return null;
+
+        return charges.find((charge) => {
+            if (currentChargeId && charge.id === currentChargeId) return false;
+            return normalizeClientCode(charge.clientCode) === normalizedCode
+                && String(charge.contractNumber || '').trim() === normalizedContract
+                && !isFinalStatus(charge.status)
+                && !charge.excluded;
+        }) || null;
+    };
+
     const filteredCharges = useMemo(() => {
-        const search = searchFilter.trim().toLowerCase();
-        return charges
-            .filter((charge) => {
-                if (!isRegister) return true;
-                return !charge.automatic || Boolean(String(charge.responsible || '').trim());
-            })
-            .filter((charge) => {
-                if (!isDashboard) return true;
-                return !charge.excluded && !isClosedStatus(charge.status);
-            })
-            .filter((charge) => {
-                if (!isDashboard) return true;
-                return isSameMonth(charge.date, dashboardMonth);
-            })
-            .filter((charge) => {
-                if (statusFilter === 'Todos') return true;
-                if (statusFilter === 'Em aberto') return !charge.excluded && !isFinalStatus(charge.status);
-                if (statusFilter === 'Finalizadas') return isFinalStatus(charge.status);
-                if (statusFilter === 'Promessas hoje') return isPromiseStatus(charge.status) && charge.promiseDate === todayIso();
-                if (statusFilter === 'Promessas vencidas') return isPromiseStatus(charge.status) && charge.promiseDate && charge.promiseDate < todayIso();
-                if (statusFilter === 'Sem atualização há 7 dias') return needsSevenDayReminder(charge);
-                return charge.status === statusFilter;
-            })
-            .filter((charge) => userFilter === 'Todos' || normalizeLabel(charge.lastUser) === userFilter)
-            .filter((charge) => actionFilter === 'Todos' || normalizeLabel(charge.action) === actionFilter)
-            .filter((charge) => groupFilter === 'Todos' || normalizeLabel(charge.clientGroup) === groupFilter)
-            .filter((charge) => {
-                if (!search) return true;
-                return [
-                    charge.protocol,
-                    charge.client,
-                    charge.clientCode,
-                    charge.action,
-                    charge.status,
-                    charge.serviceSituation,
-                    charge.lastUser,
-                    charge.clientGroup,
-                    charge.excludedBy,
-                    charge.exclusionReason,
-                ].some((value) => String(value || '').toLowerCase().includes(search));
-            })
-            .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
-    }, [charges, dashboardMonth, isDashboard, isRegister, statusFilter, searchFilter, userFilter, actionFilter, groupFilter]);
+        const term = searchFilter.trim().toLowerCase();
+        return charges.filter((charge) => {
+            if (isDashboard && dashboardMonth && !isSameMonth(charge.date, dashboardMonth)) return false;
+            if (term) {
+                const matchesProtocol = String(charge.protocol || '').toLowerCase().includes(term);
+                const matchesClient = String(charge.client || '').toLowerCase().includes(term);
+                const matchesCode = String(charge.clientCode || '').toLowerCase().includes(term);
+                if (!matchesProtocol && !matchesClient && !matchesCode) return false;
+            }
+            if (statusFilter === 'Em aberto' && isFinalStatus(charge.status)) return false;
+            if (statusFilter === 'Finalizadas' && !isFinalStatus(charge.status)) return false;
+            if (statusFilter === 'Promessas hoje' && (!isPromiseStatus(charge.status) || charge.promiseDate !== todayIso())) return false;
+            if (statusFilter === 'Promessas vencidas' && (!isPromiseStatus(charge.status) || !charge.promiseDate || charge.promiseDate >= todayIso())) return false;
+            if (statusFilter === 'Sem atualização há 7 dias' && !needsSevenDayReminder(charge)) return false;
+            if (!['Todos', 'Em aberto', 'Finalizadas', 'Promessas hoje', 'Promessas vencidas', 'Sem atualização há 7 dias'].includes(statusFilter)
+                && charge.status !== statusFilter) {
+                return false;
+            }
+            if (userFilter !== 'Todos' && normalizeLabel(charge.lastUser) !== userFilter) return false;
+            if (actionFilter !== 'Todos' && normalizeLabel(charge.action) !== actionFilter) return false;
+            if (groupFilter !== 'Todos' && normalizeLabel(charge.clientGroup) !== groupFilter) return false;
+            return true;
+        });
+    }, [charges, isDashboard, dashboardMonth, searchFilter, statusFilter, userFilter, actionFilter, groupFilter]);
 
     useEffect(() => {
         setPage(0);
-    }, [dashboardMonth, statusFilter, searchFilter, userFilter, actionFilter, groupFilter, viewMode]);
+    }, [searchFilter, statusFilter, userFilter, actionFilter, groupFilter, dashboardMonth]);
 
     useEffect(() => {
         const lastPage = Math.max(0, Math.ceil(filteredCharges.length / rowsPerPage) - 1);
         if (page > lastPage) setPage(lastPage);
     }, [filteredCharges.length, page, rowsPerPage]);
 
-    const paginatedCharges = useMemo(
-        () => filteredCharges.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
-        [filteredCharges, page, rowsPerPage],
-    );
-
     useEffect(() => {
         const lastPage = Math.max(0, Math.ceil(delinquentQueue.length / delinquentRowsPerPage) - 1);
         if (delinquentPage > lastPage) setDelinquentPage(lastPage);
     }, [delinquentQueue.length, delinquentPage, delinquentRowsPerPage]);
 
-    const paginatedDelinquentQueue = useMemo(
-        () => delinquentQueue.slice(
-            delinquentPage * delinquentRowsPerPage,
-            delinquentPage * delinquentRowsPerPage + delinquentRowsPerPage,
-        ),
-        [delinquentQueue, delinquentPage, delinquentRowsPerPage],
-    );
+    const paginatedCharges = useMemo(() => {
+        const start = page * rowsPerPage;
+        return filteredCharges.slice(start, start + rowsPerPage);
+    }, [filteredCharges, page, rowsPerPage]);
 
-    const reminderCount = useMemo(
-        () => charges.filter(needsSevenDayReminder).length,
-        [charges],
-    );
+    const paginatedDelinquentQueue = useMemo(() => {
+        const start = delinquentPage * delinquentRowsPerPage;
+        return delinquentQueue.slice(start, start + delinquentRowsPerPage);
+    }, [delinquentQueue, delinquentPage, delinquentRowsPerPage]);
 
     const metrics = useMemo(() => {
         const source = isDashboard ? filteredCharges : charges;
-        const abertas = source.filter((charge) => !charge.excluded && !isFinalStatus(charge.status));
-        const pagas = source.filter((charge) => !charge.excluded && String(charge.status || '').toUpperCase() === 'PAGO');
-        const excluidas = source.filter((charge) => charge.excluded);
-        const pagasMes = source.filter((charge) => (
-            !charge.excluded
-            &&
-            String(charge.status || '').toUpperCase() === 'PAGO'
-            && isSameMonth(charge.date, dashboardMonth)
-        ));
-        const promessasHoje = source.filter((charge) => !charge.excluded && isPromiseStatus(charge.status) && charge.promiseDate === todayIso());
-        const promessasVencidas = source.filter((charge) => !charge.excluded && isPromiseStatus(charge.status) && charge.promiseDate && charge.promiseDate < todayIso());
-        const valorAberto = abertas.reduce((total, charge) => total + charge.value, 0);
-        const valorPago = pagas.reduce((total, charge) => total + (charge.paidValue ?? charge.value), 0);
-        const valorExcluido = excluidas.reduce((total, charge) => total + charge.value, 0);
-        const valorPagoMes = pagasMes.reduce((total, charge) => total + (charge.paidValue ?? charge.value), 0);
-        const valorTotal = source.reduce((total, charge) => total + charge.value, 0);
+        const total = source.length;
+        const abertas = source.filter((c) => !isFinalStatus(c.status) && !c.excluded).length;
+        const pagas = source.filter((c) => isPaidStatus(c.status) && !c.excluded).length;
+        const pagasMes = source.filter((c) => isPaidStatus(c.status) && !c.excluded && isSameMonth(c.date, dashboardMonth)).length;
+        const valorAberto = source.filter((c) => !isFinalStatus(c.status) && !c.excluded).reduce((acc, c) => acc + c.value, 0);
+        const valorPago = source.filter((c) => isPaidStatus(c.status) && !c.excluded).reduce((acc, c) => acc + (c.paidValue ?? c.value), 0);
+        const valorPagoMes = source.filter((c) => isPaidStatus(c.status) && !c.excluded && isSameMonth(c.date, dashboardMonth)).reduce((acc, c) => acc + (c.paidValue ?? c.value), 0);
+        const promessasHoje = source.filter((c) => isPromiseStatus(c.status) && !c.excluded && c.promiseDate === todayIso()).length;
+        const promessasVencidas = source.filter((c) => isPromiseStatus(c.status) && !c.excluded && c.promiseDate && c.promiseDate < todayIso()).length;
+        const valorTotal = source.filter((c) => !c.excluded).reduce((acc, c) => acc + c.value, 0);
 
         return {
-            total: source.length,
-            abertas: abertas.length,
-            pagas: pagas.length,
-            excluidas: excluidas.length,
-            pagasMes: pagasMes.length,
-            promessasHoje: promessasHoje.length,
-            promessasVencidas: promessasVencidas.length,
+            total,
+            abertas,
+            pagas,
+            pagasMes,
             valorAberto,
             valorPago,
-            valorExcluido,
             valorPagoMes,
+            promessasHoje,
+            promessasVencidas,
             valorTotal,
         };
-    }, [charges, dashboardMonth, filteredCharges, isDashboard]);
+    }, [charges, filteredCharges, isDashboard, dashboardMonth]);
 
     const chartData = useMemo(() => {
-        const statusCounts = countBy(filteredCharges, (charge) => charge.status);
-        const auditCounts = {
-            'Em aberto': filteredCharges.filter((charge) => !charge.excluded && !isFinalStatus(charge.status)).length,
-            Pagas: filteredCharges.filter((charge) => !charge.excluded && String(charge.status || '').toUpperCase() === 'PAGO').length,
-        };
-        const auditValues = {
-            'Em aberto': filteredCharges
-                .filter((charge) => !charge.excluded && !isFinalStatus(charge.status))
-                .reduce((total, charge) => total + charge.value, 0),
-            Pagas: filteredCharges
-                .filter((charge) => !charge.excluded && String(charge.status || '').toUpperCase() === 'PAGO')
-                .reduce((total, charge) => total + charge.value, 0),
-        };
-        const userCounts = countBy(filteredCharges, (charge) => charge.lastUser);
-        const userValues = sumBy(filteredCharges, (charge) => charge.lastUser, (charge) => charge.value);
-        const groupValues = sumBy(filteredCharges, (charge) => charge.clientGroup, (charge) => charge.value);
-        const statusEntries = Object.entries(statusCounts).sort((a, b) => b[1] - a[1]);
-        const userEntries = Object.entries(userCounts).sort((a, b) => b[1] - a[1]).slice(0, 8);
-        const userValueEntries = compactChartEntries(Object.entries(userValues)
-            .filter(([, value]) => Number(value) > 0)
-            .sort((a, b) => Number(b[1]) - Number(a[1]))
-        );
-        const groupValueEntries = compactChartEntries(Object.entries(groupValues)
-            .filter(([, value]) => Number(value) > 0)
-            .sort((a, b) => Number(b[1]) - Number(a[1]))
-        );
-        const userLabels = userEntries.map(([label]) => label);
-        const visibleStatuses = statusOptions.filter((status) => filteredCharges.some((charge) => charge.status === status));
-        const statusByUserSeries = visibleStatuses.map((status) => ({
+        const activeCharges = filteredCharges.filter((c) => !c.excluded);
+        const statusMap = countBy(activeCharges, (c) => c.status);
+        const statusPie = compactChartEntries(Object.entries(statusMap)).map(([label, value], id) => ({
+            id,
+            label,
+            value,
+            color: dashboardPalette[id % dashboardPalette.length],
+        }));
+
+        const abertasCount = activeCharges.filter((c) => !isFinalStatus(c.status)).length;
+        const pagasCount = activeCharges.filter((c) => isPaidStatus(c.status)).length;
+        const fechadasCount = activeCharges.filter((c) => isClosedStatus(c.status)).length;
+        const auditStatusPie = [
+            { id: 0, label: 'Em aberto', value: abertasCount, color: '#f39c12' },
+            { id: 1, label: 'Pagas', value: pagasCount, color: '#27ae60' },
+            { id: 2, label: 'Fechadas', value: fechadasCount, color: '#7f8c8d' },
+        ].filter((item) => item.value > 0);
+
+        const abertasValue = activeCharges.filter((c) => !isFinalStatus(c.status)).reduce((acc, c) => acc + c.value, 0);
+        const pagasValue = activeCharges.filter((c) => isPaidStatus(c.status)).reduce((acc, c) => acc + (c.paidValue ?? c.value), 0);
+        const auditValuePie = [
+            { id: 0, label: 'Valor em aberto', value: abertasValue, color: '#e67e22' },
+            { id: 1, label: 'Valor pago', value: pagasValue, color: '#2ecc71' },
+        ].filter((item) => item.value > 0);
+
+        const userValueMap = sumBy(activeCharges, (c) => c.lastUser, (c) => c.value);
+        const userValuePie = compactChartEntries(Object.entries(userValueMap)).map(([label, value], id) => ({
+            id,
+            label,
+            value,
+            color: dashboardPalette[id % dashboardPalette.length],
+        }));
+
+        const groupValueMap = sumBy(activeCharges, (c) => c.clientGroup, (c) => c.value);
+        const groupValuePie = compactChartEntries(Object.entries(groupValueMap)).map(([label, value], id) => ({
+            id,
+            label,
+            value,
+            color: dashboardPalette[id % dashboardPalette.length],
+        }));
+
+        const userLabels = Array.from(new Set(activeCharges.map((c) => normalizeLabel(c.lastUser)).filter(Boolean))).sort();
+        const topStatuses = Object.keys(statusMap).slice(0, 4);
+        const statusByUserSeries = topStatuses.map((status, index) => ({
+            data: userLabels.map((user) => activeCharges.filter((c) => normalizeLabel(c.lastUser) === user && c.status === status).length),
             label: status,
-            data: userLabels.map((user) => filteredCharges.filter((charge) => normalizeLabel(charge.lastUser) === user && charge.status === status).length),
-        }));
-        const statusByUserTotals = userLabels.map((user, index) => ({
-            label: user,
-            value: statusByUserSeries.reduce((total, serie) => total + Number(serie.data[index] || 0), 0),
             color: dashboardPalette[index % dashboardPalette.length],
+            stack: 'total',
         }));
-        const individualUsers = Array.from(new Set(filteredCharges
-            .map((charge) => normalizeLabel(charge.createdBy))
-            .filter((user) => user !== 'Nao informado'))).sort();
-        const individualRows = individualUsers.map((user) => {
-            const opened = filteredCharges.filter((charge) => (
-                !charge.excluded
-                && charge.serviceSituation !== 'Fechada'
-                && normalizeLabel(charge.createdBy) === user
-            ));
-            const paid = filteredCharges.filter((charge) => (
-                !charge.excluded
-                && isPaidStatus(charge.status)
-                && normalizeLabel(charge.createdBy) === user
-                && normalizeLabel(charge.updatedBy) === user
-            ));
+        const statusByUserTotals = userLabels.map((user) => [
+            user,
+            activeCharges.filter((c) => normalizeLabel(c.lastUser) === user).length,
+        ]);
+
+        const individualRows = userLabels.map((user) => {
+            const openedCharges = activeCharges.filter((c) => normalizeLabel(c.createdBy || c.lastUser) === user && !isFinalStatus(c.status));
+            const paidBySameUser = activeCharges.filter((c) => isPaidStatus(c.status)
+                && normalizeLabel(c.createdBy) === user
+                && normalizeLabel(c.lastUser) === user);
+
             return {
                 user,
-                openedCount: opened.length,
-                openedValue: opened.reduce((total, charge) => total + charge.value, 0),
-                paidCount: paid.length,
-                paidValue: paid.reduce((total, charge) => total + (charge.paidValue ?? charge.value), 0),
+                openedCount: openedCharges.length,
+                openedValue: openedCharges.reduce((acc, c) => acc + c.value, 0),
+                paidCount: paidBySameUser.length,
+                paidValue: paidBySameUser.reduce((acc, c) => acc + (c.paidValue ?? c.value), 0),
             };
         });
 
         return {
-            statusPie: statusEntries.map(([label, value], index) => ({ id: index, label, value, color: dashboardPalette[index % dashboardPalette.length] })),
-            auditStatusPie: Object.entries(auditCounts)
-                .filter(([, value]) => value > 0)
-                .map(([label, value], index) => ({ id: label, label, value, color: dashboardPalette[index % dashboardPalette.length] })),
-            auditValuePie: Object.entries(auditValues)
-                .filter(([, value]) => value > 0)
-                .map(([label, value], index) => ({ id: label, label, value, color: dashboardPalette[index % dashboardPalette.length] })),
+            statusPie,
+            auditStatusPie,
+            auditValuePie,
+            userValuePie,
+            groupValuePie,
             userLabels,
             statusByUserSeries,
             statusByUserTotals,
-            userValuePie: userValueEntries.map(([label, value], index) => ({
-                id: index,
-                label,
-                value: Number(value),
-                color: dashboardPalette[index % dashboardPalette.length],
-            })),
-            groupValuePie: groupValueEntries.map(([label, value], index) => ({
-                id: index,
-                label,
-                value: Number(value),
-                color: dashboardPalette[index % dashboardPalette.length],
-            })),
             individualRows,
         };
     }, [filteredCharges]);
 
-    const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }));
-
-    const findChargeInProgressByContract = (code, contractNumber, ignoredId = selected?.id) => {
-        const normalizedCode = String(code || '').trim();
-        const normalizedContract = String(contractNumber || '').trim();
-        if (!normalizedCode || !normalizedContract) return null;
-
-        return charges.find((charge) => (
-            String(charge.clientCode || '').trim() === normalizedCode
-            && String(charge.contractNumber || '').trim() === normalizedContract
-            && charge.id !== ignoredId
-            && !charge.excluded
-            && charge.serviceSituation !== 'Fechada'
-            && !isFinalStatus(charge.status)
-        ));
+    const updateForm = (field, value) => {
+        setForm((current) => ({ ...current, [field]: value }));
     };
 
-    const openNew = () => {
+    const openNewCharge = () => {
         setSelected(null);
         setRbxClient(null);
         setValidatedClientCode('');
         setTrackingNote('');
-        setForm({ ...emptyForm, data: new Date().toISOString().slice(0, 10) });
+        setError('');
+        setForm(emptyForm);
         setOpen(true);
     };
 
-    const openCharge = (charge) => {
+    const openCharge = async (charge) => {
         setSelected(charge);
-        setRbxClient(null);
-        setValidatedClientCode(charge.clientCode ? String(charge.clientCode) : '');
         setTrackingNote('');
+        setError('');
         setForm(toForm(charge));
+        setValidatedClientCode(charge.clientCode || '');
         setOpen(true);
+
+        if (charge.clientCode) {
+            setRbxLoading(true);
+            try {
+                const response = await UseApi(`cobrancas/rbx/clientes/${charge.clientCode}`);
+                setRbxClient(normalizeRbxClient(response));
+            } catch {
+                setRbxClient(null);
+            } finally {
+                setRbxLoading(false);
+            }
+        } else {
+            setRbxClient(null);
+        }
     };
 
     const searchRbxClient = async (codeOverride) => {
         const explicitCode = typeof codeOverride === 'string' || typeof codeOverride === 'number' ? codeOverride : null;
         const code = normalizeClientCode(explicitCode || form.codigoCliente || selected?.clientCode);
         if (!code) {
-            setError('Informe o codigo do cliente para buscar no RBX.');
+            setError('Informe o código do cliente para buscar no RBX.');
+            showWarning('Informe o código do cliente para buscar no RBX.');
             return;
         }
         setRbxLoading(true);
@@ -707,8 +375,9 @@ const Cobrancas = ({ readOnly = false, mode }) => {
             const response = await UseApi(`cobrancas/rbx/clientes/${code}`);
             const normalizedClient = normalizeRbxClient(response);
             if (!normalizedClient?.nome) {
-                throw new Error('Codigo de cliente nao encontrado no RBX.');
+                throw new Error('Código de cliente não encontrado no RBX.');
             }
+            showSuccess(`Cliente ${normalizedClient.nome} localizado no RBX!`);
             setRbxClient(normalizedClient);
             setValidatedClientCode(code);
             if (normalizedClient?.nome || normalizedClient?.grupo) {
@@ -724,7 +393,9 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 }));
             }
         } catch (requestError) {
-            setError(requestError.message || 'Erro ao buscar cliente no RBX.');
+            const msg = requestError.message || 'Erro ao buscar cliente no RBX.';
+            setError(msg);
+            showError(msg);
         } finally {
             setRbxLoading(false);
         }
@@ -737,58 +408,81 @@ const Cobrancas = ({ readOnly = false, mode }) => {
         setTrackingNote('');
         setForm({
             ...emptyForm,
-            codigoCliente: normalizeClientCode(item.codigoCliente),
+            codigoCliente: item.codigoCliente || '',
             cliente: item.cliente || '',
-            data: new Date().toISOString().slice(0, 10),
+            grupoCliente: item.grupoCliente || '',
+            dataVencimento: item.vencimentoMaisAntigo || '',
+            valor: item.valorVencido ? String(item.valorVencido) : '',
         });
+        setError('');
         setOpen(true);
-        searchRbxClient(item.codigoCliente);
+        if (item.codigoCliente) {
+            searchRbxClient(item.codigoCliente);
+        }
     };
 
-    const handleSubmit = async () => {
+    const saveCharge = async () => {
+        if (!selected && isRegister) {
+            if (!validatedClientCode || normalizeClientCode(form.codigoCliente) !== validatedClientCode || !form.cliente) {
+                setError('Valide o código do cliente no RBX antes de salvar a cobrança.');
+                showWarning('Valide o código do cliente no RBX antes de salvar a cobrança.');
+                return;
+            }
+            if (!form.numeroContrato) {
+                setError('Selecione o contrato do cliente.');
+                showWarning('Selecione o contrato do cliente.');
+                return;
+            }
+            if (!form.dataVencimento) {
+                setError('Informe a data de vencimento.');
+                showWarning('Informe a data de vencimento.');
+                return;
+            }
+            const existing = findChargeInProgressByContract(form.codigoCliente, form.numeroContrato, null);
+            if (existing) {
+                setError(`Já existe uma cobrança em andamento para o contrato ${form.numeroContrato}: ${existing.protocol} (${existing.status}).`);
+                showError(`Já existe uma cobrança em andamento para este contrato (${existing.protocol}).`);
+                return;
+            }
+        }
+
+        if (isPromiseStatus(form.status) && !form.dataPromessa) {
+            setError('A data da promessa é obrigatória para o status Promessa de pagamento.');
+            showWarning('Informe a data da promessa de pagamento.');
+            return;
+        }
+
+        if (isPaidStatus(form.status) && !form.valorPago) {
+            setError('Informe o valor pago.');
+            showWarning('Informe o valor pago.');
+            return;
+        }
+
         setSaving(true);
         setError('');
         try {
-            if (isTracking && !trackingNote.trim()) {
-                throw new Error('Informe o que foi realizado no acompanhamento.');
-            }
-            if (!selected && (!validatedClientCode || normalizeClientCode(form.codigoCliente) !== validatedClientCode || !form.cliente)) {
-                throw new Error('Busque e valide um codigo de cliente no RBX antes de cadastrar a cobranca.');
-            }
-            if (!selected && (!form.numeroContrato || !form.boletoSelecionado)) {
-                throw new Error('Selecione o contrato e um boleto em aberto antes de cadastrar a cobranca.');
-            }
-            const chargeInProgress = !selected ? findChargeInProgressByContract(form.codigoCliente, form.numeroContrato, null) : null;
-            if (chargeInProgress) {
-                throw new Error(`Ja existe uma cobranca em andamento para o contrato ${form.numeroContrato}: ${chargeInProgress.protocol} (${chargeInProgress.status}).`);
-            }
             const payload = {
                 acao: form.acao,
-                codigoCliente: form.codigoCliente ? Number(normalizeClientCode(form.codigoCliente)) : null,
+                codigoCliente: form.codigoCliente,
                 numeroContrato: form.numeroContrato,
-                documentoTitulo: selectedRbxContract?.boletos.find((item) => item.id === form.boletoSelecionado)?.documento || null,
+                documentoTitulo: form.boletoSelecionado || null,
                 cliente: form.cliente,
                 grupoCliente: form.grupoCliente,
-                data: form.data || null,
-                dataVencimento: form.dataVencimento || null,
-                valor: Number(String(form.valor || 0).replace(',', '.')),
-                valorPago: isPaidStatus(form.status) ? Number(String(form.valorPago || 0).replace(',', '.')) : null,
-                dataPromessa: isPromiseStatus(form.status) ? form.dataPromessa || null : null,
+                data: form.data,
+                dataVencimento: form.dataVencimento,
+                dataPromessa: form.dataPromessa || null,
+                valor: Number(form.valor || 0),
+                valorPago: form.valorPago ? Number(form.valorPago) : null,
                 status: form.status,
                 observacao: form.observacao,
+                notaAcompanhamento: isTracking ? trackingNote : null,
             };
-            const response = isTracking && selected
-                ? await UseApi(`cobrancas/${selected.id}/acompanhamento`, 'PATCH', {
-                    status: form.status,
-                    valor: Number(String(form.valor || 0).replace(',', '.')),
-                    valorPago: isPaidStatus(form.status) ? Number(String(form.valorPago || 0).replace(',', '.')) : null,
-                    dataPromessa: isPromiseStatus(form.status) ? form.dataPromessa || null : null,
-                    observacao: trackingNote,
-                })
-                : selected
-                    ? await UseApi(`cobrancas/${selected.id}`, 'PUT', payload)
-                    : await UseApi('cobrancas', 'POST', payload);
+
+            const response = selected
+                ? await UseApi(`cobrancas/${selected.id}`, 'PUT', payload)
+                : await UseApi('cobrancas', 'POST', payload);
             const normalized = normalizeCharge(response);
+
             setCharges((current) => {
                 if (!selected) {
                     return [normalized, ...current];
@@ -798,8 +492,11 @@ const Cobrancas = ({ readOnly = false, mode }) => {
             setSelected(normalized);
             setTrackingNote('');
             setOpen(false);
+            showSuccess(selected ? 'Cobrança atualizada com sucesso!' : 'Cobrança cadastrada com sucesso!');
         } catch (requestError) {
-            setError(requestError.message || 'Erro ao salvar cobranca.');
+            const msg = requestError.message || 'Erro ao salvar cobrança.';
+            setError(msg);
+            showError(msg);
         } finally {
             setSaving(false);
         }
@@ -820,7 +517,8 @@ const Cobrancas = ({ readOnly = false, mode }) => {
 
     const handleLogicalDelete = async () => {
         if (!deleteReason.trim()) {
-            setError('Informe o motivo da exclusao.');
+            setError('Informe o motivo da exclusão.');
+            showWarning('Informe o motivo da exclusão.');
             return;
         }
         setSaving(true);
@@ -832,8 +530,11 @@ const Cobrancas = ({ readOnly = false, mode }) => {
             const normalized = normalizeCharge(response);
             setCharges((current) => current.map((charge) => (charge.id === normalized.id ? normalized : charge)));
             closeDeleteDialog();
+            showSuccess('Cobrança excluída com sucesso!');
         } catch (requestError) {
-            setError(requestError.message || 'Erro ao excluir cobranca.');
+            const msg = requestError.message || 'Erro ao excluir cobrança.';
+            setError(msg);
+            showError(msg);
         } finally {
             setSaving(false);
         }
@@ -846,9 +547,12 @@ const Cobrancas = ({ readOnly = false, mode }) => {
             const response = await UseApi(`cobrancas/${charge.id}/capturar`, 'PATCH');
             const normalized = normalizeCharge(response);
             setCharges((current) => current.map((item) => (item.id === normalized.id ? normalized : item)));
+            showSuccess('Atendimento capturado com sucesso!');
             if (isAutomaticQueue) navigate('/financeiro/cobranca/acompanhamento');
         } catch (requestError) {
-            setError(requestError.message || 'Erro ao capturar atendimento.');
+            const msg = requestError.message || 'Erro ao capturar atendimento.';
+            setError(msg);
+            showError(msg);
         } finally {
             setSaving(false);
         }
@@ -861,33 +565,35 @@ const Cobrancas = ({ readOnly = false, mode }) => {
     const selectedRbxContract = rbxClient?.contratos?.find((item) => String(item.numero) === String(form.numeroContrato));
     const saveDisabled = saving
         || (isTracking && canTrackSelected && !trackingNote.trim())
-        || (!selected && isRegister && (!validatedClientCode || normalizeClientCode(form.codigoCliente) !== validatedClientCode || !form.cliente))
-        || (!selected && isRegister && (!form.numeroContrato || !form.boletoSelecionado))
-        || (canEditSelected && !form.dataVencimento)
-        || (canSaveSelected && isPaidStatus(form.status) && Number(String(form.valorPago || 0).replace(',', '.')) <= 0)
-        || (canSaveSelected && isPromiseStatus(form.status) && !form.dataPromessa);
+        || (!selected && isRegister && (!validatedClientCode || normalizeClientCode(form.codigoCliente) !== validatedClientCode || !form.cliente));
 
-    const pageTitle = {
-        cadastro: 'Cobrancas',
-        dashboard: 'Dashboard de cobrancas',
-        acompanhamento: 'Acompanhamento de cobrancas',
-        automaticas: 'Atendimentos automaticos',
-        pagas: 'Baixas e auditoria',
-    }[viewMode];
+    const pageTitle = isDashboard
+        ? 'Dashboard de Cobrança'
+        : isTracking
+            ? 'Acompanhamento de Cobrança'
+            : isAutomaticQueue
+                ? 'Fila Automática de Cobrança'
+                : isPaidList
+                    ? 'Auditoria de Cobranças Pagas'
+                    : 'Cadastro de Cobrança';
 
-    const pageSubtitle = {
-        cadastro: 'Cadastro, acompanhamento e fechamento das acoes de cobranca.',
-        dashboard: 'Resumo geral da carteira de cobrancas, sem alteracao de registros.',
-        acompanhamento: 'Fila operacional para acompanhar status, priorizando cobrancas em aberto.',
-        automaticas: 'Boletos vencidos identificados automaticamente e ainda aguardando captura.',
-        pagas: 'Consulta de baixas, exclusoes logicas e historico de auditoria.',
-    }[viewMode];
+    const pageSubtitle = isDashboard
+        ? 'Acompanhamento executivo de cobranças, promessas e liquidações.'
+        : isTracking
+            ? 'Histórico operacional e evolução de cada atendimento.'
+            : isAutomaticQueue
+                ? 'Cobranças geradas pelo sistema aguardando atendimento.'
+                : isPaidList
+                    ? 'Cobranças que foram baixadas e histórico de exclusões.'
+                    : 'Inicie um atendimento a partir da fila ou informe o código do cliente.';
 
     return (
         <Box
-            id="dashboard-cobrancas-export"
             sx={{
-                py: 2,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2.5,
+                p: { xs: 1.5, sm: 2.5 },
                 ...(isDashboard ? dashboardShellSx : {}),
             }}
         >
@@ -895,1031 +601,149 @@ const Cobrancas = ({ readOnly = false, mode }) => {
                 variant="outlined"
                 sx={{
                     p: isDashboard ? 1.8 : 2.5,
-                    mb: 2,
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 2,
                     borderRadius: isDashboard ? 1 : 2,
                     ...(isDashboard ? dashboardHeaderSx : {}),
                 }}
             >
-                <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2}>
-                    <Box>
-                        <Typography variant="h5" fontWeight={800}>
-                            {pageTitle}
-                        </Typography>
-                        <Typography color={isDashboard ? '#e8f8ff' : 'text.secondary'}>{pageSubtitle}</Typography>
-                    </Box>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} gap={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
-                        {isDashboard && (
-                            <>
-                                <TextField
-                                    size="small"
-                                    type="month"
-                                    label="Mes de pagamento"
-                                    value={dashboardMonth}
-                                    onChange={(event) => setDashboardMonth(event.target.value)}
-                                    InputLabelProps={{ shrink: true }}
-                                    sx={{
-                                        minWidth: 210,
-                                        ...dashboardInputSx,
-                                    }}
-                                />
-                                <ExportDashboardPdfButton
-                                    targetId="dashboard-cobrancas-export"
-                                    title="Dashboard de cobrancas"
-                                    fileName="dashboard-cobrancas"
-                                />
-                            </>
-                        )}
-                        {isRegister && (
-                            <Button variant="contained" startIcon={<AddCircleRoundedIcon />} onClick={openNew}>
-                                Nova cobranca
-                            </Button>
-                        )}
-                    </Stack>
-                </Stack>
-            </Paper>
-
-            {error && !open && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-            {reminderCount > 0 && (
-                <Alert
-                    severity="warning"
-                    sx={{ mb: 2 }}
-                    action={(
-                        <Button color="inherit" size="small" onClick={() => setStatusFilter('Sem atualização há 7 dias')}>
-                            Ver cobranças
+                <Box>
+                    <Typography variant="h5" fontWeight={800} color={isDashboard ? '#ffffff' : 'text.primary'}>
+                        {pageTitle}
+                    </Typography>
+                    <Typography color={isDashboard ? '#e8f8ff' : 'text.secondary'}>
+                        {pageSubtitle}
+                    </Typography>
+                </Box>
+                <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+                    {isDashboard && (
+                        <TextField
+                            size="small"
+                            type="month"
+                            label="Mês de referência"
+                            value={dashboardMonth}
+                            onChange={(event) => setDashboardMonth(event.target.value)}
+                            InputLabelProps={{ shrink: true }}
+                            sx={dashboardInputSx}
+                        />
+                    )}
+                    {isDashboard && (
+                        <ExportDashboardPdfButton
+                            title="Dashboard de Cobrança"
+                            subtitle={`Mês de referência: ${dashboardMonth}`}
+                        />
+                    )}
+                    {isRegister && (
+                        <Button
+                            variant="contained"
+                            startIcon={<AddCircleRoundedIcon />}
+                            onClick={openNewCharge}
+                            sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}
+                        >
+                            Nova cobrança
                         </Button>
                     )}
-                >
-                    {reminderCount} cobrança(s) aberta(s) estão há 7 dias ou mais sem atualização.
-                </Alert>
-            )}
-            {(metrics.promessasHoje > 0 || metrics.promessasVencidas > 0) && (
-                <Alert severity={metrics.promessasVencidas > 0 ? 'error' : 'warning'} sx={{ mb: 2 }}>
-                    {metrics.promessasVencidas > 0
-                        ? `${metrics.promessasVencidas} promessa(s) de pagamento vencida(s).`
-                        : `${metrics.promessasHoje} promessa(s) de pagamento vencem hoje.`}
-                </Alert>
-            )}
+                </Stack>
+            </Paper>
 
             {isRegister && (
-                <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: 2 }}>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={1} mb={1.5}>
-                        <Box>
-                            <Typography variant="h6" fontWeight={800}>Fila automática de inadimplentes</Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                Clientes com boletos importados, sem baixa e atrasados há pelo menos 7 dias. Selecione um cliente para consultar contratos e iniciar a cobrança.
-                            </Typography>
-                        </Box>
-                        <Chip color={delinquentQueue.length ? 'error' : 'success'} variant="outlined" label={`${delinquentQueue.length} cliente(s)`} />
-                    </Stack>
-                    <TableContainer sx={{ maxHeight: 330 }}>
-                        <Table size="small" stickyHeader>
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell>Código / cliente</TableCell>
-                                    <TableCell>Vencidos</TableCell>
-                                    <TableCell>Mais antigo</TableCell>
-                                    <TableCell>Valor vencido</TableCell>
-                                    <TableCell>Situação</TableCell>
-                                    <TableCell align="right">Ação</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {paginatedDelinquentQueue.map((item) => (
-                                    <TableRow key={item.codigoCliente} hover>
-                                        <TableCell>
-                                            <Typography fontWeight={700}>{item.cliente || 'Nome será atualizado pelo RBX'}</Typography>
-                                            <Typography variant="caption" color="text.secondary">Código {item.codigoCliente}</Typography>
-                                        </TableCell>
-                                        <TableCell>{Number(item.boletosVencidos || 0).toLocaleString('pt-BR')}</TableCell>
-                                        <TableCell>{formatDate(item.vencimentoMaisAntigo)}</TableCell>
-                                        <TableCell>{formatCurrency(item.valorVencido)}</TableCell>
-                                        <TableCell>
-                                            <Chip size="small" color={item.atendimentoAberto ? 'warning' : 'error'} variant="outlined" label={item.atendimentoAberto ? 'Em atendimento' : 'Pendente'} />
-                                        </TableCell>
-                                        <TableCell align="right">
-                                            <Button size="small" variant="outlined" onClick={() => openFromDelinquentQueue(item)}>
-                                                {item.atendimentoAberto ? 'Ver contratos' : 'Iniciar cobrança'}
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                                {!delinquentQueue.length && (
-                                    <TableRow><TableCell colSpan={6} align="center">Nenhum boleto importado sem baixa atingiu 7 dias de atraso.</TableCell></TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-                    {delinquentQueue.length > 0 && (
-                        <TablePagination
-                            component="div"
-                            count={delinquentQueue.length}
-                            page={delinquentPage}
-                            onPageChange={(_, nextPage) => setDelinquentPage(nextPage)}
-                            rowsPerPage={delinquentRowsPerPage}
-                            onRowsPerPageChange={(event) => {
-                                setDelinquentRowsPerPage(Number(event.target.value));
-                                setDelinquentPage(0);
-                            }}
-                            rowsPerPageOptions={[10, 20, 50]}
-                            labelRowsPerPage="Clientes por página"
-                            labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
-                        />
-                    )}
-                </Paper>
+                <FilaInadimplentesTable
+                    delinquentQueue={delinquentQueue}
+                    paginatedDelinquentQueue={paginatedDelinquentQueue}
+                    delinquentPage={delinquentPage}
+                    setDelinquentPage={setDelinquentPage}
+                    delinquentRowsPerPage={delinquentRowsPerPage}
+                    setDelinquentRowsPerPage={setDelinquentRowsPerPage}
+                    onAttend={openFromDelinquentQueue}
+                />
             )}
-
-            {isDashboard && <Box sx={{ ...pageGridSx, mb: 2 }}>
-                {[
-                    ['Cobrancas', metrics.total, 'registros no sistema'],
-                    ['Em aberto', metrics.abertas, formatCurrency(metrics.valorAberto)],
-                    ['Pago no mes', metrics.pagasMes, formatCurrency(metrics.valorPagoMes)],
-                    ['Promessas hoje', metrics.promessasHoje, `${metrics.promessasVencidas} vencidas`],
-                    ['Pagas', metrics.pagas, `${formatCurrency(metrics.valorPago)} de ${formatCurrency(metrics.valorTotal)}`],
-                ].map(([label, value, detail]) => (
-                    <Paper
-                        variant="outlined"
-                        sx={{
-                            p: 2,
-                            borderRadius: 1.5,
-                            ...dashboardMetricSx,
-                        }}
-                        key={label}
-                    >
-                        <Stack direction="row" alignItems="center" spacing={1.2}>
-                            <TimelineRoundedIcon color="primary" />
-                            <Box>
-                                <Typography sx={dashboardSubtleTextSx} variant="body2" fontWeight={800}>{label}</Typography>
-                                <Typography variant="h5" fontWeight={800}>{value}</Typography>
-                                <Typography sx={dashboardMutedTextSx} variant="caption">{detail}</Typography>
-                            </Box>
-                        </Stack>
-                    </Paper>
-                ))}
-            </Box>}
 
             {isDashboard && (
-                <Box
-                    sx={{
-                        display: 'grid',
-                        gap: 2,
-                        gridTemplateColumns: '1fr',
-                        mb: 2,
-                    }}
-                >
-                    <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
-                        <Typography variant="h6" fontWeight={800}>Pagas x em aberto</Typography>
-                                <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">
-                                    Visao de auditoria por situacao operacional.
-                                </Typography>
-                                {chartData.auditStatusPie.length ? (
-                                    <Box
-                                        sx={{
-                                            display: 'grid',
-                                            gap: 2,
-                                            gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 240px' },
-                                            alignItems: 'center',
-                                        }}
-                                    >
-                                        <Box sx={{ minWidth: 0 }}>
-                                            <PieChart
-                                                height={260}
-                                                series={[{
-                                                    data: chartData.auditStatusPie,
-                                                    innerRadius: 45,
-                                                    paddingAngle: 2,
-                                                }]}
-                                                slotProps={{ legend: { hidden: true } }}
-                                                sx={dashboardChartSx}
-                                            />
-                                        </Box>
-                                        <ChartValueList items={chartData.auditStatusPie} />
-                                    </Box>
-                                ) : (
-                                    <Stack alignItems="center" justifyContent="center" minHeight={220}>
-                                        <Typography sx={dashboardMutedTextSx}>Sem dados para exibir.</Typography>
-                                    </Stack>
-                                )}
-                    </Paper>
-
-                    <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
-                        <Typography variant="h6" fontWeight={800}>Valores por situacao</Typography>
-                                <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">
-                                    Comparativo financeiro entre abertas e pagas.
-                                </Typography>
-                                {chartData.auditValuePie.length ? (
-                                    <Box
-                                        sx={{
-                                            display: 'grid',
-                                            gap: 2,
-                                            gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 260px' },
-                                            alignItems: 'center',
-                                        }}
-                                    >
-                                        <Box sx={{ minWidth: 0 }}>
-                                            <PieChart
-                                                height={260}
-                                                series={[{
-                                                    data: chartData.auditValuePie,
-                                                    innerRadius: 45,
-                                                    paddingAngle: 2,
-                                                    valueFormatter: (item) => formatCurrency(item.value),
-                                                }]}
-                                                slotProps={{ legend: { hidden: true } }}
-                                                sx={dashboardChartSx}
-                                            />
-                                        </Box>
-                                        <ChartValueList items={chartData.auditValuePie} valueFormatter={formatCurrency} />
-                                    </Box>
-                                ) : (
-                                    <Stack alignItems="center" justifyContent="center" minHeight={220}>
-                                        <Typography sx={dashboardMutedTextSx}>Sem dados para exibir.</Typography>
-                                    </Stack>
-                                )}
-                    </Paper>
-                    <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
-                        <Typography variant="h6" fontWeight={800}>Status por usuario</Typography>
-                        <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">
-                            {userFilter === 'Todos'
-                                ? 'Distribuicao de status da fila filtrada. Selecione um usuario para detalhar.'
-                                : `Distribuicao de status de ${userFilter}.`}
-                        </Typography>
-                        {chartData.statusPie.length ? (
-                            <Box
-                                sx={{
-                                    display: 'grid',
-                                    gap: 2,
-                                    gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 240px' },
-                                    alignItems: 'center',
-                                }}
-                            >
-                                <Box sx={{ minWidth: 0 }}>
-                                    <PieChart
-                                        height={260}
-                                        series={[{
-                                            data: chartData.statusPie,
-                                            innerRadius: 45,
-                                            paddingAngle: 2,
-                                        }]}
-                                        slotProps={{ legend: { hidden: true } }}
-                                        sx={dashboardChartSx}
-                                    />
-                                </Box>
-                                <ChartValueList items={chartData.statusPie} />
-                            </Box>
-                        ) : (
-                            <Stack alignItems="center" justifyContent="center" minHeight={220}>
-                                <Typography sx={dashboardMutedTextSx}>Sem dados para exibir.</Typography>
-                            </Stack>
-                        )}
-                    </Paper>
-                    <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
-                        <Typography variant="h6" fontWeight={800}>Status por usuario</Typography>
-                        <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">
-                            Compare a quantidade de cobrancas por status em cada responsavel.
-                        </Typography>
-                        {chartData.userLabels.length && chartData.statusByUserSeries.length ? (
-                            <Box
-                                sx={{
-                                    display: 'grid',
-                                    gap: 2,
-                                    gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 240px' },
-                                    alignItems: 'center',
-                                }}
-                            >
-                                <Box sx={{ minWidth: 0 }}>
-                                    <BarChart
-                                        height={260}
-                                        xAxis={[{ scaleType: 'band', data: chartData.userLabels }]}
-                                        series={chartData.statusByUserSeries}
-                                        margin={{ left: 35, right: 10, top: 25, bottom: 70 }}
-                                        sx={dashboardChartSx}
-                                    />
-                                </Box>
-                                <ChartValueList items={chartData.statusByUserTotals} showPercent={false} />
-                            </Box>
-                        ) : (
-                            <Stack alignItems="center" justifyContent="center" minHeight={220}>
-                                <Typography sx={dashboardMutedTextSx}>Sem dados para exibir.</Typography>
-                            </Stack>
-                        )}
-                    </Paper>
-                    <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
-                        <Typography variant="h6" fontWeight={800}>Valor por usuario</Typography>
-                        <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">
-                            Participacao em valor por ultimo responsavel.
-                        </Typography>
-                        {chartData.userValuePie.length ? (
-                            <Box
-                                sx={{
-                                    display: 'grid',
-                                    gap: 2,
-                                    gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 260px' },
-                                    alignItems: 'center',
-                                }}
-                            >
-                                <Box sx={{ minWidth: 0 }}>
-                                    <PieChart
-                                        height={260}
-                                        series={[{
-                                            data: chartData.userValuePie,
-                                            innerRadius: 45,
-                                            paddingAngle: 2,
-                                            valueFormatter: (item) => formatCurrency(item.value),
-                                        }]}
-                                        slotProps={{ legend: { hidden: true } }}
-                                        sx={dashboardChartSx}
-                                    />
-                                </Box>
-                                <ChartValueList items={chartData.userValuePie} valueFormatter={formatCurrency} />
-                            </Box>
-                        ) : (
-                            <Stack alignItems="center" justifyContent="center" minHeight={220}>
-                                <Typography sx={dashboardMutedTextSx}>Sem dados para exibir.</Typography>
-                            </Stack>
-                        )}
-                    </Paper>
-                    <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2 }}>
-                        <Typography variant="h6" fontWeight={800}>Valor por grupo</Typography>
-                        <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">
-                            Participacao em valor por grupo do cliente.
-                        </Typography>
-                        {chartData.groupValuePie.length ? (
-                            <Box
-                                sx={{
-                                    display: 'grid',
-                                    gap: 2,
-                                    gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 260px' },
-                                    alignItems: 'center',
-                                }}
-                            >
-                                <Box sx={{ minWidth: 0 }}>
-                                    <PieChart
-                                        height={260}
-                                        series={[{
-                                            data: chartData.groupValuePie,
-                                            innerRadius: 45,
-                                            paddingAngle: 2,
-                                            valueFormatter: (item) => formatCurrency(item.value),
-                                        }]}
-                                        slotProps={{ legend: { hidden: true } }}
-                                        sx={dashboardChartSx}
-                                    />
-                                </Box>
-                                <ChartValueList items={chartData.groupValuePie} valueFormatter={formatCurrency} />
-                            </Box>
-                        ) : (
-                            <Stack alignItems="center" justifyContent="center" minHeight={220}>
-                                <Typography sx={dashboardMutedTextSx}>Sem dados para exibir.</Typography>
-                            </Stack>
-                        )}
-                    </Paper>
-                    <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2, gridColumn: '1 / -1' }}>
-                        <Typography variant="h6" fontWeight={800}>Resultado individual por usuário</Typography>
-                        <Typography sx={{ ...dashboardSubtleTextSx, mb: 1 }} variant="body2">
-                            Uma cobrança paga só conta como resultado individual quando o mesmo usuário abriu e concluiu o atendimento.
-                        </Typography>
-                        <TableContainer>
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell>Usuário</TableCell>
-                                        <TableCell align="right">Em aberto</TableCell>
-                                        <TableCell align="right">Valor em aberto</TableCell>
-                                        <TableCell align="right">Pagas pelo mesmo usuário</TableCell>
-                                        <TableCell align="right">Valor recuperado</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {chartData.individualRows.map((row) => (
-                                        <TableRow key={row.user}>
-                                            <TableCell>{row.user}</TableCell>
-                                            <TableCell align="right">{row.openedCount}</TableCell>
-                                            <TableCell align="right">{formatCurrency(row.openedValue)}</TableCell>
-                                            <TableCell align="right">{row.paidCount}</TableCell>
-                                            <TableCell align="right">{formatCurrency(row.paidValue)}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                    {!chartData.individualRows.length && (
-                                        <TableRow>
-                                            <TableCell colSpan={5} align="center">Sem resultados individuais no período.</TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    </Paper>
-                </Box>
+                <CobrancasDashboardCharts
+                    metrics={metrics}
+                    chartData={chartData}
+                    userFilter={userFilter}
+                />
             )}
 
-            <Paper
-                className={isDashboard ? 'pdf-export-ignore' : undefined}
-                variant="outlined"
-                sx={{ p: 2, borderRadius: 2 }}
-            >
-                <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2} mb={2}>
-                    <Box>
-                        <Typography variant="h6" fontWeight={800}>
-                            {isDashboard ? 'Resumo da fila' : isPaidList ? 'Baixas registradas' : isAutomaticQueue ? 'Disponiveis para captura' : 'Fila de cobranca'}
-                        </Typography>
-                        <Typography color="text.secondary" variant="body2">{filteredCharges.length} registros encontrados</Typography>
-                    </Box>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-                        <TextField
-                            size="small"
-                            label="Buscar"
-                            value={searchFilter}
-                            onChange={(event) => setSearchFilter(event.target.value)}
-                            placeholder="Cliente, codigo ou protocolo"
-                            sx={{ minWidth: { xs: '100%', sm: 260 } }}
-                        />
-                        <TextField
-                            select
-                            size="small"
-                            label="Status"
-                            value={statusFilter}
-                            onChange={(event) => setStatusFilter(event.target.value)}
-                            sx={{ minWidth: 220 }}
-                        >
-                            <MenuItem value="Todos">Todos</MenuItem>
-                            <MenuItem value="Em aberto">Em aberto</MenuItem>
-                            <MenuItem value="Finalizadas">Finalizadas</MenuItem>
-                            <MenuItem value="Promessas hoje">Promessas hoje</MenuItem>
-                            <MenuItem value="Promessas vencidas">Promessas vencidas</MenuItem>
-                            <MenuItem value="Sem atualização há 7 dias">Sem atualização há 7 dias</MenuItem>
-                            {statusOptions.map((status) => <MenuItem key={status} value={status}>{status}</MenuItem>)}
-                        </TextField>
-                        {(isDashboard || isTracking) && (
-                            <>
-                                {isDashboard && (
-                                    <>
-                                        <TextField
-                                            select
-                                            size="small"
-                                            label="Usuario"
-                                            value={userFilter}
-                                            onChange={(event) => setUserFilter(event.target.value)}
-                                            sx={{ minWidth: 190 }}
-                                        >
-                                            <MenuItem value="Todos">Todos</MenuItem>
-                                            {userOptions.map((user) => <MenuItem key={user} value={user}>{user}</MenuItem>)}
-                                        </TextField>
-                                        <TextField
-                                            select
-                                            size="small"
-                                            label="Acao"
-                                            value={actionFilter}
-                                            onChange={(event) => setActionFilter(event.target.value)}
-                                            sx={{ minWidth: 210 }}
-                                        >
-                                            <MenuItem value="Todos">Todas</MenuItem>
-                                            {actionFilterOptions.map((action) => <MenuItem key={action} value={action}>{action}</MenuItem>)}
-                                        </TextField>
-                                    </>
-                                )}
-                                <TextField
-                                    select
-                                    size="small"
-                                    label="Grupo"
-                                    value={groupFilter}
-                                    onChange={(event) => setGroupFilter(event.target.value)}
-                                    sx={{ minWidth: 190 }}
-                                >
-                                    <MenuItem value="Todos">Todos</MenuItem>
-                                    {groupOptions.map((group) => <MenuItem key={group} value={group}>{group}</MenuItem>)}
-                                </TextField>
-                            </>
-                        )}
-                    </Stack>
-                </Stack>
+            <CobrancasTable
+                isDashboard={isDashboard}
+                isPaidList={isPaidList}
+                isAutomaticQueue={isAutomaticQueue}
+                isTracking={isTracking}
+                isRegister={isRegister}
+                filteredCharges={filteredCharges}
+                paginatedCharges={paginatedCharges}
+                page={page}
+                setPage={setPage}
+                rowsPerPage={rowsPerPage}
+                setRowsPerPage={setRowsPerPage}
+                loading={loading}
+                statusFilter={statusFilter}
+                setStatusFilter={setStatusFilter}
+                searchFilter={searchFilter}
+                setSearchFilter={setSearchFilter}
+                userFilter={userFilter}
+                setUserFilter={setUserFilter}
+                actionFilter={actionFilter}
+                setActionFilter={setActionFilter}
+                groupFilter={groupFilter}
+                setGroupFilter={setGroupFilter}
+                statusOptions={statusOptions}
+                actionFilterOptions={actionFilterOptions}
+                userOptions={userOptions}
+                groupOptions={groupOptions}
+                onSelectCharge={openCharge}
+                onOpenDeleteDialog={openDeleteDialog}
+                onCaptureCharge={captureCharge}
+                saving={saving}
+            />
 
-                <TableContainer>
-                    {loading ? (
-                        <Stack alignItems="center" py={5}><CircularProgress /></Stack>
-                    ) : (
-                        <Table size="small">
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell>Protocolo</TableCell>
-                                    <TableCell>Cliente</TableCell>
-                                    <TableCell>Grupo</TableCell>
-                                    <TableCell>Acao</TableCell>
-                                    <TableCell>Data registro</TableCell>
-                                    <TableCell>Data vencimento</TableCell>
-                                    <TableCell>Valor</TableCell>
-                                    <TableCell>Status</TableCell>
-                                    <TableCell>Situação do atendimento</TableCell>
-                                    <TableCell>Usuario</TableCell>
-                                    {isPaidList && <TableCell>Exclusao</TableCell>}
-                                    <TableCell align="right">{isPaidList ? 'Acoes' : 'Detalhes'}</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {paginatedCharges.map((charge) => (
-                                    <TableRow key={charge.id} hover>
-                                        <TableCell>{charge.protocol}</TableCell>
-                                        <TableCell>
-                                            <Typography fontWeight={700} fontSize="inherit">{charge.client || 'Nao informado'}</Typography>
-                                            <Typography color="text.secondary" variant="caption">
-                                                Codigo {charge.clientCode || '-'}
-                                            </Typography>
-                                        </TableCell>
-                                        <TableCell>{charge.clientGroup || 'Nao informado'}</TableCell>
-                                        <TableCell>{charge.action}</TableCell>
-                                        <TableCell>{formatDate(charge.date)}</TableCell>
-                                        <TableCell>{formatDate(charge.dueDate)}</TableCell>
-                                        <TableCell>
-                                            <Typography fontSize="inherit">Original: {formatCurrency(charge.value)}</Typography>
-                                            {isPaidStatus(charge.status) && (
-                                                <Typography color="success.main" variant="caption" display="block">
-                                                    Pago: {formatCurrency(charge.paidValue ?? charge.value)}
-                                                </Typography>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                size="small"
-                                                color={charge.excluded ? 'error' : isPromiseStatus(charge.status) && charge.promiseDate && charge.promiseDate <= todayIso() ? 'error' : isFinalStatus(charge.status) ? 'success' : 'warning'}
-                                                label={charge.excluded ? 'Excluida' : charge.status}
-                                            />
-                                            {isPromiseStatus(charge.status) && charge.promiseDate && (
-                                                <Typography display="block" color="text.secondary" variant="caption">
-                                                    Promessa: {formatDate(charge.promiseDate)}
-                                                </Typography>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                size="small"
-                                                color={charge.serviceSituation === 'Fechada' ? 'default' : 'success'}
-                                                variant="outlined"
-                                                label={charge.serviceSituation}
-                                            />
-                                        </TableCell>
-                                        <TableCell>
-                                            <Typography fontSize="inherit">
-                                                {charge.responsible || (charge.automatic ? 'Aguardando captura' : charge.lastUser || 'sem usuario')}
-                                            </Typography>
-                                            {charge.automatic && (
-                                                <Typography color="text.secondary" variant="caption" display="block">
-                                                    Automático • RBX: {charge.rbxStatus || 'não iniciado'}
-                                                </Typography>
-                                            )}
-                                        </TableCell>
-                                        {isPaidList && (
-                                            <TableCell>
-                                                {charge.excluded ? (
-                                                    <>
-                                                        <Typography fontWeight={700} fontSize="inherit">
-                                                            {charge.excludedBy || 'sem usuario'}
-                                                        </Typography>
-                                                        <Typography color="text.secondary" variant="caption" display="block">
-                                                            {charge.excludedAt ? new Date(charge.excludedAt).toLocaleString('pt-BR') : '-'}
-                                                        </Typography>
-                                                        <Typography color="text.secondary" variant="caption" display="block">
-                                                            {charge.exclusionReason || 'Motivo nao informado'}
-                                                        </Typography>
-                                                    </>
-                                                ) : (
-                                                    <Typography color="text.secondary" variant="caption">Nao excluida</Typography>
-                                                )}
-                                            </TableCell>
-                                        )}
-                                        <TableCell align="right">
-                                            {charge.automatic
-                                                && (!charge.responsible || charge.rbxStatus === 'ERRO_ABERTURA_RBX')
-                                                && charge.serviceSituation !== 'Fechada' && (
-                                                <Button
-                                                    size="small"
-                                                    variant="outlined"
-                                                    disabled={saving}
-                                                    onClick={() => captureCharge(charge)}
-                                                    sx={{ mr: 0.5 }}
-                                                >
-                                                    {charge.responsible ? 'Tentar RBX novamente' : 'Capturar'}
-                                                </Button>
-                                            )}
-                                            <IconButton size="small" onClick={() => openCharge(charge)}>
-                                                {isDashboard || !charge.editable ? <InfoOutlinedIcon fontSize="small" /> : <EditRoundedIcon fontSize="small" />}
-                                            </IconButton>
-                                            {isPaidList && !charge.excluded && (
-                                                <IconButton size="small" color="error" onClick={() => openDeleteDialog(charge)}>
-                                                    <DeleteRoundedIcon fontSize="small" />
-                                                </IconButton>
-                                            )}
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                                {!filteredCharges.length && (
-                                    <TableRow>
-                                        <TableCell colSpan={isPaidList ? 12 : 11} align="center">Nenhuma cobranca cadastrada.</TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    )}
-                </TableContainer>
-                {!loading && filteredCharges.length > 0 && (
-                    <TablePagination
-                        component="div"
-                        count={filteredCharges.length}
-                        page={page}
-                        onPageChange={(_, nextPage) => setPage(nextPage)}
-                        rowsPerPage={rowsPerPage}
-                        onRowsPerPageChange={(event) => {
-                            setRowsPerPage(Number(event.target.value));
-                            setPage(0);
-                        }}
-                        rowsPerPageOptions={[20, 50, 100]}
-                        labelRowsPerPage="Linhas por página"
-                        labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
-                    />
-                )}
-            </Paper>
-
-            <Dialog
+            <CobrancaFormDialog
                 open={open}
                 onClose={() => setOpen(false)}
-                maxWidth="md"
-                fullWidth
-                PaperProps={{ sx: { width: 'min(980px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 32px)' } }}
-            >
-                <DialogTitle>
-                    {selected
-                        ? `${canSaveSelected ? (isTracking ? 'Acompanhar' : 'Editar') : 'Detalhes da'} cobranca ${selected.protocol}`
-                        : 'Nova cobranca'}
-                </DialogTitle>
-                <DialogContent sx={{ overflowX: 'hidden' }}>
-                    {error && (
-                        <Alert severity="error" sx={{ mb: 2 }}>
-                            {error}
-                        </Alert>
-                    )}
-                    {!selected && isRegister && (!validatedClientCode || normalizeClientCode(form.codigoCliente) !== validatedClientCode || !form.cliente) && (
-                        <Alert severity="info" sx={{ mb: 2 }}>
-                            Informe o codigo do cliente e clique na lupa para validar no RBX antes de salvar.
-                        </Alert>
-                    )}
-                    <Box sx={{ ...formGridSx, pt: 1 }}>
-                        <Box sx={{ gridColumn: fieldSpan.third }}>
-                            <TextField
-                                select
-                                fullWidth
-                                label="Acao"
-                                value={form.acao}
-                                onChange={(event) => updateForm('acao', event.target.value)}
-                                disabled={!canEditSelected}
-                            >
-                                {actionOptions.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
-                            </TextField>
-                        </Box>
-                        <Box sx={{ gridColumn: fieldSpan.third }}>
-                            <TextField
-                                fullWidth
-                                type="text"
-                                label="Codigo cliente"
-                                value={form.codigoCliente}
-                                onChange={(event) => {
-                                    updateForm('codigoCliente', normalizeClientCode(event.target.value));
-                                    updateForm('cliente', '');
-                                    updateForm('grupoCliente', '');
-                                    updateForm('numeroContrato', '');
-                                    updateForm('boletoSelecionado', '');
-                                    updateForm('dataVencimento', '');
-                                    updateForm('valor', '');
-                                    setRbxClient(null);
-                                    setValidatedClientCode('');
-                                }}
-                                disabled={!canEditSelected}
-                                inputProps={{ inputMode: 'numeric', pattern: '[0-9]*' }}
-                                InputProps={{
-                                    endAdornment: (
-                                        <IconButton size="small" onClick={searchRbxClient} disabled={rbxLoading}>
-                                            {rbxLoading ? <CircularProgress size={18} /> : <SearchRoundedIcon fontSize="small" />}
-                                        </IconButton>
-                                    ),
-                                }}
-                            />
-                        </Box>
-                        {isPromiseStatus(form.status) && (
-                            <Box sx={{ gridColumn: fieldSpan.third }}>
-                                <TextField
-                                    fullWidth
-                                    required
-                                    type="date"
-                                    label="Data da promessa"
-                                    value={form.dataPromessa}
-                                    onChange={(event) => updateForm('dataPromessa', event.target.value)}
-                                    InputLabelProps={{ shrink: true }}
-                                    disabled={!(canEditSelected || canTrackSelected)}
-                                    helperText="Obrigatorio para promessa de pagamento"
-                                />
-                            </Box>
-                        )}
-                        <Box sx={{ gridColumn: fieldSpan.third }}>
-                            <TextField
-                                fullWidth
-                                label="Cliente"
-                                value={form.cliente}
-                                disabled
-                                helperText="Preenchido pela busca do codigo no RBX"
-                            />
-                        </Box>
-                        <Box sx={{ gridColumn: fieldSpan.third }}>
-                            <TextField
-                                fullWidth
-                                label="Grupo"
-                                value={form.grupoCliente}
-                                disabled
-                                helperText="Grupo do cliente no RBX"
-                            />
-                        </Box>
-                        <Box sx={{ gridColumn: fieldSpan.third }}>
-                            <TextField
-                                select={Boolean(rbxClient) && !selected}
-                                fullWidth
-                                required={!selected}
-                                label="Contrato / ponto de internet"
-                                value={form.numeroContrato}
-                                onChange={(event) => {
-                                    const numeroContrato = event.target.value;
-                                    updateForm('numeroContrato', numeroContrato);
-                                    updateForm('boletoSelecionado', '');
-                                    updateForm('dataVencimento', '');
-                                    updateForm('valor', '');
-                                    const charge = findChargeInProgressByContract(form.codigoCliente, numeroContrato, null);
-                                    setError(charge
-                                        ? `Ja existe uma cobranca em andamento para o contrato ${numeroContrato}: ${charge.protocol} (${charge.status}).`
-                                        : '');
-                                }}
-                                disabled={!rbxClient || Boolean(selected)}
-                                helperText={!rbxClient
-                                    ? 'Busque o cliente para listar os contratos com boletos'
-                                    : `${rbxClient.contratos.length} contrato(s) com boleto em aberto`}
-                            >
-                                {(rbxClient?.contratos || []).map((contrato) => (
-                                    <MenuItem key={contrato.numero} value={contrato.numero}>
-                                        Contrato {contrato.numero}{contrato.plano ? ` - ${contrato.plano}` : ''}
-                                    </MenuItem>
-                                ))}
-                            </TextField>
-                        </Box>
-                        {!selected && (
-                            <Box sx={{ gridColumn: fieldSpan.third }}>
-                                <TextField
-                                    select
-                                    fullWidth
-                                    required
-                                    label="Boleto em aberto"
-                                    value={form.boletoSelecionado}
-                                    onChange={(event) => {
-                                        const boletoId = event.target.value;
-                                        const boleto = selectedRbxContract?.boletos.find((item) => item.id === boletoId);
-                                        setForm((current) => ({
-                                            ...current,
-                                            boletoSelecionado: boletoId,
-                                            dataVencimento: boleto?.vencimento || '',
-                                            valor: boleto ? String(boleto.valor) : '',
-                                        }));
-                                    }}
-                                    disabled={!selectedRbxContract}
-                                    helperText="Selecione um boleto do contrato"
-                                >
-                                    {(selectedRbxContract?.boletos || []).map((boleto) => (
-                                        <MenuItem key={boleto.id} value={boleto.id}>
-                                            {formatDate(boleto.vencimento)} - {formatCurrency(boleto.valor)}
-                                            {boleto.documento ? ` - ${boleto.documento}` : ''}
-                                        </MenuItem>
-                                    ))}
-                                </TextField>
-                            </Box>
-                        )}
-                        <Box sx={{ gridColumn: fieldSpan.third }}>
-                            <TextField
-                                fullWidth
-                                type="date"
-                                label="Data registro"
-                                value={form.data}
-                                onChange={(event) => updateForm('data', event.target.value)}
-                                InputLabelProps={{ shrink: true }}
-                                disabled={!canEditSelected}
-                            />
-                        </Box>
-                        <Box sx={{ gridColumn: fieldSpan.third }}>
-                            <TextField
-                                fullWidth
-                                required
-                                type="date"
-                                label="Data de vencimento"
-                                value={form.dataVencimento}
-                                onChange={(event) => updateForm('dataVencimento', event.target.value)}
-                                InputLabelProps={{ shrink: true }}
-                                disabled={!canEditSelected}
-                                helperText="Preenchimento manual"
-                            />
-                        </Box>
-                        <Box sx={{ gridColumn: fieldSpan.third }}>
-                            <TextField
-                                fullWidth
-                                type="number"
-                                label="Valor"
-                                value={form.valor}
-                                onChange={(event) => updateForm('valor', event.target.value)}
-                                inputProps={{ step: '0.01', min: '0' }}
-                                disabled={!canEditOriginalValue}
-                                helperText={canEditOriginalValue
-                                    ? 'Liberado pelo status selecionado'
-                                    : 'Valor original bloqueado; selecione Negociação ou Promessa de pagamento'}
-                            />
-                        </Box>
-                        <Box sx={{ gridColumn: fieldSpan.third }}>
-                            <TextField
-                                select
-                                fullWidth
-                                label="Status"
-                                value={form.status}
-                                onChange={(event) => updateForm('status', event.target.value)}
-                                disabled={!(canEditSelected || canTrackSelected)}
-                            >
-                                {statusOptions.map((status) => <MenuItem key={status} value={status}>{status}</MenuItem>)}
-                            </TextField>
-                        </Box>
-                        {isPaidStatus(form.status) && (
-                            <Box sx={{ gridColumn: fieldSpan.third }}>
-                                <TextField
-                                    fullWidth
-                                    required
-                                    type="number"
-                                    label="Valor pago"
-                                    value={form.valorPago}
-                                    onChange={(event) => updateForm('valorPago', event.target.value)}
-                                    inputProps={{ step: '0.01', min: '0.01' }}
-                                    disabled={!canSaveSelected}
-                                    helperText="Pode ser diferente do valor original"
-                                />
-                            </Box>
-                        )}
-                        <Box sx={{ gridColumn: fieldSpan.full }}>
-                            <TextField
-                                fullWidth
-                                multiline
-                                minRows={3}
-                                label="Observacao"
-                                value={form.observacao}
-                                onChange={(event) => updateForm('observacao', event.target.value)}
-                                disabled={!canEditSelected}
-                            />
-                        </Box>
-                        {isTracking && canTrackSelected && (
-                            <Box sx={{ gridColumn: fieldSpan.full }}>
-                                <TextField
-                                    fullWidth
-                                    required
-                                    multiline
-                                    minRows={3}
-                                    label={`O que foi feito (${form.status})`}
-                                    value={trackingNote}
-                                    onChange={(event) => setTrackingNote(event.target.value)}
-                                    helperText="Esse texto sera salvo no historico junto com o status selecionado."
-                                />
-                            </Box>
-                        )}
-                    </Box>
+                selected={selected}
+                form={form}
+                updateForm={updateForm}
+                setForm={setForm}
+                actionOptions={actionOptions}
+                statusOptions={statusOptions}
+                canEditSelected={canEditSelected}
+                canTrackSelected={canTrackSelected}
+                canSaveSelected={canSaveSelected}
+                canEditOriginalValue={canEditOriginalValue}
+                trackingNote={trackingNote}
+                setTrackingNote={setTrackingNote}
+                saveDisabled={saveDisabled}
+                saving={saving}
+                onSubmit={saveCharge}
+                rbxClient={rbxClient}
+                setRbxClient={setRbxClient}
+                searchRbxClient={searchRbxClient}
+                rbxLoading={rbxLoading}
+                validatedClientCode={validatedClientCode}
+                setValidatedClientCode={setValidatedClientCode}
+                isTracking={isTracking}
+                isRegister={isRegister}
+                selectedRbxContract={selectedRbxContract}
+                findChargeInProgressByContract={findChargeInProgressByContract}
+                error={error}
+                setError={setError}
+            />
 
-                    <ClienteRbxPanel cliente={rbxClient} />
-
-                    {rbxClient && (
-                        <Alert severity={rbxClient.contratos.length ? 'success' : 'warning'} sx={{ mt: 2 }}>
-                            {rbxClient.contratos.length
-                                ? 'Selecione primeiro o contrato e depois um dos boletos em aberto vinculados a ele.'
-                                : 'O cliente nao possui contratos com boletos em aberto no RBX.'}
-                        </Alert>
-                    )}
-
-                    {selected && (
-                        <>
-                            <Divider sx={{ my: 2 }} />
-                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                                <Box>
-                                    <Typography variant="caption" color="text.secondary">Criado em</Typography>
-                                    <Typography fontWeight={700}>
-                                        {selected.createdAt ? new Date(selected.createdAt).toLocaleString('pt-BR') : '-'}
-                                    </Typography>
-                                    <Typography color="text.secondary" variant="caption">
-                                        {selected.createdBy ? `por ${selected.createdBy}` : ''}
-                                    </Typography>
-                                </Box>
-                                <Box>
-                                    <Typography variant="caption" color="text.secondary">Atualizado em</Typography>
-                                    <Typography fontWeight={700}>
-                                        {selected.updatedAt ? new Date(selected.updatedAt).toLocaleString('pt-BR') : '-'}
-                                    </Typography>
-                                    <Typography color="text.secondary" variant="caption">
-                                        {selected.updatedBy ? `por ${selected.updatedBy}` : ''}
-                                    </Typography>
-                                </Box>
-                                <Box>
-                                    <Typography variant="caption" color="text.secondary">Fechado em</Typography>
-                                    <Typography fontWeight={700}>
-                                        {selected.closedAt ? new Date(selected.closedAt).toLocaleString('pt-BR') : '-'}
-                                    </Typography>
-                                </Box>
-                                <Box>
-                                    <Typography variant="caption" color="text.secondary">Ultimo usuario</Typography>
-                                    <Typography fontWeight={700}>
-                                        {selected.lastUser || '-'}
-                                    </Typography>
-                                </Box>
-                            </Stack>
-                            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, mt: 2 }}>
-                                <Typography variant="subtitle1" fontWeight={800}>Historico de acompanhamento</Typography>
-                                <Stack spacing={1.2} sx={{ mt: 1.5 }}>
-                                    {selected.history?.length ? selected.history.map((item) => (
-                                        <Box
-                                            key={item.id}
-                                            sx={{
-                                                border: '1px solid',
-                                                borderColor: 'divider',
-                                                borderRadius: 1,
-                                                p: 1.5,
-                                            }}
-                                        >
-                                            <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={1}>
-                                                <Box>
-                                                    <Typography fontWeight={800}>
-                                                        {item.previousStatus || '-'} para {item.nextStatus || '-'}
-                                                    </Typography>
-                                                    <Typography color="text.secondary" variant="body2">
-                                                        {item.notes}
-                                                    </Typography>
-                                                </Box>
-                                                <Box sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
-                                                    <Typography variant="body2" fontWeight={700}>
-                                                        {formatCurrency(item.previousValue)} para {formatCurrency(item.nextValue)}
-                                                    </Typography>
-                                                    <Typography color="text.secondary" variant="caption">
-                                                        {[item.user, item.createdAt ? new Date(item.createdAt).toLocaleString('pt-BR') : null].filter(Boolean).join(' - ')}
-                                                    </Typography>
-                                                </Box>
-                                            </Stack>
-                                        </Box>
-                                    )) : (
-                                        <Typography color="text.secondary" variant="body2">
-                                            Nenhum acompanhamento registrado.
-                                        </Typography>
-                                    )}
-                                </Stack>
-                            </Paper>
-                        </>
-                    )}
-                </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={() => setOpen(false)}>Cancelar</Button>
-                    {canSaveSelected && (
-                        <Button variant="contained" onClick={handleSubmit} disabled={saveDisabled}>
-                            {saving ? 'Salvando...' : 'Salvar cobranca'}
-                        </Button>
-                    )}
-                </DialogActions>
-            </Dialog>
-
-            <Dialog open={deleteOpen} onClose={closeDeleteDialog} maxWidth="sm" fullWidth>
-                <DialogTitle>Excluir cobranca paga</DialogTitle>
-                <DialogContent>
-                    {error && (
-                        <Alert severity="error" sx={{ mb: 2 }}>
-                            {error}
-                        </Alert>
-                    )}
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Essa acao nao apaga o registro do banco. A cobranca sera marcada como excluida e o motivo ficara salvo no historico.
-                    </Typography>
-                    {deleteTarget && (
-                        <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 1.5, mb: 2 }}>
-                            <Typography fontWeight={800}>{deleteTarget.protocol}</Typography>
-                            <Typography variant="body2">{deleteTarget.client || 'Cliente nao informado'}</Typography>
-                            <Typography variant="caption" color="text.secondary">
-                                Codigo {deleteTarget.clientCode || '-'} - Valor {formatCurrency(deleteTarget.value)}
-                            </Typography>
-                        </Paper>
-                    )}
-                    <TextField
-                        fullWidth
-                        required
-                        multiline
-                        minRows={4}
-                        label="Motivo da exclusao"
-                        value={deleteReason}
-                        onChange={(event) => setDeleteReason(event.target.value)}
-                        helperText="Obrigatorio. Sera salvo com usuario, data e hora."
-                    />
-                </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={closeDeleteDialog}>Cancelar</Button>
-                    <Button color="error" variant="contained" onClick={handleLogicalDelete} disabled={saving || !deleteReason.trim()}>
-                        {saving ? 'Excluindo...' : 'Excluir cobranca'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
+            <CobrancaDeleteDialog
+                open={deleteOpen}
+                onClose={closeDeleteDialog}
+                deleteTarget={deleteTarget}
+                deleteReason={deleteReason}
+                setDeleteReason={setDeleteReason}
+                onConfirm={handleLogicalDelete}
+                saving={saving}
+                error={error}
+            />
         </Box>
     );
 };

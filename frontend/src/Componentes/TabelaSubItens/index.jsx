@@ -2,7 +2,8 @@ import * as React from 'react';
 import {
     Box, Collapse, IconButton, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, Typography, Paper, CircularProgress, Alert,
-    Dialog, DialogActions, DialogContent, DialogTitle, TextField, Button
+    Dialog, DialogActions, DialogContent, DialogTitle, TextField, Button,
+    Chip, Tooltip
 } from '@mui/material';
 import AddBoxIcon from '@mui/icons-material/AddBox';
 import RemoveIcon from '@mui/icons-material/Remove';
@@ -11,6 +12,7 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import PropTypes from 'prop-types';
 import Api from '../../Services/Api';
 import { DialogAction } from '../DialogAction';
+import { useNotification } from '../NotificationProvider';
 
 const UseApi = Api();
 
@@ -31,7 +33,7 @@ const Row = React.forwardRef(({ row, onOpenDialog, onRemoverCliente }, ref) => {
             } else {
                 setErroCto("Resposta inválida recebida da API.");
             }
-        } catch (error) {
+        } catch {
             setErroCto("Erro ao buscar portas da CTO.");
         } finally {
             setLoadingCtos(false);
@@ -85,51 +87,91 @@ const Row = React.forwardRef(({ row, onOpenDialog, onRemoverCliente }, ref) => {
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
-                                        {portas.map((porta) => (
-                                            <TableRow
-                                                key={porta.id}
-                                                sx={{
-                                                    backgroundColor: {
-                                                        A: '#308a4f',
-                                                        S: '#720808',
-                                                        C: '#c72121',
-                                                        B: '#d37042',
-                                                        N: 'transparent'
-                                                    }[porta.cliente?.Situacao] || 'transparent'
-                                                }}
-                                            >
-                                                <TableCell>{porta.label}</TableCell>
-                                                <TableCell align="right">{porta.cliente?.Codigo ?? ''}</TableCell>
-                                                <TableCell align="right">{porta.cliente?.Nome ?? ''}</TableCell>
-                                                <TableCell align="right">{porta.login ?? ''}</TableCell>
-                                                <TableCell align="right">{porta.cliente?.CNPJ_CNPF ?? ''}</TableCell>
-                                                <TableCell align="right">{porta.cliente?.Sigla ?? ''}</TableCell>
-                                                <TableCell align="right">
-                                                    {{
-                                                        S: 'Suspenso',
-                                                        A: 'Ativo',
-                                                        B: 'Bloqueado',
-                                                        N: 'Inativo',
-                                                        C: 'Cancelado',
-                                                        I: 'Em Instalação',
-                                                        E: 'Aguardando Instalação'
-                                                    }[porta.cliente?.Situacao] ?? ''}
-                                                </TableCell>
-                                                <TableCell align="right">
-                                                    {porta.cliente?.Codigo ? (
-                                                        <RemoveIcon
-                                                            sx={{ cursor: 'pointer' }}
-                                                            onClick={() => onRemoverCliente(porta.id, row.id)}
-                                                        />
-                                                    ) : (
-                                                        <AddBoxIcon
-                                                            sx={{ cursor: 'pointer' }}
-                                                            onClick={() => onOpenDialog(porta.id, row.id)}
-                                                        />
-                                                    )}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
+                                        {portas.map((porta) => {
+                                            const situacaoLabels = {
+                                                S: 'Suspenso',
+                                                A: 'Ativo',
+                                                B: 'Bloqueado',
+                                                N: 'Inativo',
+                                                C: 'Cancelado',
+                                                I: 'Em Instalação',
+                                                E: 'Aguardando Instalação'
+                                            };
+                                            const situacaoColors = {
+                                                A: 'success',
+                                                B: 'warning',
+                                                S: 'error',
+                                                C: 'error',
+                                                I: 'info',
+                                                E: 'info',
+                                                N: 'default'
+                                            };
+                                            const situacao = porta.cliente?.Situacao;
+
+                                            return (
+                                                <TableRow
+                                                    key={porta.id}
+                                                    hover
+                                                    sx={{
+                                                        backgroundColor: situacao === 'A'
+                                                            ? 'rgba(46, 125, 50, 0.04)'
+                                                            : situacao === 'B'
+                                                            ? 'rgba(237, 108, 2, 0.05)'
+                                                            : (situacao === 'S' || situacao === 'C')
+                                                            ? 'rgba(211, 47, 47, 0.05)'
+                                                            : 'inherit'
+                                                    }}
+                                                >
+                                                    <TableCell sx={{ fontWeight: 600 }}>{porta.label}</TableCell>
+                                                    <TableCell align="right">{porta.cliente?.Codigo ?? '—'}</TableCell>
+                                                    <TableCell align="right">{porta.cliente?.Nome ?? '—'}</TableCell>
+                                                    <TableCell align="right">{porta.login ?? '—'}</TableCell>
+                                                    <TableCell align="right">{porta.cliente?.CNPJ_CNPF ?? '—'}</TableCell>
+                                                    <TableCell align="right">{porta.cliente?.Sigla ?? '—'}</TableCell>
+                                                    <TableCell align="right">
+                                                        {situacao ? (
+                                                            <Typography
+                                                                variant="body2"
+                                                                fontWeight={700}
+                                                                color={
+                                                                    situacaoColors[situacao] === 'success' ? 'success.main' :
+                                                                    situacaoColors[situacao] === 'warning' ? 'warning.main' :
+                                                                    situacaoColors[situacao] === 'error' ? 'error.main' :
+                                                                    situacaoColors[situacao] === 'info' ? 'info.main' : 'text.primary'
+                                                                }
+                                                            >
+                                                                {situacaoLabels[situacao] || situacao}
+                                                            </Typography>
+                                                        ) : (
+                                                            <Typography variant="body2" color="text.secondary">Livre</Typography>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell align="right">
+                                                        {porta.cliente?.Codigo ? (
+                                                            <Tooltip title="Desvincular cliente da porta">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    color="error"
+                                                                    onClick={() => onRemoverCliente(porta.id, row.id)}
+                                                                >
+                                                                    <RemoveIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                        ) : (
+                                                            <Tooltip title="Vincular cliente à porta">
+                                                                <IconButton
+                                                                    size="small"
+                                                                    color="primary"
+                                                                    onClick={() => onOpenDialog(porta.id, row.id)}
+                                                                >
+                                                                    <AddBoxIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
                                     </TableBody>
                                 </Table>
                             )}
@@ -150,6 +192,7 @@ Row.propTypes = {
 };
 
 export default function TabelaSubItens({ ctoData }) {
+    const { showSuccess, showError, showWarning } = useNotification();
     const [exibirForm, setExibirForm] = React.useState(false);
     const [exibirFormExcluir, setExibirFormExcluir] = React.useState(false);
     const [codigo, setCodigo] = React.useState('');
@@ -169,39 +212,47 @@ export default function TabelaSubItens({ ctoData }) {
     };
 
     const abrirDialogExcluir = (portaId, ctoId) => {
-        setExibirFormExcluir(true)
-        setPortaSelecionadaExcluir(portaId)
-        setCtoSelecionadoExcluir(ctoId)
-    }
+        setExibirFormExcluir(true);
+        setPortaSelecionadaExcluir(portaId);
+        setCtoSelecionadoExcluir(ctoId);
+    };
 
     const cadastrarClienteNaPorta = async () => {
+        if (!codigo.trim()) {
+            showWarning('Informe o código do cliente.');
+            return;
+        }
+
         setSalvando(true);
         const form = { codigo, porta: portaSelecionada, login };
         try {
             await UseApi('olt/cto/porta/cadastrar', 'POST', form);
+            showSuccess('Cliente vinculado à porta com sucesso!');
             if (ctoSelecionado && rowRefs.current[ctoSelecionado]?.current) {
                 await rowRefs.current[ctoSelecionado].current.recarregar();
             }
-            
         } catch (err) {
             console.error(err);
+            showError(err.message || 'Erro ao vincular cliente à porta.');
         } finally {
             setSalvando(false);
             setExibirForm(false);
             setCodigo('');
-            setLogin('')
+            setLogin('');
         }
     };
 
     const removerClienteDaPorta = async (portaId, ctoId) => {
         try {
             await UseApi(`olt/cto/porta/${portaId}`, 'DELETE');
+            showSuccess('Cliente desvinculado da porta com sucesso!');
             if (ctoId && rowRefs.current[ctoId]?.current) {
                 await rowRefs.current[ctoId].current.recarregar();
             }
         } catch (err) {
             console.error('Erro ao remover cliente da porta:', err);
-        }finally {
+            showError(err.message || 'Erro ao desvincular cliente da porta.');
+        } finally {
             setExibirFormExcluir(false);
         }
     };

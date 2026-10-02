@@ -18,7 +18,7 @@ public class CriptografiaChaveRbxService {
     private final SecretKeySpec key;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public CriptografiaChaveRbxService(@Value("${api.security.token.secret}") String secret) throws Exception {
+    public CriptografiaChaveRbxService(@Value("${api.security.rbx.secret:${api.security.token.secret}}") String secret) throws Exception {
         byte[] digest = MessageDigest.getInstance("SHA-256").digest(secret.getBytes(StandardCharsets.UTF_8));
         this.key = new SecretKeySpec(digest, "AES");
     }

@@ -1,7 +1,10 @@
 package br.com.w4solution.controle_instalacao.services.registros;
 
 import br.com.w4solution.controle_instalacao.domain.registro.Registro;
+import br.com.w4solution.controle_instalacao.domain.usuarios.Usuario;
+import br.com.w4solution.controle_instalacao.domain.usuarios.UserRole;
 import br.com.w4solution.controle_instalacao.dto.evento.ResumoMensalDTO;
+import org.springframework.security.access.AccessDeniedException;
 import br.com.w4solution.controle_instalacao.dto.registro.*;
 import br.com.w4solution.controle_instalacao.repository.equipeTecnica.EquipeTecnicaRepository;
 import br.com.w4solution.controle_instalacao.repository.registro.ProcedimentoRepository;
@@ -14,6 +17,8 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class RegistroService {
@@ -40,27 +45,42 @@ public class RegistroService {
 
     public List<ServicosPorEquipeMensal> listarServicosPorEquipe(String filtro){
         var equipes = equipeTecnicaRepository.findAll();
-        var variavel = equipes.stream().map(e -> {
-            List<Object[]> resultados = null;
-            if(filtro != null){
 
-                LocalDate data = LocalDate.parse(filtro);
-                resultados  = registroRepository.EncontrarRegistroMensalPorTecnico(e.getNomeEquipe(), data.getMonthValue(), data.getYear());
+        // Elimina N+1 queries pré-carregando os procedimentos em 1 única busca
+        Map<String, String> corPorProcedimento = procedimentoRepository.findAll().stream()
+                .filter(p -> p.getProcedimento() != null)
+                .collect(Collectors.toMap(
+                        p -> p.getProcedimento().trim().toLowerCase(),
+                        p -> p.getCor() != null ? p.getCor() : "#2563eb",
+                        (existente, maisRecente) -> maisRecente
+                ));
 
-            }else {
-                resultados  = registroRepository.EncontrarRegistroMensalPorTecnico(e.getNomeEquipe(), LocalDate.now().getMonth().getValue(), LocalDate.now().getYear());
-            }
+        int mes;
+        int ano;
+        if (filtro != null) {
+            LocalDate data = LocalDate.parse(filtro);
+            mes = data.getMonthValue();
+            ano = data.getYear();
+        } else {
+            LocalDate hoje = LocalDate.now();
+            mes = hoje.getMonthValue();
+            ano = hoje.getYear();
+        }
+
+        return equipes.stream().map(e -> {
+            List<Object[]> resultados = registroRepository.EncontrarRegistroMensalPorTecnico(e.getNomeEquipe(), mes, ano);
             List<ServicosEquipe> servicos2 = new ArrayList<>();
             for (Object[] resultado : resultados) {
                 String procedimento = (String) resultado[0];
                 Long quantidade = (Long) resultado[1];
-                var pc = procedimentoRepository.findTopByProcedimentoOrderByIdDesc(procedimento);
-                servicos2.add(new ServicosEquipe(procedimento, quantidade, pc.getCor()));
+                String cor = corPorProcedimento.getOrDefault(
+                        procedimento != null ? procedimento.trim().toLowerCase() : "",
+                        "#2563eb"
+                );
+                servicos2.add(new ServicosEquipe(procedimento, quantidade, cor));
             }
             return new ServicosPorEquipeMensal(e.getNomeEquipe(), servicos2);
         }).toList();
-
-        return variavel;
     }
 
     public List<RegistroDTO2> listarTop15Registros(){
@@ -83,14 +103,25 @@ public class RegistroService {
         return registro;
     }
 
-    public void deletarRegistro(Long id) {
-        var registro = registroRepository.findById(id);
-        if(registro.isPresent()){
-            registroRepository.deleteById(id);
-        }else {
-            throw new DeletarRegistroExceptions("REGISTRO NAO ENCONTRADO");
+    public void deletarRegistro(Long id, Usuario usuario) {
+        var registro = registroRepository.findById(id)
+                .orElseThrow(() -> new DeletarRegistroExceptions("REGISTRO NAO ENCONTRADO"));
+
+        boolean isAdminOuSupervisor = usuario != null && (
+                usuario.getPermissao() == UserRole.ADMIN || usuario.isSupervisor()
+        );
+        boolean isProprietario = usuario != null && registro.getLogin() != null &&
+                registro.getLogin().equalsIgnoreCase(usuario.getUsuario());
+
+        if (!isAdminOuSupervisor && !isProprietario) {
+            throw new AccessDeniedException("Você não possui permissão para excluir este registro.");
         }
 
+        registroRepository.delete(registro);
+    }
+
+    public void deletarRegistro(Long id) {
+        deletarRegistro(id, null);
     }
 
     public List<TotalPorMesDTO> listarTodosRegistroPorMes(String servico){

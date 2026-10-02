@@ -99,72 +99,30 @@ public class CobrancaService {
     }
 
     public List<CobrancaDTO> listar(String usuario, boolean podeVerGeral) {
-        return repository.findAll().stream()
-                .filter(cobranca -> podeAcessar(cobranca, usuario, podeVerGeral))
-                .filter(cobranca -> !Boolean.TRUE.equals(cobranca.getExcluida()))
-                .sorted(Comparator.comparing(Cobranca::getData, Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(Cobranca::getCriadoEm, Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(this::toDto)
-                .toList();
+        return toDtoList(repository.listarCobrancas(usuario, podeVerGeral));
     }
 
     public List<CobrancaDTO> listarAutomaticasDisponiveis() {
         LocalDate hoje = LocalDate.now();
-        return repository.findAll().stream()
-                .filter(cobranca -> Boolean.TRUE.equals(cobranca.getGeradaAutomaticamente()))
-                .filter(cobranca -> atrasoMinimoAtingido(cobranca.getDataVencimento(), hoje))
-                .filter(cobranca -> cobranca.getResponsavel() == null || cobranca.getResponsavel().isBlank())
-                .filter(cobranca -> !Boolean.TRUE.equals(cobranca.getExcluida()))
-                .filter(cobranca -> !"Fechada".equalsIgnoreCase(cobranca.getSituacaoAtendimento()))
-                .sorted(Comparator.comparing(Cobranca::getDataVencimento, Comparator.nullsLast(Comparator.naturalOrder())))
-                .map(this::toDto)
-                .toList();
+        LocalDate dataLimite = hoje.minusDays(DIAS_ATRASO_FILA_AUTOMATICA);
+        return toDtoList(repository.listarAutomaticasDisponiveis(dataLimite));
     }
 
     public List<CobrancaDTO> listarAcompanhamento(String usuario) {
-        return repository.findAll().stream()
-                .filter(cobranca -> !Boolean.TRUE.equals(cobranca.getExcluida()))
-                .filter(cobranca -> {
-                    if (!Boolean.TRUE.equals(cobranca.getGeradaAutomaticamente())) {
-                        return String.valueOf(cobranca.getResponsavel()).equalsIgnoreCase(String.valueOf(usuario))
-                                || String.valueOf(cobranca.getCriadoPor()).equalsIgnoreCase(String.valueOf(usuario));
-                    }
-                    return cobranca.getResponsavel() != null
-                            && cobranca.getResponsavel().equalsIgnoreCase(String.valueOf(usuario));
-                })
-                .sorted(Comparator.comparing(Cobranca::getData, Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(Cobranca::getCriadoEm, Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(this::toDto)
-                .toList();
+        return toDtoList(repository.listarAcompanhamento(usuario));
     }
 
     public List<CobrancaDTO> listarPagas(String usuario, boolean podeVerGeral) {
-        return repository.findAll().stream()
-                .filter(cobranca -> podeAcessar(cobranca, usuario, podeVerGeral))
-                .filter(cobranca -> "PAGO".equals(String.valueOf(cobranca.getStatus()).trim().toUpperCase()))
-                .sorted(Comparator.comparing(Cobranca::getFechadoEm, Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(Cobranca::getAtualizadoEm, Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(Cobranca::getData, Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(this::toDto)
-                .toList();
+        return toDtoList(repository.listarPagas(usuario, podeVerGeral));
     }
 
     public List<CobrancaDTO> listarAuditoria(String usuario, boolean podeVerGeral) {
-        return repository.findAll().stream()
-                .filter(cobranca -> podeAcessar(cobranca, usuario, podeVerGeral))
-                .sorted(Comparator.comparing(Cobranca::getExcluidoEm, Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(Cobranca::getFechadoEm, Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(Cobranca::getAtualizadoEm, Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(Cobranca::getData, Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(this::toDto)
-                .toList();
+        return toDtoList(repository.listarAuditoria(usuario, podeVerGeral));
     }
 
     public CobrancaLembreteDTO lembretesPendentes(String usuario, boolean podeVerGeral) {
         LocalDateTime limite = LocalDateTime.now().minusDays(7);
-        long quantidade = repository.findAll().stream()
-                .filter(cobranca -> podeAcessar(cobranca, usuario, podeVerGeral))
-                .filter(cobranca -> !Boolean.TRUE.equals(cobranca.getExcluida()))
+        long quantidade = repository.listarCobrancas(usuario, podeVerGeral).stream()
                 .filter(cobranca -> !"Fechada".equalsIgnoreCase(cobranca.getSituacaoAtendimento()))
                 .filter(cobranca -> isEditavel(cobranca.getStatus()))
                 .filter(cobranca -> ultimaMovimentacao(cobranca) != null && !ultimaMovimentacao(cobranca).isAfter(limite))
@@ -173,11 +131,7 @@ public class CobrancaService {
     }
 
     public List<CobrancaEncerramentoNotificacaoDTO> notificacoesEncerramento(String usuario) {
-        return repository.findAll().stream()
-                .filter(cobranca -> Boolean.TRUE.equals(cobranca.getNotificacaoEncerramentoPendente()))
-                .filter(cobranca -> String.valueOf(cobranca.getResponsavel()).equalsIgnoreCase(String.valueOf(usuario)))
-                .sorted(Comparator.comparing(Cobranca::getNotificacaoEncerramentoEm,
-                        Comparator.nullsLast(Comparator.naturalOrder())))
+        return repository.listarNotificacoesEncerramento(usuario).stream()
                 .map(CobrancaEncerramentoNotificacaoDTO::new)
                 .toList();
     }
@@ -442,11 +396,8 @@ public class CobrancaService {
     @Transactional
     public int corrigirDuplicidadesAutomaticas() {
         repository.bloquearGeracaoCobrancas();
-        Map<String, List<Cobranca>> grupos = repository.findAll().stream()
-                .filter(item -> Boolean.TRUE.equals(item.getGeradaAutomaticamente()))
-                .filter(item -> !Boolean.TRUE.equals(item.getExcluida()))
-                .filter(item -> item.getCodigoCliente() != null)
-                .filter(item -> item.getDocumentoTitulo() != null && !item.getDocumentoTitulo().isBlank())
+        Map<String, List<Cobranca>> grupos = repository.findByGeradaAutomaticamenteTrueAndExcluidaFalseAndCodigoClienteIsNotNullAndDocumentoTituloIsNotNull().stream()
+                .filter(item -> !item.getDocumentoTitulo().isBlank())
                 .collect(Collectors.groupingBy(item -> item.getCodigoCliente() + "|" + normalizarNumero(item.getDocumentoTitulo())));
         int corrigidas = 0;
         for (List<Cobranca> duplicadas : grupos.values()) {
@@ -457,9 +408,10 @@ public class CobrancaService {
                     .thenComparing(Cobranca::getId));
             Cobranca principal = duplicadas.get(0);
             Set<Long> idsDuplicados = duplicadas.stream().skip(1).map(Cobranca::getId).collect(Collectors.toSet());
-            faturamentoRepository.findAll().stream()
-                    .filter(titulo -> titulo.getCobrancaId() != null && idsDuplicados.contains(titulo.getCobrancaId()))
-                    .forEach(titulo -> titulo.setCobrancaId(principal.getId()));
+            if (!idsDuplicados.isEmpty()) {
+                faturamentoRepository.findAllByCobrancaIdIn(idsDuplicados)
+                        .forEach(titulo -> titulo.setCobrancaId(principal.getId()));
+            }
             for (Cobranca duplicada : duplicadas.subList(1, duplicadas.size())) {
                 if ((duplicada.getResponsavel() == null || duplicada.getResponsavel().isBlank())
                         && (duplicada.getAtendimentoRbxNumero() == null || duplicada.getAtendimentoRbxNumero().isBlank())) {
@@ -547,9 +499,7 @@ public class CobrancaService {
 
     @EventListener(ApplicationReadyEvent.class)
     public void encerrarAtendimentosPendentesAoIniciar() {
-        repository.findAll().stream()
-                .filter(cobranca -> "AGUARDANDO_FECHAMENTO_RBX".equals(cobranca.getStatusIntegracaoRbx()))
-                .filter(cobranca -> cobranca.getAbertoNoRbxEm() != null)
+        repository.findByStatusIntegracaoRbxAndAbertoNoRbxEmIsNotNull("AGUARDANDO_FECHAMENTO_RBX")
                 .forEach(this::encerrarAtendimentoRbx);
     }
 
@@ -713,11 +663,7 @@ public class CobrancaService {
 
     public List<FilaInadimplenteDTO> filaInadimplentes() {
         LocalDate hoje = LocalDate.now();
-        List<Cobranca> cobrancas = repository.findAll();
-        Set<Integer> clientesComAtendimento = cobrancas.stream()
-                .filter(item -> !Boolean.TRUE.equals(item.getExcluida()))
-                .filter(item -> !"Fechada".equalsIgnoreCase(item.getSituacaoAtendimento()))
-                .map(Cobranca::getCodigoCliente).filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<Integer> clientesComAtendimento = repository.findClientesComAtendimentoAberto();
 
         return faturamentoRepository.findByBaixadoFalse().stream()
                 .filter(titulo -> atrasoMinimoAtingido(titulo.getVencimento(), hoje))
@@ -740,16 +686,16 @@ public class CobrancaService {
     public Map<String, Object> relatorioOperacional(LocalDate mes) {
         LocalDate inicio = mes.withDayOfMonth(1);
         LocalDate fim = inicio.plusMonths(1);
-        List<Cobranca> todasCobrancas = repository.findAll().stream()
-                .filter(item -> !Boolean.TRUE.equals(item.getExcluida()))
-                .toList();
+        LocalDate inicioAno = LocalDate.of(inicio.getYear(), 1, 1);
+        LocalDate fimAno = inicioAno.plusYears(1);
+
+        List<Cobranca> todasCobrancas = repository.buscarCobrancasRelatorio(inicioAno.atStartOfDay(), fimAno.atStartOfDay());
         List<Cobranca> cobrancas = todasCobrancas.stream()
                 .filter(this::possuiDonoRelatorio)
                 .toList();
         List<Cobranca> criadas = cobrancas.stream().filter(item -> dentroDoMes(item.getCriadoEm(), inicio, fim)).toList();
         List<Cobranca> fechadas = cobrancas.stream().filter(item -> dentroDoMes(item.getFechadoEm(), inicio, fim)).toList();
-        List<CobrancaHistorico> movimentos = historicoRepository.findAll().stream()
-                .filter(item -> dentroDoMes(item.getCriadoEm(), inicio, fim))
+        List<CobrancaHistorico> movimentos = historicoRepository.buscarMovimentosNoPeriodo(inicio.atStartOfDay(), fim.atStartOfDay()).stream()
                 .filter(item -> item.getCobranca() != null && possuiDonoRelatorio(item.getCobranca()))
                 .toList();
         List<CobrancaHistorico> acordos = movimentos.stream()
@@ -776,8 +722,6 @@ public class CobrancaService {
                 ? recebido.multiply(BigDecimal.valueOf(100)).divide(carteiraTrabalhada, 2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
-        LocalDate inicioAno = LocalDate.of(inicio.getYear(), 1, 1);
-        LocalDate fimAno = inicioAno.plusYears(1);
         List<Cobranca> carteiraAnual = cobrancas.stream()
                 .filter(item -> dentroDoMes(item.getCriadoEm(), inicioAno, fimAno))
                 .toList();
@@ -916,6 +860,21 @@ public class CobrancaService {
                 .map(CobrancaHistoricoDTO::new)
                 .toList();
         return new CobrancaDTO(cobranca, historico);
+    }
+
+    private List<CobrancaDTO> toDtoList(List<Cobranca> cobrancas) {
+        if (cobrancas == null || cobrancas.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = cobrancas.stream().map(Cobranca::getId).filter(Objects::nonNull).toList();
+        List<CobrancaHistorico> todosHistoricos = historicoRepository.findAllByCobrancaIdInOrderByCriadoEmDesc(ids);
+        Map<Long, List<CobrancaHistoricoDTO>> historicosPorCobranca = todosHistoricos.stream()
+                .filter(h -> h.getCobranca() != null && h.getCobranca().getId() != null)
+                .collect(Collectors.groupingBy(h -> h.getCobranca().getId(),
+                        Collectors.mapping(CobrancaHistoricoDTO::new, Collectors.toList())));
+        return cobrancas.stream()
+                .map(c -> new CobrancaDTO(c, historicosPorCobranca.getOrDefault(c.getId(), List.of())))
+                .toList();
     }
 
     private void fecharSeFinalizada(Cobranca cobranca) {

@@ -10,8 +10,15 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "faturamento_mensal_titulos", uniqueConstraints =
-        @UniqueConstraint(name = "uk_faturamento_mes_documento", columnNames = {"mes_referencia", "documento"}))
+@Table(
+        name = "faturamento_mensal_titulos",
+        uniqueConstraints = @UniqueConstraint(name = "uk_faturamento_mes_documento", columnNames = {"mes_referencia", "documento"}),
+        indexes = {
+                @Index(name = "idx_faturamento_cliente_doc", columnList = "codigoCliente, documento"),
+                @Index(name = "idx_faturamento_cobranca_id", columnList = "cobrancaId"),
+                @Index(name = "idx_faturamento_mes_baixado", columnList = "mes_referencia, baixado")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor

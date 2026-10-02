@@ -5,10 +5,11 @@ import br.com.w4solution.controle_instalacao.services.eventos.AtividadesService;
 import br.com.w4solution.controle_instalacao.domain.usuarios.Usuario;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,6 +19,7 @@ import static br.com.w4solution.controle_instalacao.infra.configuration.security
 @RestController
 @RequestMapping("atividades")
 @PreAuthorize(COMMERCIAL_OR_FINANCIAL_ACCESS)
+@Validated
 public class AtividadesController {
 
     private final AtividadesService service;
@@ -90,27 +92,27 @@ public class AtividadesController {
 
     @PostMapping
     @Transactional
-    public ResponseEntity<List<AtividadesDTO>> cadastrarAtividade(@RequestBody List<CadastrarAtividadesDTO> dados, HttpServletRequest request){
+    public ResponseEntity<List<AtividadesDTO>> cadastrarAtividade(@RequestBody List<@Valid CadastrarAtividadesDTO> dados, HttpServletRequest request){
         var atividades = service.cadastrarAtividade(dados, request);
         return ResponseEntity.ok().body(atividades);
     }
 
     @PatchMapping("/{id}/converter-lead")
     @Transactional
-    public ResponseEntity<AtividadesDTO> converterLead(@PathVariable Long id, @RequestBody ConverterLeadDTO dados, HttpServletRequest request, @AuthenticationPrincipal Usuario usuario){
+    public ResponseEntity<AtividadesDTO> converterLead(@PathVariable Long id, @Valid @RequestBody ConverterLeadDTO dados, HttpServletRequest request, @AuthenticationPrincipal Usuario usuario){
         var atividade = service.converterLead(id, dados, request, usuario);
         return ResponseEntity.ok().body(atividade);
     }
 
     @PatchMapping("/{id}/venda-nao-concluida")
     @Transactional
-    public ResponseEntity<AtividadesDTO> registrarVendaNaoConcluida(@PathVariable Long id, @RequestBody NaoConcluirVendaDTO dados, HttpServletRequest request, @AuthenticationPrincipal Usuario usuario) {
+    public ResponseEntity<AtividadesDTO> registrarVendaNaoConcluida(@PathVariable Long id, @Valid @RequestBody NaoConcluirVendaDTO dados, HttpServletRequest request, @AuthenticationPrincipal Usuario usuario) {
         return ResponseEntity.ok(service.registrarVendaNaoConcluida(id, dados, request, usuario));
     }
 
     @DeleteMapping
     @Transactional
-    public ResponseEntity<?> deletarAtividade (@RequestBody IdDTO id, @AuthenticationPrincipal Usuario usuario){
+    public ResponseEntity<?> deletarAtividade (@Valid @RequestBody IdDTO id, @AuthenticationPrincipal Usuario usuario){
         service.deletarAtividade(id.id(), usuario);
         return ResponseEntity.ok().build();
     }

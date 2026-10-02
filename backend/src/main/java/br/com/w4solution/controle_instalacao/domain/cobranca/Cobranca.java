@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
@@ -17,7 +18,14 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "cobrancas")
+@Table(name = "cobrancas", indexes = {
+        @Index(name = "idx_cobrancas_codigo_cliente", columnList = "codigoCliente"),
+        @Index(name = "idx_cobrancas_numero_contrato", columnList = "numeroContrato"),
+        @Index(name = "idx_cobrancas_status_excluida", columnList = "status, excluida"),
+        @Index(name = "idx_cobrancas_responsavel", columnList = "responsavel"),
+        @Index(name = "idx_cobrancas_vencimento", columnList = "dataVencimento"),
+        @Index(name = "idx_cobrancas_protocolo", columnList = "protocolo")
+})
 @Getter
 @Setter
 @NoArgsConstructor

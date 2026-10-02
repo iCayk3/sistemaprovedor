@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Box, Paper, Stack, Typography } from "@mui/material";
+import { useQuery } from "@tanstack/react-query";
 import ResumoMensal from "../../Componentes/ResumoMensal";
 import Api from "../../Services/Api";
 import DashPizza from "../../Componentes/DashPizza";
@@ -11,12 +12,12 @@ import { dashboardHeaderSx, dashboardPanelSx, dashboardShellSx } from "../../Uti
 const today = new Date();
 
 const columns = [
-    { field: 'cliente', headerName: 'CODIGO', width: 80 },
-    { field: 'login', headerName: 'LOGIN', width: 80 },
+    { field: 'cliente', headerName: 'CODIGO', width: 90 },
+    { field: 'login', headerName: 'LOGIN', width: 90 },
     { field: 'olt', headerName: 'OLT', width: 150 },
-    { field: 'cto', headerName: 'CTO', width: 130 },
-    { field: 'porta', headerName: 'PORTA', width: 70 },
-    { field: 'equipe', headerName: 'Equipe tecnica', width: 250 },
+    { field: 'cto', headerName: 'CTO', width: 140 },
+    { field: 'porta', headerName: 'PORTA', width: 80 },
+    { field: 'equipe', headerName: 'Equipe técnica', width: 240 },
     {
         field: 'data',
         headerName: 'Data',
@@ -24,56 +25,47 @@ const columns = [
         valueFormatter: (params) => {
             const raw = params;
             if (!raw) return '';
-            const data = new Date(`${raw}T00:00:00`);
-            return data.toLocaleDateString('pt-BR');
+            const dataObj = new Date(`${raw}T00:00:00`);
+            return dataObj.toLocaleDateString('pt-BR');
         }
     },
-    { field: 'procedimento', headerName: 'Procedimento', width: 130 },
-    { field: 'mac', headerName: 'MAC', width: 130 },
+    { field: 'procedimento', headerName: 'Procedimento', width: 150 },
+    { field: 'mac', headerName: 'MAC', width: 140 },
     { field: 'ctoAntiga', headerName: 'CTO Antiga', width: 130 },
     { field: 'localidade', headerName: 'Localidade', width: 130 },
-    { field: 'observacao', headerName: 'Observacao', width: 130 },
+    { field: 'observacao', headerName: 'Observação', width: 160 },
 ];
+
+const UseApi = Api();
 
 const OverviewRegistro = () => {
     const [dataConsulta, setDataConsulta] = useState(today.toISOString().slice(0, 10));
-    const [data, setData] = useState();
-    const [rows, setRows] = useState();
     const [dataFiltro, setDataFiltro] = useState('');
     const [codigo, setCodigo] = useState('');
-    const [tecnico, setTecnico] = useState('');
     const [tecnicoLabel, setTecnicoLabel] = useState('');
-    const UseApi = Api();
 
-    const selectData = (even) => {
-        setDataConsulta(even.toISOString().slice(0, 10));
+    const selectData = (dateVal) => {
+        if (dateVal) {
+            setDataConsulta(dateVal.toISOString().slice(0, 10));
+        }
     };
 
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const response = await UseApi(`registros/servicos/mensais/resumo?filtro=${dataConsulta}`);
-                setData(response);
-            } catch (error) {
-                console.error('Erro ao buscar dados:', error);
-            }
-        };
+    const { data: overviewData, isLoading } = useQuery({
+        queryKey: ['overviewRegistros', dataConsulta],
+        queryFn: async () => {
+            const [resumo, registros] = await Promise.all([
+                UseApi(`registros/servicos/mensais/resumo?filtro=${dataConsulta}`),
+                UseApi(`registros?filtro=${dataConsulta}`),
+            ]);
+            return {
+                resumo: Array.isArray(resumo) ? resumo : [],
+                registros: Array.isArray(registros) ? registros : [],
+            };
+        },
+    });
 
-        fetchData();
-    }, [dataConsulta]);
-
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const response = await UseApi(`registros?filtro=${dataConsulta}`);
-                setRows(response);
-            } catch (error) {
-                console.error('Erro ao buscar dados:', error);
-            }
-        };
-
-        fetchData();
-    }, [dataConsulta]);
+    const data = overviewData?.resumo || [];
+    const rows = overviewData?.registros || [];
 
     return (
         <Box id="overview-registros-export" sx={{ display: 'grid', gap: 2, ...dashboardShellSx }}>
@@ -81,7 +73,7 @@ const OverviewRegistro = () => {
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={2} alignItems={{ xs: 'stretch', md: 'center' }}>
                     <Box>
                         <Typography variant="h5" fontWeight={800}>Overview de registros</Typography>
-                        <Typography color="#e8f8ff">Consulta operacional com filtros, resumo mensal e distribuicao por tecnico.</Typography>
+                        <Typography color="#e8f8ff">Consulta operacional com filtros, resumo mensal e distribuição por técnico.</Typography>
                     </Box>
                     <ExportDashboardPdfButton
                         targetId="overview-registros-export"
@@ -93,20 +85,24 @@ const OverviewRegistro = () => {
 
             <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2.5, minWidth: 0 }}>
                 <Filtros
-                    aoAlteradoTecnico={setTecnico}
                     aoAlteradoTecnicoLabel={setTecnicoLabel}
                     aoAlteradoData={setDataFiltro}
                     aoAlteradoCliente={setCodigo}
                 />
                 <Box sx={{ mt: 2 }}>
-                    <TabelaExibicao columns={columns} rows={rows} filtroExterno={{ tecnicoLabel, codigo, dataFiltro }} />
+                    <TabelaExibicao
+                        columns={columns}
+                        rows={rows}
+                        loading={isLoading}
+                        filtroExterno={{ tecnicoLabel, codigo, dataFiltro }}
+                    />
                 </Box>
             </Paper>
 
-            <ResumoMensal dataApiCto={data} aoSelectData={(e) => selectData(e)} dark />
+            <ResumoMensal dataApiCto={data} aoSelectData={selectData} dark />
 
             <Paper variant="outlined" sx={{ ...dashboardPanelSx, p: 2.5 }}>
-                <Typography variant="h6" fontWeight={800} mb={2}>Distribuicao por equipe</Typography>
+                <Typography variant="h6" fontWeight={800} mb={2}>Distribuição por equipe</Typography>
                 <DashPizza uri={`registros/servicos/tecnicos/mensal/resumo?filtro=${dataConsulta}`} />
             </Paper>
         </Box>

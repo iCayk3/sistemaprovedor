@@ -4,7 +4,6 @@ import {
     Alert,
     Box,
     Button,
-    Chip,
     IconButton,
     Paper,
     Stack,
@@ -16,7 +15,7 @@ import {
     TableRow,
     TextField,
     Typography,
-} from "@mui/material";
+} from '@mui/material';
 import { useEffect, useMemo, useState } from "react";
 import { DialogAction } from "../../Componentes/DialogAction";
 import TextoInput from "../../Componentes/TextoInput";
@@ -157,7 +156,7 @@ const SettingsRegistros = () => {
                             {filteredProcedimentos.length} de {procedimentos.length} procedimentos exibidos.
                         </Typography>
                     </Box>
-                    <Chip label={`${procedimentos.length} cadastrados`} variant="outlined" />
+                    <Typography variant="body2" fontWeight={700} color="text.secondary">• {`${procedimentos.length} cadastrados`}</Typography>
                 </Stack>
                 <TableContainer>
                     <Table size="small">

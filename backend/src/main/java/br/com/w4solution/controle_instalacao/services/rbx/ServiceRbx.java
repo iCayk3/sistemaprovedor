@@ -7,6 +7,7 @@ import br.com.w4solution.controle_instalacao.dto.rbx.*;
 import com.fasterxml.jackson.core.type.TypeReference;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cglib.core.Local;
 import org.springframework.stereotype.Service;
 
@@ -28,6 +29,7 @@ public class ServiceRbx {
         this.chaveApi = chaveApi;
     }
 
+    @Cacheable(value = "rbx_boletos_baixados_cidade", key = "#data != null ? #data.toString() : 'HOJE'")
     public List<ResponsePieReact> boletosBaixadosPorCidade(LocalDate data) {
         LocalDate dataFiltro = (data != null) ? data : LocalDate.now();
 
@@ -57,15 +59,19 @@ public class ServiceRbx {
                 boletoUnicoPorPessoa.putIfAbsent(boleto.codigoPessoa(), boleto);
             }
 
-            // Mapeia os totais por grupo usando os boletos únicos
+            // Mapeia cliente -> grupo em O(1)
+            Map<String, String> grupoPorCliente = clientes.stream()
+                    .filter(c -> c.codigo() != null && c.grupo() != null)
+                    .collect(Collectors.toMap(c -> c.codigo().trim(), ClienteRbxDTO::grupo, (existente, novo) -> existente));
+
+            // Mapeia os totais por grupo usando os boletos únicos em O(N)
             Map<String, Double> totaisPorGrupo = new HashMap<>();
             for (BoletosBaixadosRbxDTO boleto : boletoUnicoPorPessoa.values()) {
-                for (ClienteRbxDTO cliente : clientes) {
-                    if (Objects.equals(boleto.codigoPessoa(), cliente.codigo())) {
-                        String grupo = cliente.grupo();
+                if (boleto.codigoPessoa() != null) {
+                    String grupo = grupoPorCliente.get(boleto.codigoPessoa().trim());
+                    if (grupo != null) {
                         double valor = Double.parseDouble(boleto.valorBaixado());
                         totaisPorGrupo.merge(grupo, valor, Double::sum);
-                        break; // cliente encontrado, não precisa continuar o loop
                     }
                 }
             }
@@ -77,6 +83,7 @@ public class ServiceRbx {
         }
     }
 
+    @Cacheable("rbx_boletos_abertos_cidade")
     public List<ResponsePieReact> boletosAbertosPorCidade() {
 
         try {
@@ -84,14 +91,17 @@ public class ServiceRbx {
 
             List<BoletosAbertos> boletos = buscarBoletosAbertos();
 
+            Map<String, String> grupoPorCliente = clientes.stream()
+                    .filter(c -> c.codigo() != null && c.grupo() != null)
+                    .collect(Collectors.toMap(c -> c.codigo().trim(), ClienteRbxDTO::grupo, (existente, novo) -> existente));
+
             Map<String, Double> totaisPorGrupo = new HashMap<>();
 
             for (BoletosAbertos boleto : boletos) {
-                for (ClienteRbxDTO cliente : clientes) {
-                    if (Objects.equals(boleto.cliente(), cliente.codigo())) {
-                        String grupo = cliente.grupo();
-                        double valor = boleto.valor();
-                        totaisPorGrupo.merge(grupo, valor, Double::sum);
+                if (boleto.cliente() != null && boleto.valor() != null) {
+                    String grupo = grupoPorCliente.get(boleto.cliente().trim());
+                    if (grupo != null) {
+                        totaisPorGrupo.merge(grupo, boleto.valor(), Double::sum);
                     }
                 }
             }
@@ -111,14 +121,20 @@ public class ServiceRbx {
             if (status != null) {
                 List<ClienteRbxDTO> clientes = buscarClientesRbx(status);
 
-                // Mapa para armazenar um boleto por cliente
+                Set<String> codigosClientes = clientes.stream()
+                        .map(ClienteRbxDTO::codigo)
+                        .filter(Objects::nonNull)
+                        .map(String::trim)
+                        .collect(Collectors.toSet());
+
+                // Mapa para armazenar um boleto por cliente em O(N)
                 Map<String, BoletosAbertos> boletoUnicoPorCliente = new HashMap<>();
 
                 for (BoletosAbertos boleto : boletos) {
-                    for (ClienteRbxDTO cliente : clientes) {
-                        if (Objects.equals(boleto.cliente(), cliente.codigo())) {
-                            boletoUnicoPorCliente.putIfAbsent(cliente.codigo(), boleto);
-                            break; // cliente encontrado, pode parar o loop interno
+                    if (boleto.cliente() != null) {
+                        String codigo = boleto.cliente().trim();
+                        if (codigosClientes.contains(codigo)) {
+                            boletoUnicoPorCliente.putIfAbsent(codigo, boleto);
                         }
                     }
                 }
@@ -141,6 +157,7 @@ public class ServiceRbx {
         }
     }
 
+    @Cacheable(value = "rbx_total_inadimplentes_cidade", key = "#suspenso != null ? #suspenso : 'ALL'")
     public List<ResponsePieReact> totalInadimplentesCidade(String suspenso) {
 
         if (suspenso != null) {
@@ -301,6 +318,7 @@ public class ServiceRbx {
         }
     }
 
+    @Cacheable(value = "rbx_total_inadimplentes", key = "#status != null ? #status : 'ALL'")
     public TotalInadimplenteDTO totalInadimplentes(String status) {
         if (status != null) {
             try {
@@ -318,6 +336,7 @@ public class ServiceRbx {
         }
     }
 
+    @Cacheable(value = "rbx_cliente_por_id", key = "#id")
     public List<ClienteFiltradoDTO> buscarClienteId(Long id) {
         var corpoMessage = """
                 {
@@ -369,6 +388,7 @@ public class ServiceRbx {
                 .max(Comparator.comparingLong(this::numeroContrato));
     }
 
+    @Cacheable(value = "rbx_contratos_cliente", key = "#codigoCliente")
     public List<ContratoRbxDTO> buscarContratos(Integer codigoCliente) {
         var corpoMessage = """
                 {
@@ -401,27 +421,43 @@ public class ServiceRbx {
     }
 
     public List<BoletosAbertos> buscarBoletosAbertosDoCliente(Long codigoCliente) {
+        if (codigoCliente == null) {
+            return Collections.emptyList();
+        }
+        var corpoBoletoAberto = """
+                {
+                   "ConsultaDocumentosAbertos": {
+                      "Autenticacao": {
+                         "ChaveIntegracao": "%s"
+                      },
+                      "Filtro": "Historico = 'Documento a Receber' AND CliFor = '%d'"
+                   }
+                }
+                """.formatted(chaveApi, codigoCliente);
         try {
-            return buscarBoletosAbertos().stream()
-                    .filter(boleto -> Objects.equals(String.valueOf(codigoCliente), String.valueOf(boleto.cliente()).trim()))
+            List<BoletosAbertos> boletos = integracaoRbx.fazerRequest(
+                    corpoBoletoAberto,
+                    new TypeReference<RespostaAPI<BoletosAbertos>>() {
+                    }
+            );
+            if (boletos == null) {
+                return Collections.emptyList();
+            }
+            return boletos.stream()
                     .sorted(Comparator.comparing(this::dataVencimentoBoleto))
                     .toList();
         } catch (Exception e) {
-            throw new RuntimeException("Erro ao consultar boletos em aberto do cliente no RBX.", e);
+            throw new RuntimeException("Erro ao consultar boletos em aberto do cliente no RBX: " + e.getMessage(), e);
         }
     }
 
     public Optional<BoletosAbertos> buscarBoletoAbertoMaisRecente(Long codigoCliente) {
         try {
-            return buscarBoletosAbertos().stream()
-                    .filter(boleto -> Objects.equals(
-                            String.valueOf(codigoCliente),
-                            String.valueOf(boleto.cliente()).trim()
-                    ))
+            return buscarBoletosAbertosDoCliente(codigoCliente).stream()
                     .filter(boleto -> boleto.vencimento() != null && !boleto.vencimento().isBlank())
                     .max(Comparator.comparing(this::dataVencimentoBoleto));
         } catch (Exception e) {
-            throw new RuntimeException("Erro ao consultar boletos em aberto do cliente no RBX.", e);
+            throw new RuntimeException("Erro ao consultar boletos em aberto do cliente no RBX: " + e.getMessage(), e);
         }
     }
 
@@ -577,6 +613,7 @@ public class ServiceRbx {
         );
     }
 
+    @Cacheable(value = "rbx_valor_baixados", key = "#data != null ? #data : 'HOJE'")
     public ValorBaixadoDTO buscarValorTotalBoletosBaixados(String data) {
         try {
             List<BoletosBaixadosRbxDTO> boletos = boletosBaixados(data);

@@ -4,6 +4,7 @@ import br.com.w4solution.controle_instalacao.domain.usuarios.Usuario;
 import br.com.w4solution.controle_instalacao.dto.noc.NocEventoAtualizacaoDTO;
 import br.com.w4solution.controle_instalacao.dto.noc.NocEventoCadastroDTO;
 import br.com.w4solution.controle_instalacao.services.noc.NocEventoService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import static br.com.w4solution.controle_instalacao.infra.configuration.security.SecurityExpressions.ADMIN_ONLY;
 import static br.com.w4solution.controle_instalacao.infra.configuration.security.SecurityExpressions.AUTHENTICATED;
 import static br.com.w4solution.controle_instalacao.infra.configuration.security.SecurityExpressions.TECHNICAL_ACCESS;
 
@@ -37,7 +39,7 @@ public class NocEventoController {
 
     @PostMapping
     @PreAuthorize(TECHNICAL_ACCESS)
-    public ResponseEntity<?> cadastrar(@RequestBody NocEventoCadastroDTO dto) {
+    public ResponseEntity<?> cadastrar(@Valid @RequestBody NocEventoCadastroDTO dto) {
         return ResponseEntity.ok(service.cadastrar(dto));
     }
 
@@ -45,7 +47,7 @@ public class NocEventoController {
     @PreAuthorize(TECHNICAL_ACCESS)
     public ResponseEntity<?> atualizar(
             @PathVariable Long id,
-            @RequestBody NocEventoAtualizacaoDTO dto,
+            @Valid @RequestBody NocEventoAtualizacaoDTO dto,
             @AuthenticationPrincipal Usuario usuario
     ) {
         String nomeUsuario = usuario == null ? "sistema" : usuario.getUsuario();
@@ -53,7 +55,7 @@ public class NocEventoController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize(TECHNICAL_ACCESS)
+    @PreAuthorize(ADMIN_ONLY)
     public ResponseEntity<?> deletar(@PathVariable Long id) {
         service.deletar(id);
         return ResponseEntity.noContent().build();

@@ -5,7 +5,6 @@ import {
     Alert,
     Box,
     Button,
-    Chip,
     FormControlLabel,
     IconButton,
     MenuItem,
@@ -22,7 +21,7 @@ import {
     Tabs,
     TextField,
     Typography,
-} from "@mui/material";
+} from '@mui/material';
 import { useEffect, useMemo, useState } from "react";
 import { DialogAction } from "../../Componentes/DialogAction";
 import TextoInput from "../../Componentes/TextoInput";
@@ -330,20 +329,23 @@ const SettingsAtividades = ({ initialSegment = "ATIVIDADE", allowedSegments = ["
                                         <Typography fontWeight={800}>{item.label}</Typography>
                                     </TableCell>
                                     <TableCell>
-                                        {isLocked(item) ? (
-                                            <Chip size="small" icon={<LockRoundedIcon />} color="warning" variant="outlined" label="Obrigatorio" />
-                                        ) : (
-                                            <Chip size="small" variant="outlined" label="Customizavel" />
-                                        )}
+                                        <Typography
+                                            variant="body2"
+                                            fontWeight={700}
+                                            color={isLocked(item) ? "warning.main" : "text.secondary"}
+                                        >
+                                            {isLocked(item) ? "Obrigatorio" : "Customizavel"}
+                                        </Typography>
                                     </TableCell>
                                     {segmento === "COBRANCA_STATUS" && (
                                         <TableCell>
-                                            <Chip
-                                                size="small"
-                                                color={item.encerraAtendimento ? "default" : "success"}
-                                                variant="outlined"
-                                                label={item.encerraAtendimento ? "Fecha o atendimento" : "Permanece aberta"}
-                                            />
+                                            <Typography
+                                                variant="body2"
+                                                fontWeight={700}
+                                                color={item.encerraAtendimento ? "text.secondary" : "success.main"}
+                                            >
+                                                {item.encerraAtendimento ? "Fecha o atendimento" : "Permanece aberta"}
+                                            </Typography>
                                         </TableCell>
                                     )}
                                     <TableCell align="right">

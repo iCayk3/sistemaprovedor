@@ -5,13 +5,14 @@ import br.com.w4solution.controle_instalacao.dto.evento.EventoDTO;
 import br.com.w4solution.controle_instalacao.dto.evento.cadastrarEventoDTO;
 import br.com.w4solution.controle_instalacao.services.eventos.EventoService;
 import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+import static br.com.w4solution.controle_instalacao.infra.configuration.security.SecurityExpressions.ADMIN_ONLY;
 import static br.com.w4solution.controle_instalacao.infra.configuration.security.SecurityExpressions.COMMERCIAL_OR_FINANCIAL_ACCESS;
 
 @RestController
@@ -33,20 +34,24 @@ public class EventoController {
 
     @PostMapping
     @Transactional
-    public ResponseEntity<EventoDTO> cadastrarEvento(@RequestBody cadastrarEventoDTO dados){
+    @PreAuthorize(ADMIN_ONLY)
+    public ResponseEntity<EventoDTO> cadastrarEvento(@Valid @RequestBody cadastrarEventoDTO dados){
         var evento = service.cadastrarEvento(dados);
         return ResponseEntity.ok().body(new EventoDTO(evento));
     }
+
     @PutMapping("/{id}")
     @Transactional
-    public ResponseEntity<?> editarEvento(@PathVariable Long id, @RequestBody AtualizarEventoDTO ev){
+    @PreAuthorize(ADMIN_ONLY)
+    public ResponseEntity<?> editarEvento(@PathVariable Long id, @Valid @RequestBody AtualizarEventoDTO ev){
         service.editarEvento(id, ev);
         return ResponseEntity.ok().build();
     }
 
     @DeleteMapping("/{id}")
     @Transactional
-    public ResponseEntity<?> editarEvento(@PathVariable Long id){
+    @PreAuthorize(ADMIN_ONLY)
+    public ResponseEntity<?> deletarEvento(@PathVariable Long id){
         service.deletarEvento(id);
         return ResponseEntity.ok().build();
     }

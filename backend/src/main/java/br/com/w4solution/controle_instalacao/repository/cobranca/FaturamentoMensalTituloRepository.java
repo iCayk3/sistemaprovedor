@@ -4,6 +4,7 @@ import br.com.w4solution.controle_instalacao.domain.cobranca.FaturamentoMensalTi
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,4 +15,5 @@ public interface FaturamentoMensalTituloRepository extends JpaRepository<Faturam
     Optional<FaturamentoMensalTitulo> findFirstByDocumentoAndCodigoClienteAndBaixadoFalseOrderByMesReferenciaDesc(String documento, String codigoCliente);
     boolean existsByMesReferencia(LocalDate mesReferencia);
     void deleteByMesReferencia(LocalDate mesReferencia);
+    List<FaturamentoMensalTitulo> findAllByCobrancaIdIn(Collection<Long> cobrancaIds);
 }

@@ -1,58 +1,77 @@
-import * as React from 'react';
-import { createTheme } from '@mui/material/styles';
+﻿import * as React from 'react';
+
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import DescriptionIcon from '@mui/icons-material/Description';
 import { DashboardLayout } from '@toolpad/core/DashboardLayout';
 import { PageContainer } from '@toolpad/core/PageContainer';
-import Inicio from "../Paginas/Inicio";
-import DashboardPrincipal from "../Paginas/DashboardPrincipal";
-import OverviewRegistro from "../Paginas/OverviewRegistro";
 import MapIcon from '@mui/icons-material/Map';
-import MapPage from "../Paginas/MapPage";
 import SettingsApplicationsIcon from '@mui/icons-material/SettingsApplications';
 import FiberNewIcon from '@mui/icons-material/FiberNew';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
-import Financeiro from '../Paginas/Financeiro';
-import Inadiplentes from '../Paginas/Inadiplentes';
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
 import PaymentOutlinedIcon from '@mui/icons-material/PaymentOutlined';
 import MoneyOffOutlinedIcon from '@mui/icons-material/MoneyOffOutlined';
 import SavingsOutlinedIcon from '@mui/icons-material/SavingsOutlined';
 import RequestQuoteOutlinedIcon from '@mui/icons-material/RequestQuoteOutlined';
-import Suspensos from '../Paginas/Suspensos';
-import CadastroEquipamento from '../Paginas/CadastroEquipamento';
-import ListeCto from '../Paginas/ListeCto';
-import EquipesTecnicas from '../Paginas/EquipesTecnicas';
-import SettingsRegistros from '../Paginas/SettingsRegistros';
 import Groups2Icon from '@mui/icons-material/Groups2';
+import EventNoteIcon from '@mui/icons-material/EventNote';
+import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined';
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
+import FingerprintIcon from '@mui/icons-material/Fingerprint';
+import TableChartIcon from '@mui/icons-material/TableChart';
 import PropTypes from 'prop-types';
-import { Alert, Badge, Box, Button, MenuItem, Paper, Snackbar, Stack, TextField, Typography } from '@mui/material';
-import AtividadesComercial from '../Paginas/AtividadesComercial';
-import DashBoardsComercial from '../Paginas/DashBoardsComercial';
+import { Alert, Badge, Box, Button, CircularProgress, MenuItem, Paper, Snackbar, Stack, TextField, Typography } from '@mui/material';
 import AccountMenu from '../Componentes/AccountMenu';
 import { ReactRouterAppProvider } from '@toolpad/core/react-router';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import SettingsPerfil from '../Paginas/SettingsPerfil';
-import UsuariosNAtivos from '../Paginas/UsuariosNAtivos';
-import ManagementUser from '../Paginas/ManagementUser';
 import Api from '../Services/Api';
-import SettingsAtividades from '../Paginas/SettingsAtividades';
-import PendentPass from '../Paginas/PendentPass';
-import DashboardClientes from '../Paginas/DashboardClientes';
-import AcpEventos from '../Paginas/AcpEventos';
-import EventNoteIcon from '@mui/icons-material/EventNote';
-import Cobrancas from '../Paginas/Cobrancas';
-import PainelCobrancaGerencial from '../Paginas/PainelCobrancaGerencial';
 import { dashboardHeaderInputSx, dashboardHeaderSx } from '../Utils/DashboardTheme';
 import AssistenteIa from '../Componentes/AssistenteIa';
-import ChatInterno from '../Paginas/ChatInterno';
-import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined';
-import WhatsAppIcon from '@mui/icons-material/WhatsApp';
-import WhatsAppChat from '../Paginas/WhatsAppChat';
-import ConfiguracaoWhatsApp from '../Paginas/ConfiguracaoWhatsApp';
+import StateFeedback from '../Componentes/StateFeedback';
+import { appTheme } from '../Utils/appTheme';
+import { ThemeToggleButton } from '../Componentes/ThemeModeProvider';
 
-const theme = createTheme({
+// Code Splitting - Lazy Loaded Pages
+const Inicio = React.lazy(() => import("../Paginas/Inicio"));
+const DashboardPrincipal = React.lazy(() => import("../Paginas/DashboardPrincipal"));
+const OverviewRegistro = React.lazy(() => import("../Paginas/OverviewRegistro"));
+const MapPage = React.lazy(() => import("../Paginas/MapPage"));
+const Financeiro = React.lazy(() => import('../Paginas/Financeiro'));
+const Inadiplentes = React.lazy(() => import('../Paginas/Inadiplentes'));
+const Suspensos = React.lazy(() => import('../Paginas/Suspensos'));
+const CadastroEquipamento = React.lazy(() => import('../Paginas/CadastroEquipamento'));
+const ListeCto = React.lazy(() => import('../Paginas/ListeCto'));
+const EquipesTecnicas = React.lazy(() => import('../Paginas/EquipesTecnicas'));
+const SettingsRegistros = React.lazy(() => import('../Paginas/SettingsRegistros'));
+const AtividadesComercial = React.lazy(() => import('../Paginas/AtividadesComercial'));
+const DashBoardsComercial = React.lazy(() => import('../Paginas/DashBoardsComercial'));
+const SettingsPerfil = React.lazy(() => import('../Paginas/SettingsPerfil'));
+const UsuariosNAtivos = React.lazy(() => import('../Paginas/UsuariosNAtivos'));
+const ManagementUser = React.lazy(() => import('../Paginas/ManagementUser'));
+const SettingsAtividades = React.lazy(() => import('../Paginas/SettingsAtividades'));
+const PendentPass = React.lazy(() => import('../Paginas/PendentPass'));
+const DashboardClientes = React.lazy(() => import('../Paginas/DashboardClientes'));
+const AcpEventos = React.lazy(() => import('../Paginas/AcpEventos'));
+const Cobrancas = React.lazy(() => import('../Paginas/Cobrancas'));
+const PainelCobrancaGerencial = React.lazy(() => import('../Paginas/PainelCobrancaGerencial'));
+const ChatInterno = React.lazy(() => import('../Paginas/ChatInterno'));
+const WhatsAppChat = React.lazy(() => import('../Paginas/WhatsAppChat'));
+const ConfiguracaoWhatsApp = React.lazy(() => import('../Paginas/ConfiguracaoWhatsApp'));
+const AuditoriaIp = React.lazy(() => import('../Paginas/AuditoriaIp'));
+const RelatorioClientesPlanoCidade = React.lazy(() => import('../Paginas/RelatorioClientesPlanoCidade'));
+
+function ToolbarActions() {
+    return (
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ mr: 1 }}>
+            <ThemeToggleButton />
+        </Stack>
+    );
+}
+
+const theme = appTheme;
+
+/* theme original substituido por appTheme
     colorSchemes: { light: true, dark: true },
     cssVariables: {
         colorSchemeSelector: 'class',
@@ -70,7 +89,7 @@ const theme = createTheme({
             },
         },
     },
-});
+*/
 
 function SidebarFooter({ mini }) {
     return (
@@ -88,7 +107,7 @@ function SidebarFooter({ mini }) {
                 variant="caption"
                 sx={{ mt: 1, whiteSpace: 'nowrap', overflow: 'hidden', textAlign: 'center' }}
             >
-                {mini ? '© SOL' : '© SOL PROVEDOR DE INTERNET | 2.1'}
+                {mini ? 'Â© SOL' : 'Â© SOL PROVEDOR DE INTERNET | 2.1'}
             </Typography>
         </Box>
     );
@@ -115,7 +134,7 @@ const Menu = () => {
     const [avisoCobrancas, setAvisoCobrancas] = React.useState(false);
     const [encerramentosAutomaticos, setEncerramentosAutomaticos] = React.useState([]);
     const naoLidasAnteriores = React.useRef(0);
-    const semPermissao = <div>Sem permissao</div>;
+    const semPermissao = <StateFeedback type="denied" />;
 
     const hasRole = React.useCallback(
         (group) => roleGroups[group]?.includes(user.role),
@@ -198,7 +217,7 @@ const Menu = () => {
                 const response = await UseApi('cobrancas/notificacoes/encerramentos');
                 setEncerramentosAutomaticos(Array.isArray(response) ? response : []);
             } catch {
-                // O aviso não deve interromper o restante do sistema.
+                // O aviso nÃ£o deve interromper o restante do sistema.
             }
         };
         atualizarEncerramentos();
@@ -213,7 +232,7 @@ const Menu = () => {
             await UseApi(`cobrancas/${atual.cobrancaId}/notificacao-encerramento/lida`, 'PATCH');
             setEncerramentosAutomaticos((lista) => lista.filter((item) => item.cobrancaId !== atual.cobrancaId));
         } catch {
-            // Mantém o aviso visível para que o usuário possa tentar confirmar novamente.
+            // MantÃ©m o aviso visÃ­vel para que o usuÃ¡rio possa tentar confirmar novamente.
         }
     };
 
@@ -373,6 +392,12 @@ const Menu = () => {
                 title: 'ACP eventos',
                 icon: <EventNoteIcon />,
             } : null,
+        hasRole('technical')
+            ? {
+                segment: 'auditoria-ip',
+                title: 'Auditoria de IP',
+                icon: <FingerprintIcon />,
+            } : null,
         hasRole('commercial')
             ? {
                 segment: 'comercial',
@@ -422,6 +447,11 @@ const Menu = () => {
                         icon: <DashboardIcon />,
                     },
                     {
+                        segment: 'clientes-plano-cidade',
+                        title: 'Clientes por Plano x Cidade',
+                        icon: <TableChartIcon />,
+                    },
+                    {
                         segment: 'configuration',
                         title: 'Configuracoes comercial',
                         icon: <Groups2Icon />,
@@ -438,6 +468,11 @@ const Menu = () => {
                         segment: 'dashboard-clientes',
                         title: 'Dashboard clientes',
                         icon: <DashboardIcon />,
+                    },
+                    {
+                        segment: 'clientes-plano-cidade',
+                        title: 'Clientes por Plano x Cidade',
+                        icon: <TableChartIcon />,
                     },
                     {
                         segment: 'dados',
@@ -486,6 +521,9 @@ const Menu = () => {
     const DashboardView = () => {
         const options = [
             hasRole('technical') ? { value: 'tecnico', label: 'Registros tecnicos', content: <DashboardPrincipal /> } : null,
+
+
+            (hasRole('financial') || hasRole('commercial')) ? { value: 'plano-cidade', label: 'Clientes por Plano x Cidade', content: <RelatorioClientesPlanoCidade /> } : null,
             user.role ? { value: 'acp-eventos', label: 'ACP Eventos', content: <AcpEventos readOnly /> } : null,
             hasRole('commercial') ? { value: 'atividade', label: 'Atividades comerciais', content: <DashBoardsComercial segmento="ATIVIDADE" allowSegmentSelect={false} /> } : null,
             hasRole('charging') ? { value: 'cobranca', label: 'Cobrancas', content: <Cobrancas mode="dashboard" /> } : null,
@@ -528,7 +566,7 @@ const Menu = () => {
         <ReactRouterAppProvider
             navigation={NAVIGATION}
             branding={{
-                logo: <img src={null} alt="" />,
+                logo: <img src="/imagens/logo.png" alt="SOL" style={{ height: 36, objectFit: "contain" }} />,
                 title: 'SOL PROVEDOR DE INTERNET',
             }}
             theme={theme}
@@ -537,10 +575,12 @@ const Menu = () => {
                 defaultSidebarCollapsed
                 slots={{
                     sidebarFooter: SidebarFooter,
+                    toolbarActions: ToolbarActions,
                 }}
             >
                 <PageContainer>
-                    <Routes>
+                    <React.Suspense fallback={<Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}><CircularProgress /></Box>}>
+                        <Routes>
                         <Route path="/" element={<Navigate to={isChargingOnly ? "/financeiro/cobranca/dashboard" : "/dashboard"} replace />} />
                         <Route path="dashboard" element={<DashboardView />} />
                         <Route path="chat" element={temAcessoIaChat
@@ -560,6 +600,7 @@ const Menu = () => {
                         <Route path="redes/tecnico" element={hasRole('technical') ? <EquipesTecnicas /> : semPermissao} />
                         <Route path="map" element={hasRole('technical') ? <MapPage /> : semPermissao} />
                         <Route path="noc-eventos" element={hasRole('technical') ? <AcpEventos /> : semPermissao} />
+                        <Route path="auditoria-ip" element={hasRole('technical') ? <AuditoriaIp /> : semPermissao} />
                         <Route path="comercial/atividades" element={hasRole('commercial') ? <AtividadesComercial /> : semPermissao} />
                         <Route path="comercial/leads/registrar" element={hasRole('commercial') ? <AtividadesComercial segmento="LEAD" /> : semPermissao} />
                         <Route path="comercial/leads/dashboard" element={hasRole('commercial') ? <DashBoardsComercial segmento="LEAD" allowSegmentSelect={false} /> : semPermissao} />
@@ -570,6 +611,12 @@ const Menu = () => {
                         <Route path="comercial/configuration" element={hasRole('commercial') ? <SettingsAtividades allowedSegments={['ATIVIDADE']} /> : semPermissao} />
                         <Route path="perfil/settings" element={<SettingsPerfil />} />
                         <Route path="/financeiro/dashboard-clientes" element={hasRole('financial') ? <DashboardClientes /> : semPermissao} />
+
+                        <Route path="/financeiro/clientes-plano-cidade" element={hasRole('financial') || hasRole('commercial') ? <RelatorioClientesPlanoCidade /> : semPermissao} />
+
+                        <Route path="financeiro/clientes-plano-cidade" element={hasRole('financial') || hasRole('commercial') ? <RelatorioClientesPlanoCidade /> : semPermissao} />
+
+                        <Route path="comercial/clientes-plano-cidade" element={hasRole('commercial') || hasRole('financial') ? <RelatorioClientesPlanoCidade /> : semPermissao} />
                         <Route path="/financeiro/dados" element={hasRole('financial') ? <Financeiro /> : semPermissao} />
                         <Route path="/financeiro/cobranca/registrar" element={hasRole('charging') ? <Cobrancas mode="cadastro" /> : semPermissao} />
                         <Route path="/financeiro/cobranca/dashboard" element={hasRole('charging') ? <Cobrancas mode="dashboard" /> : semPermissao} />
@@ -584,8 +631,9 @@ const Menu = () => {
                         <Route path="/settinguser/management" element={hasRole('admin') ? <ManagementUser /> : semPermissao} />
                         <Route path="/settinguser/pendentpass" element={hasRole('admin') ? <PendentPass /> : semPermissao} />
                         <Route path="/settinguser/whatsapp" element={hasRole('admin') ? <ConfiguracaoWhatsApp /> : semPermissao} />
-                        <Route path="*" element={<div>Pagina nao encontrada</div>} />
+                        <Route path="*" element={<StateFeedback type="notfound" />} />
                     </Routes>
+                    </React.Suspense>
                 </PageContainer>
             </DashboardLayout>
             {temAcessoIaChat && <AssistenteIa />}
@@ -596,7 +644,7 @@ const Menu = () => {
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
             >
                 <Alert severity="info" variant="filled" onClose={() => setAvisoChat(false)}>
-                    Você recebeu uma nova mensagem no chat ou WhatsApp.
+                    VocÃª recebeu uma nova mensagem no chat ou WhatsApp.
                 </Alert>
             </Snackbar>
             <Snackbar
@@ -605,7 +653,7 @@ const Menu = () => {
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
             >
                 <Alert severity="warning" variant="filled" onClose={() => setAvisoCobrancas(false)}>
-                    {cobrancasSemAtualizacao} cobrança(s) aberta(s) estão há 7 dias ou mais sem atualização.
+                    {cobrancasSemAtualizacao} cobranÃ§a(s) aberta(s) estÃ£o hÃ¡ 7 dias ou mais sem atualizaÃ§Ã£o.
                 </Alert>
             </Snackbar>
             <Snackbar

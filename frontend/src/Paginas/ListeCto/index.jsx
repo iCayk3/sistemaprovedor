@@ -13,7 +13,6 @@ const ListeCto = () => {
   const [olt, setOlt] = useState([]);
   const [ctos, setCtos] = useState([]);
   const [oltInput, setOltInput] = useState('');
-  const [portasPorCto, setPortasPorCto] = useState({});
   const [loadingCtos, setLoadingCtos] = useState(false);
   const [ctoBusca, setCtoBusca] = useState('');
 
@@ -34,7 +33,6 @@ const ListeCto = () => {
         const response = await UseApi(`olt/${e.id}/cto`);
         if (Array.isArray(response)) {
           setCtos(response.sort());
-          setPortasPorCto({});
         } else {
           console.warn("Resposta inesperada:", response);
         }

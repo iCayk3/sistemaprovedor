@@ -44,6 +44,7 @@ public class SecurityConfiguration {
                     req.requestMatchers(HttpMethod.POST, "/usuario/logar").permitAll();
                     req.requestMatchers(HttpMethod.POST, "/usuario/userchek").permitAll();
                     req.requestMatchers(HttpMethod.POST, "/usuario/solicitaredefinirsenha").permitAll();
+                    req.requestMatchers(HttpMethod.POST, "/usuario/token/refresh").permitAll();
                     req.requestMatchers(HttpMethod.OPTIONS, "/usuario/**").permitAll();
                     req.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
                     req.requestMatchers(HttpMethod.POST, "/integracoes/whatsapp/evolution/webhook/**").permitAll();

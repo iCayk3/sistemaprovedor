@@ -8,7 +8,10 @@ import lombok.*;
 import java.util.List;
 
 @Entity
-@Table(name = "portas")
+@Table(name = "portas", indexes = {
+        @Index(name = "idx_portas_cto_id", columnList = "cto_id"),
+        @Index(name = "idx_portas_cliente_id", columnList = "cliente_id")
+})
 @AllArgsConstructor
 @NoArgsConstructor
 @EqualsAndHashCode(of = "id")

@@ -5,7 +5,6 @@ import {
     Alert,
     Box,
     Button,
-    Chip,
     IconButton,
     Paper,
     Stack,
@@ -35,7 +34,12 @@ const TechnicianChip = ({ technician, provided, onDelete }) => (
             bgcolor: "background.paper",
         }}
     >
-        <Chip icon={<Person4Icon />} label={technician.nome} size="small" />
+        <Stack direction="row" spacing={0.5} alignItems="center" sx={{ flexGrow: 1 }}>
+            <Person4Icon fontSize="small" color="primary" />
+            <Typography variant="body2" fontWeight={600}>
+                {technician.nome}
+            </Typography>
+        </Stack>
         {onDelete && (
             <IconButton color="error" size="small" onClick={() => onDelete(technician.id)}>
                 <ClearIcon fontSize="small" />

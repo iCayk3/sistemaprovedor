@@ -14,6 +14,7 @@ import br.com.w4solution.controle_instalacao.services.rbx.ServiceRbx;
 import br.com.w4solution.controle_instalacao.validations.ValidacaoCtoException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,18 +36,20 @@ public class OltService {
         this.rbx = rbx;
     }
 
+    @Transactional(readOnly = true)
     public List<OltDTO> listarOlts() {
         return repository.findAll().stream().map(OltDTO::new).toList();
     }
 
+    @Transactional(readOnly = true)
     public List<CtoDTO> listarCtos(Long id) {
-        var olt = repository.findById(id);
-        if (olt.isPresent()) {
-            return olt.get().getCto().stream().map(CtoDTO::new).toList();
+        if (!repository.existsById(id)) {
+            throw new ValidacaoCtoException("OLT não encontrada");
         }
-        throw new ValidacaoCtoException("OLT não encontrada");
+        return repositoryCto.findByOltIdWithPortas(id).stream().map(CtoDTO::new).toList();
     }
 
+    @Transactional(readOnly = true)
     public List<PortaDTORbx> listarPortas(Long id) {
         var portas = repositoryPorta.findPortasByCtoIdWithClientes(id);
 
@@ -85,23 +88,20 @@ public class OltService {
         return cto;
     }
 
+    @Transactional(readOnly = true)
     public List<CtoComPortasDTO> listarTodasCtos(Long id) {
         if (id != null) {
-            var oltOpt = repository.findById(id);
-            if (oltOpt.isPresent()) {
-                var olt = oltOpt.get();
-                return olt.getCto().stream()
-                        .map(cto -> {
-
-                            return new CtoComPortasDTO(
-                                    cto.getId(),
-                                    cto.getNomeCto(),
-                                    cto.getLat(),
-                                    cto.getLongi()
-                            );
-                        })
-                        .toList();
+            if (!repository.existsById(id)) {
+                throw new ValidacaoCtoException("OLT não encontrada");
             }
+            return repositoryCto.findByOltIdWithPortas(id).stream()
+                    .map(cto -> new CtoComPortasDTO(
+                            cto.getId(),
+                            cto.getNomeCto(),
+                            cto.getLat(),
+                            cto.getLongi()
+                    ))
+                    .toList();
         }
 
         throw new ValidacaoCtoException("OLT não encontrada");

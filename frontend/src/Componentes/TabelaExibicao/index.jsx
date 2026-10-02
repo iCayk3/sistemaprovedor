@@ -11,6 +11,7 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import PrintIcon from '@mui/icons-material/Print';
 import DownloadForOfflineIcon from '@mui/icons-material/DownloadForOffline';
 import { exportToExcel, exportToPDF } from '../../Utils/ExportUtils';
+import TableSkeleton from '../TableSkeleton';
 
 /* -------------------- Exportações -------------------- */
 function ExportExcel({ onMenuItemClick, rows }) {
@@ -97,7 +98,8 @@ export default function TabelaExibicao({
     sx,
     filtroExterno = {},
     prefix = 'tbl',
-    tablefin
+    tablefin,
+    loading = false,
 }) {
     const [search, setSearch] = useState('');
     const lastQuick = useRef(''); // guarda último valor da quick-filter
@@ -161,6 +163,10 @@ export default function TabelaExibicao({
             });
         });
     }, [rowsComId, filtroExterno, search, columns]);
+
+    if (loading) {
+        return <TableSkeleton />;
+    }
 
     return (
         <Box sx={{ height: 500, width: '100%' }}>

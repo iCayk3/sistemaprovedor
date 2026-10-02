@@ -32,6 +32,15 @@ public class FaturamentoMensalService {
     private final CobrancaService cobrancaService;
     private final DataFormatter formatter = new DataFormatter(new Locale("pt", "BR"));
 
+    private static final long MAX_FILE_SIZE = 15L * 1024 * 1024; // 15MB
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".xlsx", ".xls");
+    private static final Set<String> ALLOWED_MIME_TYPES = Set.of(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-excel",
+            "application/x-tika-ooxml",
+            "application/octet-stream"
+    );
+
     @Value("${api.service.integration.rbx.chave}")
     private String chaveApi;
 
@@ -48,7 +57,7 @@ public class FaturamentoMensalService {
 
     @Transactional
     public Map<String, Object> importar(MultipartFile arquivo, LocalDate mes, String usuario) throws Exception {
-        if (arquivo == null || arquivo.isEmpty()) throw new IllegalArgumentException("Selecione uma planilha .xls ou .xlsx.");
+        validarArquivo(arquivo);
         LocalDate referenciaInformada = mes.withDayOfMonth(1);
         List<FaturamentoMensalTitulo> titulos = new ArrayList<>();
         Set<String> documentos = new HashSet<>();
@@ -58,7 +67,13 @@ public class FaturamentoMensalService {
         int titulosDeOutraReferencia = 0;
         int titulosJaExistentes = 0;
 
-        try (Workbook workbook = WorkbookFactory.create(arquivo.getInputStream())) {
+        Workbook workbook;
+        try {
+            workbook = WorkbookFactory.create(arquivo.getInputStream());
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Não foi possível processar o arquivo. Certifique-se de que é uma planilha Excel válida (.xls ou .xlsx).");
+        }
+        try (workbook) {
             Sheet sheet = workbook.getSheetAt(0);
             Row header = sheet.getRow(sheet.getFirstRowNum());
             Map<String, Integer> columns = columns(header);
@@ -328,4 +343,33 @@ public class FaturamentoMensalService {
     }
     private String normalizeDocument(String value) { return value == null ? "" : value.replaceAll("[^0-9A-Za-z]", "").replaceFirst("^0+", ""); }
     private String value(Map<String, Object> item, String key) { Object value = item.get(key); return value == null ? "" : String.valueOf(value); }
+
+    private void validarArquivo(MultipartFile arquivo) {
+        if (arquivo == null || arquivo.isEmpty()) {
+            throw new IllegalArgumentException("Selecione uma planilha .xls ou .xlsx.");
+        }
+        if (arquivo.getSize() > MAX_FILE_SIZE) {
+            throw new IllegalArgumentException("O arquivo excede o limite máximo permitido de 15MB.");
+        }
+        String originalFilename = arquivo.getOriginalFilename();
+        if (originalFilename == null || originalFilename.isBlank()) {
+            throw new IllegalArgumentException("Nome de arquivo inválido.");
+        }
+        if (originalFilename.contains("..") || originalFilename.contains("/") || originalFilename.contains("\\")) {
+            throw new IllegalArgumentException("Nome de arquivo contém caracteres inválidos.");
+        }
+        String lowerFilename = originalFilename.toLowerCase();
+        boolean extensaoValida = ALLOWED_EXTENSIONS.stream().anyMatch(lowerFilename::endsWith);
+        if (!extensaoValida) {
+            throw new IllegalArgumentException("Formato inválido. Apenas arquivos .xlsx ou .xls são permitidos.");
+        }
+        String contentType = arquivo.getContentType();
+        if (contentType != null && !contentType.isBlank()) {
+            String lowerContentType = contentType.toLowerCase().trim();
+            boolean mimeValido = ALLOWED_MIME_TYPES.stream().anyMatch(lowerContentType::contains);
+            if (!mimeValido) {
+                throw new IllegalArgumentException("Tipo de arquivo não permitido: " + contentType);
+            }
+        }
+    }
 }

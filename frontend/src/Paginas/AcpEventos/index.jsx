@@ -8,7 +8,6 @@ import { BarChart, PieChart } from '@mui/x-charts';
 import {
     Box,
     Button,
-    Chip,
     Dialog,
     DialogActions,
     DialogContent,
@@ -644,7 +643,7 @@ const AcpEventos = ({ readOnly = false }) => {
                                 <Typography fontWeight={800}>{event.protocol}</Typography>
                                 <Typography sx={{ overflowWrap: 'anywhere' }}>{event.eventType} - {event.client || event.source || 'Nao informado'}</Typography>
                                 <Typography sx={dashboardMutedTextSx}>{formatHours(event.durationHours)} / SLA {formatHours(event.slaHours)}</Typography>
-                                <Chip size="small" color="error" label={event.problemStatus} />
+                                <Typography variant="caption" fontWeight={800} color="error.main">{event.problemStatus}</Typography>
                             </Box>
                         )) : (
                             <Typography sx={dashboardMutedTextSx}>Nenhum evento critico em aberto.</Typography>
@@ -701,11 +700,13 @@ const AcpEventos = ({ readOnly = false }) => {
                                     <TableCell>{formatHours(event.durationHours)}</TableCell>
                                     <TableCell>{formatHours(event.slaHours)}</TableCell>
                                     <TableCell>
-                                        <Chip
-                                            size="small"
-                                            color={event.problemStatus === 'Resolvido' ? 'success' : event.durationHours > event.slaHours ? 'error' : 'warning'}
-                                            label={event.problemStatus}
-                                        />
+                                        <Typography
+                                            variant="body2"
+                                            fontWeight={700}
+                                            color={event.problemStatus === 'Resolvido' ? 'success.main' : event.durationHours > event.slaHours ? 'error.main' : 'warning.main'}
+                                        >
+                                            {event.problemStatus}
+                                        </Typography>
                                     </TableCell>
                                     {!readOnly && <TableCell align="right">
                                         <IconButton size="small" color="primary" onClick={() => openUpdateDialog(event)}>

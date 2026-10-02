@@ -1,4 +1,5 @@
-import { Box, Button, InputAdornment, Link, Paper, TextField, Typography } from "@mui/material"
+import { Box, Button, InputAdornment, Link, Paper, TextField, Typography } from "@mui/material";
+import { Link as RouterLink } from 'react-router-dom';
 import AccountCircle from '@mui/icons-material/AccountCircle';
 import ArrowCircleLeftIcon from '@mui/icons-material/ArrowCircleLeft';
 import InputPass from "../../Componentes/InputPass";
@@ -38,10 +39,9 @@ const Passwd = () => {
     const [user, setUser] = React.useState('');
     const [checkUser, setCheckUser] = React.useState(202);
     const [newPass, setNewPass] = React.useState('');
-    const [retNewPass, setRetNewPass] = React.useState('')
-    const [erroCod, setErroCod] = React.useState(202)
-    const [timeoutId, setTimeoutId] = React.useState(null);
-    const [enviado, setEnviado] = React.useState(false)
+    const [retNewPass, setRetNewPass] = React.useState('');
+    const [erroCod, setErroCod] = React.useState(202);
+    const [enviado, setEnviado] = React.useState(false);
 
 
 
@@ -61,24 +61,22 @@ const Passwd = () => {
     };
 
     const checarUsuario = async (e) => {
-        e.preventDefault()
+        e.preventDefault();
         try {
             const form = { usuario: user };
             const response = await UseApi('usuario/userchek', 'POST', form);
             if (response) {
-                setCheckUser(200)
+                setCheckUser(200);
             } else {
-                setCheckUser(404)
+                setCheckUser(404);
             }
-            console.log(response)
         } catch (error) {
-            setErrorCode(error?.status || 500);
-            console.error('Erro ao fazer login:', error?.status);
+            setCheckUser(error?.status || 500);
+            console.error('Erro ao checar usuario:', error);
         }
     };
 
     const checkPass = React.useCallback(() => {
-
         if (newPass && retNewPass) {
             if (newPass !== retNewPass) {
                 setErroCod(400); // erro
@@ -86,22 +84,15 @@ const Passwd = () => {
                 setErroCod(200); // sucesso
             }
         }
-    }, [newPass, retNewPass, user]);
+    }, [newPass, retNewPass]);
 
     React.useEffect(() => {
-        if (timeoutId) clearTimeout(timeoutId);
-
-        // Define novo timeout para 3 segundos
         const id = setTimeout(() => {
             checkPass();
-        }, 1000);
+        }, 500);
 
-        // Salva o id do timeout para controle
-        setTimeoutId(id);
-
-        // Limpeza quando componente desmontar ou valores mudarem
         return () => clearTimeout(id);
-    }, [newPass, retNewPass, checkPass]);
+    }, [checkPass]);
 
     const validandoUsuario = (e) => {
         setCheckUser(202)
@@ -141,7 +132,7 @@ const Passwd = () => {
                 }}
             >
                 <Box>
-                    <Link href="/login" variant="body2" sx={{ color: '#048897', }}>
+                    <Link component={RouterLink} to="/login" variant="body2" sx={{ color: '#048897' }}>
                         <ArrowCircleLeftIcon sx={{ mb: 4 }} />
                     </Link>
                     {!enviado ? <Box>

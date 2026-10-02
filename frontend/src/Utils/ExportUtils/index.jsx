@@ -1,10 +1,5 @@
-import ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-
 /**
- * Exporta os dados para Excel usando ExcelJS
+ * Exporta os dados para Excel usando ExcelJS (Carregado sob demanda via Dynamic Import)
  * @param {Array} data - Lista de objetos a serem exportados
  * @param {string} fileName - Nome do arquivo (sem extensão)
  */
@@ -13,6 +8,12 @@ export async function exportToExcel(data, fileName = 'dados') {
     console.error('Dados inválidos para exportação.');
     return;
   }
+
+  const [{ default: ExcelJS }, fileSaverModule] = await Promise.all([
+    import('exceljs'),
+    import('file-saver'),
+  ]);
+  const saveAs = fileSaverModule.saveAs || fileSaverModule.default;
 
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Sheet1');
@@ -42,16 +43,22 @@ export async function exportToExcel(data, fileName = 'dados') {
 }
 
 /**
- * Exporta os dados para PDF usando jsPDF e autotable
+ * Exporta os dados para PDF usando jsPDF e autotable (Carregado sob demanda via Dynamic Import)
  * @param {Array} columns - Definição das colunas (array de strings ou objetos com field/headerName)
  * @param {Array} data - Dados em formato de array de objetos
  * @param {string} fileName - Nome do arquivo
  */
-export function exportToPDF(columns, data, fileName = 'relatorio') {
+export async function exportToPDF(columns, data, fileName = 'relatorio') {
   if (!Array.isArray(columns) || !Array.isArray(data)) {
     console.error('Colunas ou dados inválidos para exportação em PDF.');
     return;
   }
+
+  const [{ default: jsPDF }, autoTableModule] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
+  const autoTable = autoTableModule.default || autoTableModule;
 
   const resolvedColumns = columns.map(col => {
     if (typeof col === 'string') {
@@ -71,7 +78,7 @@ export function exportToPDF(columns, data, fileName = 'relatorio') {
       resolvedColumns.map(col => row[col.field] ?? '')
     ),
     margin: { top: 40 },
-    styles: { fontSize: 8 }
+    styles: { fontSize: 8 },
   });
 
   doc.save(`${fileName}.pdf`);

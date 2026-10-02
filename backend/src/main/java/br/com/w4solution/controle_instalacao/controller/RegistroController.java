@@ -1,13 +1,15 @@
 package br.com.w4solution.controle_instalacao.controller;
 
+import br.com.w4solution.controle_instalacao.domain.usuarios.Usuario;
 import br.com.w4solution.controle_instalacao.dto.evento.ResumoMensalDTO;
 import br.com.w4solution.controle_instalacao.dto.registro.*;
 import br.com.w4solution.controle_instalacao.services.registros.RegistroService;
 import br.com.w4solution.controle_instalacao.validations.DeletarRegistroExceptions;
 import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -63,20 +65,17 @@ public class RegistroController {
 
     @PostMapping
     @Transactional
-    public ResponseEntity<RegistroDTO2> cadastroRegistro(@RequestBody CadastroRegistroDTO dados, UriComponentsBuilder uri){
-
+    public ResponseEntity<RegistroDTO2> cadastroRegistro(@Valid @RequestBody CadastroRegistroDTO dados, UriComponentsBuilder uri){
         var registro = service.cadastrarRegistro(dados);
         var uriRegistro = uri.path("/{id}").buildAndExpand(registro.getId()).toUri();
         return ResponseEntity.created(uriRegistro).body(new RegistroDTO2(registro));
-
     }
-
 
     @DeleteMapping("/{id}")
     @Transactional
-    public ResponseEntity deletarRegistro(@PathVariable Long id){
+    public ResponseEntity deletarRegistro(@PathVariable Long id, @AuthenticationPrincipal Usuario usuario){
         try{
-            service.deletarRegistro(id);
+            service.deletarRegistro(id, usuario);
             return ResponseEntity.ok().build();
         }catch (DeletarRegistroExceptions e){
             return ResponseEntity.notFound().build();

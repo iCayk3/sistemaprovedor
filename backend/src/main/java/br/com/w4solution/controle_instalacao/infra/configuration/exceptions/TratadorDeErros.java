@@ -2,6 +2,8 @@ package br.com.w4solution.controle_instalacao.infra.configuration.exceptions;
 
 import br.com.w4solution.controle_instalacao.validations.ValidacaoCtoException;
 import jakarta.persistence.EntityNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +19,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class TratadorDeErros {
+
+    private static final Logger log = LoggerFactory.getLogger(TratadorDeErros.class);
 
     @ExceptionHandler(EntityNotFoundException.class)
     public ResponseEntity<?> tratarErro404() {
@@ -56,7 +60,8 @@ public class TratadorDeErros {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> tratarErro500(Exception ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Erro: " +ex.getLocalizedMessage());
+        log.error("Erro interno não tratado (500): ", ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Ocorreu um erro interno no servidor. Por favor, tente novamente mais tarde.");
     }
     @ExceptionHandler(UnexpectedRollbackException.class)
     public ResponseEntity<?> erroCadastro(UnexpectedRollbackException ex) {
@@ -69,11 +74,13 @@ public class TratadorDeErros {
                 ? ex.getMessage()
                 : ex.getMostSpecificCause().getMessage();
 
+        log.warn("Erro de integridade no banco de dados: {}", mensagem);
+
         if (mensagem != null && mensagem.toLowerCase().contains("usuarios_usuario")) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("Erro: Usuario ja cadastrado!");
         }
 
-        return ResponseEntity.status(HttpStatus.CONFLICT).body("Erro de integridade no banco: " + mensagem);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body("Erro ao processar a requisição: restrição de integridade dos dados.");
     }
     @ExceptionHandler(ValidacaoAutenticacaoException.class)
     public ResponseEntity<?> erroLogin(ValidacaoAutenticacaoException ex) {
