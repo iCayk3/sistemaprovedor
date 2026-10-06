@@ -266,7 +266,7 @@ public class FaturamentoMensalService {
                 + "(Movimento.Data >= '%s' AND Movimento.Data <= '%s')) "
                 + "AND Movimento.Origem = 'FAT' AND Movimento.Conta = 3 AND Movimento.Tipo = 'C'";
         filtro = filtro.formatted(
-                mes.withDayOfMonth(10), mes.withDayOfMonth(12),
+                mes.withDayOfMonth(10), mes.withDayOfMonth(13),
                 mes.withDayOfMonth(20), mes.withDayOfMonth(22),
                 day30, nextMonthDay3
         );
@@ -328,7 +328,7 @@ public class FaturamentoMensalService {
         if (dueDate == null) return null;
         if (dueDate.getYear() == reference.getYear() && dueDate.getMonth() == reference.getMonth()) {
             int day = dueDate.getDayOfMonth();
-            if (day >= 10 && day <= 12) return 10;
+            if (day >= 10 && day <= 13) return 10;
             if (day >= 20 && day <= 22) return 20;
             if (day >= 30) return 30;
         }
@@ -337,7 +337,7 @@ public class FaturamentoMensalService {
         return !dueDate.isBefore(nextMonthDay1) && !dueDate.isAfter(nextMonthDay3) ? 30 : null;
     }
     private String dueRangeLabel(Integer bucket, LocalDate reference) {
-        if (bucket == 10) return "10 a 12";
+        if (bucket == 10) return "10 a 13";
         if (bucket == 20) return "20 a 22";
         return "30 a " + reference.plusMonths(1).withDayOfMonth(3).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM"));
     }
