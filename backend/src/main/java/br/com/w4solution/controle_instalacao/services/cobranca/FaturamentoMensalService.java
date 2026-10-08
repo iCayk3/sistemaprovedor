@@ -7,6 +7,8 @@ import br.com.w4solution.controle_instalacao.services.rbx.RespostaAPI;
 import com.fasterxml.jackson.core.type.TypeReference;
 import jakarta.transaction.Transactional;
 import org.apache.poi.ss.usermodel.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -27,6 +29,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class FaturamentoMensalService {
+    private static final Logger log = LoggerFactory.getLogger(FaturamentoMensalService.class);
+
     private final FaturamentoMensalTituloRepository repository;
     private final IntegracaoRbx integracaoRbx;
     private final CobrancaService cobrancaService;
@@ -149,13 +153,15 @@ public class FaturamentoMensalService {
         List<FaturamentoMensalTitulo> titulos = repository.findByMesReferencia(referencia);
         BigDecimal faturado = sum(titulos, FaturamentoMensalTitulo::getValorFaturado);
         BigDecimal recebido = sum(titulos.stream().filter(FaturamentoMensalTitulo::isBaixado).toList(), FaturamentoMensalTitulo::getValorFaturado);
-        BigDecimal aberto = sum(titulos.stream().filter(titulo -> !titulo.isBaixado()).toList(), FaturamentoMensalTitulo::getValorFaturado);
+        BigDecimal aberto = sum(titulos.stream().filter(titulo -> !titulo.isBaixado() && !titulo.isCanceladoRbx()).toList(), FaturamentoMensalTitulo::getValorFaturado);
         long baixados = titulos.stream().filter(FaturamentoMensalTitulo::isBaixado).count();
+        long cancelados = titulos.stream().filter(FaturamentoMensalTitulo::isCanceladoRbx).count();
+        long abertos = titulos.stream().filter(titulo -> !titulo.isBaixado() && !titulo.isCanceladoRbx()).count();
         LocalDate inicioAno = referencia.withDayOfYear(1);
         LocalDate fimAno = referencia.withMonth(12).withDayOfMonth(31);
         List<FaturamentoMensalTitulo> titulosAno = repository.findByMesReferenciaBetween(inicioAno, fimAno);
         List<FaturamentoMensalTitulo> inadimplentes = titulosAno.stream()
-                .filter(titulo -> !titulo.isBaixado())
+                .filter(titulo -> !titulo.isBaixado() && !titulo.isCanceladoRbx())
                 .filter(titulo -> titulo.getVencimento().isBefore(LocalDate.now()))
                 .toList();
         BigDecimal faturadoAno = sum(titulosAno, FaturamentoMensalTitulo::getValorFaturado);
@@ -166,7 +172,9 @@ public class FaturamentoMensalService {
         totals.put("open", aberto);
         totals.put("documents", titulos.size());
         totals.put("receivedDocuments", baixados);
-        totals.put("openDocuments", titulos.size() - baixados);
+        totals.put("openDocuments", abertos);
+        totals.put("cancelled", sum(titulos.stream().filter(FaturamentoMensalTitulo::isCanceladoRbx).toList(), FaturamentoMensalTitulo::getValorFaturado));
+        totals.put("cancelledDocuments", cancelados);
         totals.put("collectionRate", faturado.signum() > 0 ? recebido.multiply(BigDecimal.valueOf(100)).divide(faturado, 2, RoundingMode.HALF_UP) : BigDecimal.ZERO);
         totals.put("delinquent", inadimplencia);
         totals.put("delinquentDocuments", inadimplentes.size());
@@ -179,9 +187,13 @@ public class FaturamentoMensalService {
                     List<FaturamentoMensalTitulo> vencimentoTitulos = entry.getValue();
                     List<FaturamentoMensalTitulo> vencimentoBaixados = vencimentoTitulos.stream()
                             .filter(FaturamentoMensalTitulo::isBaixado).toList();
+                    List<FaturamentoMensalTitulo> vencimentoAbertos = vencimentoTitulos.stream()
+                            .filter(titulo -> !titulo.isBaixado() && !titulo.isCanceladoRbx()).toList();
+                    List<FaturamentoMensalTitulo> vencimentoCancelados = vencimentoTitulos.stream()
+                            .filter(FaturamentoMensalTitulo::isCanceladoRbx).toList();
                     BigDecimal vencimentoFaturado = sum(vencimentoTitulos, FaturamentoMensalTitulo::getValorFaturado);
                     BigDecimal vencimentoRecebido = sum(vencimentoBaixados, FaturamentoMensalTitulo::getValorFaturado);
-                    BigDecimal vencimentoAberto = vencimentoFaturado.subtract(vencimentoRecebido);
+                    BigDecimal vencimentoAberto = sum(vencimentoAbertos, FaturamentoMensalTitulo::getValorFaturado);
                     Map<String, Object> row = new LinkedHashMap<>();
                     row.put("dueDate", referencia.withDayOfMonth(Math.min(entry.getKey(), referencia.lengthOfMonth())).toString());
                     row.put("dueDateLabel", "Vencimento " + entry.getKey());
@@ -191,6 +203,8 @@ public class FaturamentoMensalService {
                     row.put("open", vencimentoAberto);
                     row.put("documents", vencimentoTitulos.size());
                     row.put("receivedDocuments", vencimentoBaixados.size());
+                    row.put("openDocuments", vencimentoAbertos.size());
+                    row.put("cancelledDocuments", vencimentoCancelados.size());
                     row.put("collectionRate", vencimentoFaturado.signum() > 0
                             ? vencimentoRecebido.multiply(BigDecimal.valueOf(100)).divide(vencimentoFaturado, 2, RoundingMode.HALF_UP)
                             : BigDecimal.ZERO);
@@ -208,8 +222,8 @@ public class FaturamentoMensalService {
         try {
             List<FaturamentoMensalTitulo> titulos = repository.findByMesReferencia(mes.withDayOfMonth(1));
             if (!titulos.isEmpty()) sincronizarTitulos(titulos);
-        } catch (Exception ignored) {
-            // A próxima rotina diária ou sincronização manual tentará novamente.
+        } catch (Exception e) {
+            log.error("Erro ao sincronizar títulos em background do mês {}: {}", mes, e.getMessage(), e);
         }
     }
 
@@ -227,7 +241,7 @@ public class FaturamentoMensalService {
         List<FaturamentoMensalTitulo> titulos = repository.findAll();
         LocalDate hoje = LocalDate.now();
         long elegiveis = titulos.stream()
-                .filter(titulo -> !titulo.isBaixado())
+                .filter(titulo -> !titulo.isBaixado() && !titulo.isCanceladoRbx())
                 .filter(titulo -> titulo.getVencimento() != null && !titulo.getVencimento().isAfter(hoje.minusDays(7)))
                 .count();
         long vinculadosAntes = titulos.stream().filter(titulo -> titulo.getCobrancaId() != null).count();
@@ -251,36 +265,78 @@ public class FaturamentoMensalService {
     @Scheduled(cron = "0 15 5 * * *", zone = "America/Sao_Paulo")
     @Transactional
     public void sincronizarDiariamente() {
-        repository.findByBaixadoFalse().stream().collect(Collectors.groupingBy(FaturamentoMensalTitulo::getMesReferencia))
-                .values().forEach(titulos -> {
-                    try { sincronizarTitulos(titulos); } catch (Exception ignored) { }
-                });
+        Set<LocalDate> meses = repository.findByBaixadoFalseAndCanceladoRbxFalse().stream()
+                .map(FaturamentoMensalTitulo::getMesReferencia)
+                .collect(Collectors.toSet());
+        for (LocalDate mes : meses) {
+            try {
+                List<FaturamentoMensalTitulo> titulos = repository.findByMesReferencia(mes);
+                if (!titulos.isEmpty()) sincronizarTitulos(titulos);
+            } catch (Exception e) {
+                log.error("Erro ao sincronizar títulos do mês {}: {}", mes, e.getMessage(), e);
+            }
+        }
     }
 
     private void sincronizarTitulos(List<FaturamentoMensalTitulo> titulos) throws Exception {
         LocalDate mes = titulos.get(0).getMesReferencia();
+        LocalDate hoje = LocalDate.now();
+        LocalDate dataInicioBaixa = mes.minusMonths(1).withDayOfMonth(1);
+        LocalDate dataFimBaixa = hoje.plusDays(1);
+
+        String filtroBaixados = "Movimento.DataBaixa >= '%s' AND Movimento.DataBaixa <= '%s' "
+                + "AND Movimento.Origem = 'FAT' AND Movimento.Conta = 3 AND Movimento.Tipo = 'C'";
+        filtroBaixados = filtroBaixados.formatted(dataInicioBaixa, dataFimBaixa);
+
+        List<Map<String, Object>> baixados = fetch("ConsultaDocumentosBaixados", filtroBaixados).stream()
+                .filter(item -> {
+                    String hist = value(item, "Historico");
+                    return hist.isBlank() || "Documento a receber".equalsIgnoreCase(hist);
+                }).toList();
+        Map<String, Map<String, Object>> porDocumentoBaixado = baixados.stream().collect(Collectors.toMap(
+                item -> normalizeDocument(value(item, "Documento")), Function.identity(), (first, second) -> first));
+
         LocalDate day30 = mes.withDayOfMonth(Math.min(30, mes.lengthOfMonth()));
         LocalDate nextMonthDay3 = mes.plusMonths(1).withDayOfMonth(3);
-        String filtro = "((Movimento.Data >= '%s' AND Movimento.Data <= '%s') OR "
-                + "(Movimento.Data >= '%s' AND Movimento.Data <= '%s') OR "
-                + "(Movimento.Data >= '%s' AND Movimento.Data <= '%s')) "
-                + "AND Movimento.Origem = 'FAT' AND Movimento.Conta = 3 AND Movimento.Tipo = 'C'";
-        filtro = filtro.formatted(
+        String filtroAbertos = "((Vencimento >= '%s' AND Vencimento <= '%s') OR "
+                + "(Vencimento >= '%s' AND Vencimento <= '%s') OR "
+                + "(Vencimento >= '%s' AND Vencimento <= '%s')) "
+                + "AND Historico = 'Documento a receber'";
+        filtroAbertos = filtroAbertos.formatted(
                 mes.withDayOfMonth(10), mes.withDayOfMonth(13),
                 mes.withDayOfMonth(20), mes.withDayOfMonth(22),
                 day30, nextMonthDay3
         );
-        List<Map<String, Object>> baixados = fetch("ConsultaDocumentosBaixados", filtro).stream()
+        List<Map<String, Object>> abertos = fetch("ConsultaDocumentosAbertos", filtroAbertos).stream()
                 .filter(item -> "Documento a receber".equalsIgnoreCase(value(item, "Historico"))).toList();
-        Map<String, Map<String, Object>> porDocumento = baixados.stream().collect(Collectors.toMap(
+        Map<String, Map<String, Object>> porDocumentoAberto = abertos.stream().collect(Collectors.toMap(
                 item -> normalizeDocument(value(item, "Documento")), Function.identity(), (first, second) -> first));
+
         LocalDateTime now = LocalDateTime.now();
         for (FaturamentoMensalTitulo titulo : titulos) {
-            Map<String, Object> baixa = porDocumento.get(normalizeDocument(titulo.getDocumento()));
+            String doc = normalizeDocument(titulo.getDocumento());
+            if (doc.isBlank()) {
+                titulo.setSincronizadoEm(now);
+                continue;
+            }
+            Map<String, Object> baixa = porDocumentoBaixado.get(doc);
             if (baixa != null) {
                 titulo.setBaixado(true);
+                titulo.setCanceladoRbx(false);
                 titulo.setValorRecebido(decimal(value(baixa, "ValorBaixado")));
                 titulo.setDataBaixa(parseDate(value(baixa, "DataBaixa")));
+            } else if (porDocumentoAberto.containsKey(doc)) {
+                titulo.setBaixado(false);
+                titulo.setCanceladoRbx(false);
+                titulo.setValorRecebido(BigDecimal.ZERO);
+                titulo.setDataBaixa(null);
+            } else if (titulo.isBaixado()) {
+                titulo.setCanceladoRbx(false);
+            } else {
+                titulo.setBaixado(false);
+                titulo.setCanceladoRbx(true);
+                titulo.setValorRecebido(BigDecimal.ZERO);
+                titulo.setDataBaixa(null);
             }
             titulo.setSincronizadoEm(now);
         }

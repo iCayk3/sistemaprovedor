@@ -12,7 +12,9 @@ public interface FaturamentoMensalTituloRepository extends JpaRepository<Faturam
     List<FaturamentoMensalTitulo> findByMesReferencia(LocalDate mesReferencia);
     List<FaturamentoMensalTitulo> findByMesReferenciaBetween(LocalDate inicio, LocalDate fim);
     List<FaturamentoMensalTitulo> findByBaixadoFalse();
+    List<FaturamentoMensalTitulo> findByBaixadoFalseAndCanceladoRbxFalse();
     Optional<FaturamentoMensalTitulo> findFirstByDocumentoAndCodigoClienteAndBaixadoFalseOrderByMesReferenciaDesc(String documento, String codigoCliente);
+    Optional<FaturamentoMensalTitulo> findFirstByDocumentoAndCodigoClienteAndBaixadoFalseAndCanceladoRbxFalseOrderByMesReferenciaDesc(String documento, String codigoCliente);
     boolean existsByMesReferencia(LocalDate mesReferencia);
     void deleteByMesReferencia(LocalDate mesReferencia);
     List<FaturamentoMensalTitulo> findAllByCobrancaIdIn(Collection<Long> cobrancaIds);

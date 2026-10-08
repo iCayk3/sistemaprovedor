@@ -320,8 +320,13 @@ public class CobrancaService {
         repository.bloquearGeracaoCobrancas();
         LocalDate hoje = LocalDate.now();
         for (FaturamentoMensalTitulo titulo : titulos) {
-            if (titulo.isBaixado()) finalizarAutomaticamentePorPagamento(titulo);
-            else if (atrasoMinimoAtingido(titulo.getVencimento(), hoje)) gerarAtendimentoAutomatico(titulo);
+            if (titulo.isBaixado()) {
+                finalizarAutomaticamentePorPagamento(titulo);
+            } else if (titulo.isCanceladoRbx()) {
+                cancelarAutomaticamentePorExclusaoRbx(titulo);
+            } else if (atrasoMinimoAtingido(titulo.getVencimento(), hoje)) {
+                gerarAtendimentoAutomatico(titulo);
+            }
         }
     }
 
@@ -330,6 +335,7 @@ public class CobrancaService {
     }
 
     private void gerarAtendimentoAutomatico(FaturamentoMensalTitulo titulo) {
+        if (titulo.isCanceladoRbx() || titulo.isBaixado()) return;
         Integer codigo = inteiro(titulo.getCodigoCliente());
         if (codigo == null) return;
         if (titulo.getCobrancaId() != null) {
@@ -452,6 +458,40 @@ public class CobrancaService {
                     "Pagamento identificado automaticamente na sincronização do faturamento.", "sistema");
             prepararFechamentoRbx(cobranca);
             criarNotificacaoEncerramentoAutomatico(cobranca);
+        });
+    }
+
+    private void cancelarAutomaticamentePorExclusaoRbx(FaturamentoMensalTitulo titulo) {
+        if (titulo.getCobrancaId() == null) return;
+        repository.findById(titulo.getCobrancaId()).ifPresent(cobranca -> {
+            boolean naoCapturada = (cobranca.getResponsavel() == null || cobranca.getResponsavel().isBlank())
+                    && (cobranca.getAtendimentoRbxNumero() == null || cobranca.getAtendimentoRbxNumero().isBlank());
+            if (Boolean.TRUE.equals(cobranca.getGeradaAutomaticamente()) && naoCapturada) {
+                historicoRepository.deleteAllByCobrancaId(cobranca.getId());
+                repository.delete(cobranca);
+                titulo.setCobrancaId(null);
+                faturamentoRepository.save(titulo);
+                return;
+            }
+            if ("Fechada".equalsIgnoreCase(cobranca.getSituacaoAtendimento())) return;
+            String anterior = cobranca.getStatus();
+            cobranca.setStatus("Cancelado");
+            cobranca.setSituacaoAtendimento("Fechada");
+            cobranca.setFechadoEm(LocalDateTime.now());
+            cobranca.setAtualizadoEm(LocalDateTime.now());
+            cobranca.setAtualizadoPor("sistema");
+            repository.save(cobranca);
+            salvarHistorico(cobranca, anterior, "Cancelado", cobranca.getValor(), cobranca.getValor(),
+                    "Boleto cancelado/excluído no RBX identificado na sincronização.", "sistema");
+            prepararFechamentoRbx(cobranca);
+            if (cobranca.getResponsavel() != null && !cobranca.getResponsavel().isBlank()) {
+                cobranca.setNotificacaoEncerramentoMensagem("Boleto cancelado/excluído no RBX para "
+                        + fallback(cobranca.getCliente(), "cliente não informado") + " (" + cobranca.getProtocolo()
+                        + "). Atendimento encerrado automaticamente.");
+                cobranca.setNotificacaoEncerramentoEm(LocalDateTime.now());
+                cobranca.setNotificacaoEncerramentoPendente(true);
+                repository.save(cobranca);
+            }
         });
     }
 
@@ -652,7 +692,7 @@ public class CobrancaService {
 
     private void vincularTituloImportado(Cobranca cobranca) {
         if (cobranca.getDocumentoTitulo() == null || cobranca.getCodigoCliente() == null) return;
-        faturamentoRepository.findFirstByDocumentoAndCodigoClienteAndBaixadoFalseOrderByMesReferenciaDesc(
+        faturamentoRepository.findFirstByDocumentoAndCodigoClienteAndBaixadoFalseAndCanceladoRbxFalseOrderByMesReferenciaDesc(
                 cobranca.getDocumentoTitulo(), String.valueOf(cobranca.getCodigoCliente())
         ).ifPresent(titulo -> {
             titulo.setCobrancaId(cobranca.getId());
@@ -665,7 +705,7 @@ public class CobrancaService {
         LocalDate hoje = LocalDate.now();
         Set<Integer> clientesComAtendimento = repository.findClientesComAtendimentoAberto();
 
-        return faturamentoRepository.findByBaixadoFalse().stream()
+        return faturamentoRepository.findByBaixadoFalseAndCanceladoRbxFalse().stream()
                 .filter(titulo -> atrasoMinimoAtingido(titulo.getVencimento(), hoje))
                 .filter(titulo -> titulo.getCodigoCliente() != null && !titulo.getCodigoCliente().isBlank())
                 .collect(Collectors.groupingBy(titulo -> titulo.getCodigoCliente().trim()))

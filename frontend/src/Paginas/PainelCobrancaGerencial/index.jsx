@@ -525,7 +525,7 @@ export default function PainelCobrancaGerencial() {
                             Dashboard independente para construir os relatórios e indicadores do setor.
                         </Typography>
                     </Box>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="center">
+                    <Stack direction="row" flexWrap="wrap" spacing={1} alignItems="center">
                         <TextField
                             size="small"
                             type="month"
@@ -533,27 +533,83 @@ export default function PainelCobrancaGerencial() {
                             value={month}
                             onChange={(event) => setMonth(event.target.value)}
                             InputLabelProps={{ shrink: true }}
-                            sx={{ minWidth: 220, ...dashboardInputSx }}
+                            sx={{ minWidth: 160, ...dashboardInputSx }}
                         />
                         <Button
+                            size="small"
                             variant="contained"
                             color="secondary"
-                            startIcon={<PictureAsPdfRoundedIcon />}
+                            startIcon={<PictureAsPdfRoundedIcon fontSize="small" />}
                             onClick={generateManagementReport}
                             disabled={loading || actionLoading || !financial || !operational}
+                            sx={{
+                                textTransform: 'none',
+                                whiteSpace: 'nowrap',
+                                fontWeight: 700,
+                                fontSize: '0.8125rem',
+                                height: 36,
+                                px: 1.5,
+                            }}
                         >
                             Gerar relatório PDF
                         </Button>
-                        <Button component="label" variant="contained" color="inherit" startIcon={<FileUploadRoundedIcon />} disabled={actionLoading}>
+                        <Button
+                            component="label"
+                            size="small"
+                            variant="contained"
+                            color="inherit"
+                            startIcon={<FileUploadRoundedIcon fontSize="small" />}
+                            disabled={actionLoading}
+                            sx={{
+                                textTransform: 'none',
+                                whiteSpace: 'nowrap',
+                                fontWeight: 700,
+                                fontSize: '0.8125rem',
+                                height: 36,
+                                px: 1.5,
+                            }}
+                        >
                             Importar Excel
                             <input hidden type="file" accept=".xls,.xlsx" onChange={importSpreadsheet} />
                         </Button>
                         {isAdmin && (
-                            <Button variant="outlined" color="error" startIcon={<DeleteForeverRoundedIcon />} onClick={resetBillingMonth} disabled={actionLoading || financial?.billing?.source !== 'PLANILHA'}>
+                            <Button
+                                size="small"
+                                variant="outlined"
+                                color="error"
+                                startIcon={<DeleteForeverRoundedIcon fontSize="small" />}
+                                onClick={resetBillingMonth}
+                                disabled={actionLoading || financial?.billing?.source !== 'PLANILHA'}
+                                sx={{
+                                    textTransform: 'none',
+                                    whiteSpace: 'nowrap',
+                                    fontWeight: 700,
+                                    fontSize: '0.8125rem',
+                                    height: 36,
+                                    px: 1.5,
+                                    bgcolor: 'rgba(239, 68, 68, 0.08)',
+                                    '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.16)' },
+                                }}
+                            >
                                 Zerar mês
                             </Button>
                         )}
-                        <Button variant="outlined" color="inherit" startIcon={<SyncRoundedIcon />} onClick={syncSpreadsheet} disabled={actionLoading || financial?.billing?.source !== 'PLANILHA'}>
+                        <Button
+                            size="small"
+                            variant="outlined"
+                            color="inherit"
+                            startIcon={<SyncRoundedIcon fontSize="small" />}
+                            onClick={syncSpreadsheet}
+                            disabled={actionLoading || financial?.billing?.source !== 'PLANILHA'}
+                            sx={{
+                                textTransform: 'none',
+                                whiteSpace: 'nowrap',
+                                fontWeight: 700,
+                                fontSize: '0.8125rem',
+                                height: 36,
+                                px: 1.5,
+                            }}
+                        >
                             Sincronizar
                         </Button>
                     </Stack>
@@ -594,7 +650,21 @@ export default function PainelCobrancaGerencial() {
                                     </Typography>
                                 )}
                             </Box>
-                            <Button variant="contained" startIcon={<SaveRoundedIcon />} onClick={saveGoals} disabled={actionLoading}>
+                            <Button
+                                size="small"
+                                variant="contained"
+                                startIcon={<SaveRoundedIcon fontSize="small" />}
+                                onClick={saveGoals}
+                                disabled={actionLoading}
+                                sx={{
+                                    textTransform: 'none',
+                                    whiteSpace: 'nowrap',
+                                    fontWeight: 700,
+                                    fontSize: '0.8125rem',
+                                    height: 36,
+                                    px: 1.5,
+                                }}
+                            >
                                 Salvar metas do mês
                             </Button>
                         </Stack>
@@ -895,7 +965,7 @@ export default function PainelCobrancaGerencial() {
                                 <Typography variant="caption" sx={dashboardMutedTextSx}>Títulos da competência</Typography>
                                 <Typography variant="h5" fontWeight={900}>{Number(billing.documents || 0).toLocaleString('pt-BR')}</Typography>
                                 <Typography variant="caption" sx={dashboardMutedTextSx}>
-                                    {Number(billing.receivedDocuments || 0).toLocaleString('pt-BR')} baixados • {Number(billing.openDocuments || 0).toLocaleString('pt-BR')} em aberto
+                                    {Number(billing.receivedDocuments || 0).toLocaleString('pt-BR')} baixados • {Number(billing.openDocuments || 0).toLocaleString('pt-BR')} em aberto{Number(billing.cancelledDocuments || 0) > 0 ? ` • ${Number(billing.cancelledDocuments).toLocaleString('pt-BR')} cancelados no RBX` : ''}
                                 </Typography>
                             </Stack>
                         </Stack>
