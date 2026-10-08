@@ -37,13 +37,19 @@ public class UsuarioService {
     @org.springframework.beans.factory.annotation.Value("${api.service.integration.frontend:}")
     private String frontendUrl;
 
-    public UsuarioService(UsuarioRepository repository, AuthenticationManager manager, TokenService service, RedefinirSenhaRepository redefinirSenhaRepository, LogRepository logRepository, CriptografiaChaveRbxService criptografiaChaveRbxService) {
+    private final String chavePadrao;
+
+    public UsuarioService(UsuarioRepository repository, AuthenticationManager manager, TokenService service,
+                          RedefinirSenhaRepository redefinirSenhaRepository, LogRepository logRepository,
+                          CriptografiaChaveRbxService criptografiaChaveRbxService,
+                          @org.springframework.beans.factory.annotation.Value("${api.service.integration.rbx.chave:}") String chavePadrao) {
         this.repository = repository;
         this.manager = manager;
         this.service = service;
         this.redefinirSenhaRepository = redefinirSenhaRepository;
         this.logRepository = logRepository;
         this.criptografiaChaveRbxService = criptografiaChaveRbxService;
+        this.chavePadrao = chavePadrao;
     }
 
     public boolean isCookieSecure() {
@@ -237,22 +243,45 @@ public class UsuarioService {
     }
 
     public CredenciaisRbx credenciaisRbx(Usuario usuario) {
-        if (usuario == null || usuario.getId() == null) throw new IllegalStateException("Usuário não autenticado.");
-        Usuario persistido = repository.findById(usuario.getId())
-                .orElseThrow(() -> new UsuarioNaoEncontradoException("Usuario não encontrado"));
-        if (persistido.getUsuarioRbx() == null || persistido.getUsuarioRbx().isBlank()
-                || persistido.getChaveApiRbxCriptografada() == null || persistido.getChaveApiRbxCriptografada().isBlank()) {
-            throw new IllegalStateException("O usuário não possui usuário e chave de API do RBX configurados.");
+        if (usuario == null) throw new IllegalStateException("Usuário não autenticado.");
+        Usuario persistido = null;
+        if (usuario.getId() != null) {
+            persistido = repository.findById(usuario.getId()).orElse(null);
         }
-        return new CredenciaisRbx(persistido.getUsuarioRbx(),
-                criptografiaChaveRbxService.descriptografar(persistido.getChaveApiRbxCriptografada()));
+        if (persistido == null && usuario.getUsuario() != null) {
+            persistido = repository.findByUsuario(usuario.getUsuario().trim()).orElse(null);
+        }
+        if (persistido == null) {
+            throw new UsuarioNaoEncontradoException("Usuario não encontrado");
+        }
+        return obterCredenciais(persistido);
     }
 
     public CredenciaisRbx credenciaisRbx(String nomeUsuario) {
         if (nomeUsuario == null || nomeUsuario.isBlank()) throw new IllegalStateException("Usuário responsável não informado.");
         Usuario persistido = repository.findByUsuario(nomeUsuario.trim())
-                .orElseThrow(() -> new UsuarioNaoEncontradoException("Usuario não encontrado"));
-        return credenciaisRbx(persistido);
+                .orElseThrow(() -> new UsuarioNaoEncontradoException("Usuario não encontrado: " + nomeUsuario));
+        return obterCredenciais(persistido);
+    }
+
+    private CredenciaisRbx obterCredenciais(Usuario persistido) {
+        String usuarioRbx = (persistido.getUsuarioRbx() != null && !persistido.getUsuarioRbx().isBlank())
+                ? persistido.getUsuarioRbx().trim()
+                : persistido.getUsuario();
+        String chave = null;
+        if (persistido.getChaveApiRbxCriptografada() != null && !persistido.getChaveApiRbxCriptografada().isBlank()) {
+            try {
+                chave = criptografiaChaveRbxService.descriptografar(persistido.getChaveApiRbxCriptografada());
+            } catch (Exception ignored) {
+            }
+        }
+        if (chave == null || chave.isBlank()) {
+            chave = (chavePadrao != null && !chavePadrao.isBlank()) ? chavePadrao.trim() : null;
+        }
+        if (usuarioRbx == null || usuarioRbx.isBlank() || chave == null || chave.isBlank()) {
+            throw new IllegalStateException("O usuário não possui usuário ou chave de API do RBX configurados.");
+        }
+        return new CredenciaisRbx(usuarioRbx, chave);
     }
 
     public record CredenciaisRbx(String usuarioRbx, String chaveApi) {}

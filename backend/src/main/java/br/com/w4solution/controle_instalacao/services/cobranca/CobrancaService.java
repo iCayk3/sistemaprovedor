@@ -18,7 +18,13 @@ import br.com.w4solution.controle_instalacao.dto.cobranca.FilaInadimplenteDTO;
 import br.com.w4solution.controle_instalacao.dto.rbx.ClienteFiltradoDTO;
 import br.com.w4solution.controle_instalacao.dto.rbx.AtendimentoAberturaRbxDTO;
 import br.com.w4solution.controle_instalacao.dto.rbx.AtendimentoEncerramentoRbxDTO;
+import br.com.w4solution.controle_instalacao.domain.usuarios.UserRole;
 import br.com.w4solution.controle_instalacao.domain.usuarios.Usuario;
+import br.com.w4solution.controle_instalacao.dto.rbx.BoletosAbertos;
+import br.com.w4solution.controle_instalacao.dto.rbx.ContratoRbxDTO;
+import br.com.w4solution.controle_instalacao.services.usuarios.UsuarioService.CredenciaisRbx;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import br.com.w4solution.controle_instalacao.repository.cobranca.CobrancaHistoricoRepository;
 import br.com.w4solution.controle_instalacao.repository.cobranca.CobrancaRepository;
 import br.com.w4solution.controle_instalacao.repository.cobranca.CobrancaConfiguracaoRepository;
@@ -47,11 +53,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 public class CobrancaService {
+
+    private static final Logger log = LoggerFactory.getLogger(CobrancaService.class);
 
     private static final ZoneId FUSO_BRASILIA = ZoneId.of("America/Sao_Paulo");
     private static final DateTimeFormatter DATA_HORA_PT_BR = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
@@ -244,13 +253,29 @@ public class CobrancaService {
             throw new IllegalStateException("Este atendimento já está fechado.");
         }
         String atual = cobranca.getResponsavel();
-        if (atual != null && !atual.isBlank() && !atual.equalsIgnoreCase(usuario)) {
-            throw new IllegalStateException("Este atendimento já foi capturado por " + atual + ".");
-        }
-        if (atual == null || atual.isBlank()) {
+        boolean podeVerGeral = usuarioLogado != null && (usuarioLogado.getPermissao() == UserRole.ADMIN || usuarioLogado.isSupervisor());
+
+        boolean isMesmoResponsavel = atual != null && atual.equalsIgnoreCase(usuario);
+        boolean jaCapturadoPorOutro = atual != null && !atual.isBlank() && !isMesmoResponsavel;
+        boolean falhaRbxAberta = "ERRO_ABERTURA_RBX".equalsIgnoreCase(cobranca.getStatusIntegracaoRbx())
+                || cobranca.getAtendimentoRbxNumero() == null || cobranca.getAtendimentoRbxNumero().isBlank();
+
+        if (jaCapturadoPorOutro) {
+            if (falhaRbxAberta) {
+                String anterior = atual;
+                cobranca.setResponsavel(fallback(usuario, "sistema"));
+                cobranca.setCapturadoEm(LocalDateTime.now());
+                cobranca.setStatusIntegracaoRbx("PREPARANDO_ABERTURA_RBX");
+                cobranca.setAtualizadoEm(LocalDateTime.now());
+                cobranca.setAtualizadoPor(fallback(usuario, "sistema"));
+                salvarHistorico(cobranca, cobranca.getStatus(), cobranca.getStatus(), cobranca.getValor(), cobranca.getValor(),
+                        "Atendimento recapturado por " + usuario + " (responsável anterior: " + anterior + ").", usuario);
+            } else if (!podeVerGeral) {
+                throw new IllegalStateException("Este atendimento já foi capturado por " + atual + ".");
+            }
+        } else if (atual == null || atual.isBlank()) {
             cobranca.setResponsavel(fallback(usuario, "sistema"));
             cobranca.setCapturadoEm(LocalDateTime.now());
-            identificarContratoDoTitulo(cobranca);
             cobranca.setStatusIntegracaoRbx("PREPARANDO_ABERTURA_RBX");
             cobranca.setAtualizadoEm(LocalDateTime.now());
             cobranca.setAtualizadoPor(fallback(usuario, "sistema"));
@@ -258,6 +283,12 @@ public class CobrancaService {
             salvarHistorico(cobranca, cobranca.getStatus(), cobranca.getStatus(), cobranca.getValor(), cobranca.getValor(),
                     "Atendimento capturado. Preparando abertura no RBX para o cliente e contrato da cobrança.", usuario);
         }
+
+        if (cobranca.getNumeroContrato() == null || cobranca.getNumeroContrato().isBlank()) {
+            identificarContratoDoTitulo(cobranca);
+            repository.save(cobranca);
+        }
+
         if ((cobranca.getAtendimentoRbxNumero() == null || cobranca.getAtendimentoRbxNumero().isBlank())
                 && Boolean.TRUE.equals(cobranca.getGeradaAutomaticamente())) {
             abrirAtendimentoRbx(cobranca, usuarioLogado, usuario);
@@ -285,10 +316,18 @@ public class CobrancaService {
                     + "; boleto: " + fallback(cobranca.getDocumentoTitulo(), "não informado")
                     + "; vencimento: " + vencimentoBoleto
                     + "; valor: " + valorBoleto + ".";
+
+            CredenciaisRbx credenciais;
+            try {
+                credenciais = usuarioService.credenciaisRbx(usuarioLogado);
+            } catch (Exception e1) {
+                credenciais = usuarioService.credenciaisRbx(usuario);
+            }
+
             var resultado = atendimentoClient.abrir(new AtendimentoAberturaRbxDTO(
                     LocalDate.now(), LocalTime.now(), "A", "T", "C", cliente, contrato,
                     null, 1, "A", "A", 187L, null, assunto, ocorrencia
-            ), usuarioService.credenciaisRbx(usuarioLogado));
+            ), credenciais);
             cobranca.setAtendimentoRbxNumero(resultado.numeroAtendimento());
             cobranca.setAtendimentoRbxProtocolo(resultado.protocolo());
             cobranca.setStatusIntegracaoRbx("ABERTO_RBX");
@@ -513,15 +552,121 @@ public class CobrancaService {
     }
 
     private void identificarContratoDoTitulo(Cobranca cobranca) {
-        if (cobranca.getNumeroContrato() != null || cobranca.getCodigoCliente() == null || cobranca.getDocumentoTitulo() == null) return;
-        try {
-            buscarClienteRbx(cobranca.getCodigoCliente().longValue()).contratos().stream()
-                    .filter(contrato -> contrato.boletos().stream().anyMatch(boleto ->
-                            Objects.equals(normalizarNumero(boleto.documento()), normalizarNumero(cobranca.getDocumentoTitulo()))))
-                    .findFirst().ifPresent(contrato -> cobranca.setNumeroContrato(contrato.numero()));
-        } catch (Exception e) {
-            cobranca.setErroIntegracaoRbx("Contrato não identificado na captura: " + e.getMessage());
+        if (cobranca.getNumeroContrato() != null && !cobranca.getNumeroContrato().isBlank()) {
+            return;
         }
+        if (cobranca.getCodigoCliente() == null) {
+            return;
+        }
+        try {
+            Integer codigoCliente = cobranca.getCodigoCliente();
+            List<ContratoRbxDTO> todosContratos = serviceRbx.buscarContratos(codigoCliente);
+            if (todosContratos == null || todosContratos.isEmpty()) {
+                cobranca.setErroIntegracaoRbx("Cliente sem contratos cadastrados no RBX.");
+                return;
+            }
+
+            // 1ª Tentativa: Localizar por boleto em aberto do cliente
+            String docNormalizado = normalizarNumero(cobranca.getDocumentoTitulo());
+            if (!docNormalizado.isBlank()) {
+                try {
+                    List<BoletosAbertos> boletos = serviceRbx.buscarBoletosAbertosDoCliente(codigoCliente.longValue());
+                    if (boletos != null) {
+                        for (BoletosAbertos bol : boletos) {
+                            if (Objects.equals(normalizarNumero(bol.documento()), docNormalizado)) {
+                                String vinculados = bol.contratosVinculados();
+                                if (vinculados != null && !vinculados.isBlank()) {
+                                    Optional<ContratoRbxDTO> contratoBol = todosContratos.stream()
+                                            .filter(c -> contratoVinculado(c.numero(), vinculados))
+                                            .findFirst();
+                                    if (contratoBol.isPresent()) {
+                                        aplicarContratoIdentificado(cobranca, contratoBol.get().numero());
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Falha ao buscar boletos em aberto para o cliente {}: {}", codigoCliente, e.getMessage());
+                }
+            }
+
+            // 2ª Tentativa: Contratos cobrados (valor > 0) e ativos/habilitados (não cancelados/transferidos)
+            List<ContratoRbxDTO> contratosAtivosComValor = todosContratos.stream()
+                    .filter(c -> serviceRbx.valorContrato(c) > 0)
+                    .filter(this::isContratoAtivoOuHabilitado)
+                    .toList();
+
+            if (contratosAtivosComValor.size() == 1) {
+                aplicarContratoIdentificado(cobranca, contratosAtivosComValor.get(0).numero());
+                return;
+            }
+
+            if (contratosAtivosComValor.size() > 1) {
+                // Tenta bater pelo valor da mensalidade da cobrança
+                if (cobranca.getValor() != null && cobranca.getValor().compareTo(BigDecimal.ZERO) > 0) {
+                    double valorTitulo = cobranca.getValor().doubleValue();
+                    Optional<ContratoRbxDTO> mesmoValor = contratosAtivosComValor.stream()
+                            .filter(c -> Math.abs(serviceRbx.valorContrato(c) - valorTitulo) < 0.01)
+                            .findFirst();
+                    if (mesmoValor.isPresent()) {
+                        aplicarContratoIdentificado(cobranca, mesmoValor.get().numero());
+                        return;
+                    }
+                }
+                // Contrato ativo mais recente
+                ContratoRbxDTO maisRecente = contratosAtivosComValor.stream()
+                        .max(Comparator.comparingLong(c -> numeroLong(c.numero()) == null ? 0L : numeroLong(c.numero())))
+                        .orElse(contratosAtivosComValor.get(0));
+                aplicarContratoIdentificado(cobranca, maisRecente.numero());
+                return;
+            }
+
+            // 3ª Tentativa: Contrato mais recente com valor > 0 (mesmo que suspenso/bloqueado)
+            Optional<ContratoRbxDTO> maisRecenteComValor = serviceRbx.buscarContratoMaisRecenteComValor(codigoCliente);
+            if (maisRecenteComValor.isPresent()) {
+                aplicarContratoIdentificado(cobranca, maisRecenteComValor.get().numero());
+                return;
+            }
+
+            // 4ª Tentativa: Qualquer contrato ativo/habilitado
+            Optional<ContratoRbxDTO> qualquerAtivo = todosContratos.stream()
+                    .filter(this::isContratoAtivoOuHabilitado)
+                    .findFirst();
+            if (qualquerAtivo.isPresent()) {
+                aplicarContratoIdentificado(cobranca, qualquerAtivo.get().numero());
+                return;
+            }
+
+            // 5ª Tentativa: Contrato com maior identificador numérico
+            ContratoRbxDTO ultimo = todosContratos.stream()
+                    .max(Comparator.comparingLong(c -> numeroLong(c.numero()) == null ? 0L : numeroLong(c.numero())))
+                    .orElse(todosContratos.get(0));
+            aplicarContratoIdentificado(cobranca, ultimo.numero());
+        } catch (Exception e) {
+            log.error("Erro ao identificar contrato do cliente {}: {}", cobranca.getCodigoCliente(), e.getMessage());
+            cobranca.setErroIntegracaoRbx("Não foi possível identificar o contrato no RBX: " + e.getMessage());
+        }
+    }
+
+    private void aplicarContratoIdentificado(Cobranca cobranca, String numeroContrato) {
+        cobranca.setNumeroContrato(numeroContrato);
+        cobranca.setErroIntegracaoRbx(null);
+        if (cobranca.getId() != null) {
+            faturamentoRepository.findAllByCobrancaIdIn(List.of(cobranca.getId())).forEach(titulo -> {
+                if (titulo.getNumeroContrato() == null || titulo.getNumeroContrato().isBlank()) {
+                    titulo.setNumeroContrato(numeroContrato);
+                    faturamentoRepository.save(titulo);
+                }
+            });
+        }
+    }
+
+    private boolean isContratoAtivoOuHabilitado(ContratoRbxDTO c) {
+        if (c == null || c.situacaoDescricao() == null) return false;
+        String sit = c.situacaoDescricao().trim().toLowerCase();
+        return !sit.contains("cancelad") && !sit.contains("transferid");
     }
 
     private void prepararFechamentoRbx(Cobranca cobranca) {
@@ -640,7 +785,6 @@ public class CobrancaService {
                                 .filter(boleto -> contratoVinculado(contrato.numero(), boleto.contratosVinculados()))
                                 .toList()
                 ))
-                .filter(contrato -> !contrato.boletos().isEmpty())
                 .toList();
         return new CobrancaClienteRbxDTO(clientes.get(0), contratos);
     }

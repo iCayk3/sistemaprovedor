@@ -16,8 +16,7 @@ import java.time.LocalDateTime;
         indexes = {
                 @Index(name = "idx_faturamento_cliente_doc", columnList = "codigoCliente, documento"),
                 @Index(name = "idx_faturamento_cobranca_id", columnList = "cobrancaId"),
-                @Index(name = "idx_faturamento_mes_baixado", columnList = "mes_referencia, baixado"),
-                @Index(name = "idx_faturamento_cancelado_rbx", columnList = "cancelado_rbx")
+                @Index(name = "idx_faturamento_mes_baixado", columnList = "mes_referencia, baixado")
         }
 )
 @Getter
@@ -45,7 +44,7 @@ public class FaturamentoMensalTitulo {
     private BigDecimal valorFaturado;
     private String origem;
     private boolean baixado;
-    @Column(name = "cancelado_rbx", nullable = false)
+    @Column(name = "cancelado_rbx", nullable = false, columnDefinition = "boolean default false")
     private boolean canceladoRbx = false;
     @Column(precision = 15, scale = 2)
     private BigDecimal valorRecebido;
